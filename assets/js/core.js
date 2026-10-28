@@ -23,41 +23,131 @@
     { key: "villa", name: "וילה", plural: "וילות" },
     { key: "cabin", name: "בקתת עץ", plural: "בקתות עץ" },
     { key: "suite", name: "סוויטה", plural: "סוויטות" },
-    { key: "compound", name: "מתחם לקבוצות", plural: "מתחמים לקבוצות" }
+    { key: "compound", name: "מתחם לקבוצות", plural: "מתחמים לקבוצות" },
+    { key: "boutique", name: "מלון בוטיק", plural: "מלונות בוטיק" },
+    { key: "loft", name: "לופט", plural: "לופטים" },
+    { key: "apartment", name: "דירת נופש", plural: "דירות נופש" },
+    { key: "cave", name: "מערה", plural: "מערות" }
   ];
 
-  T.AMENITIES = [
-    { key: "jacuzzi", name: "ג׳קוזי", icon: "jacuzzi" },
-    { key: "private_pool", name: "בריכה פרטית", icon: "pool" },
-    { key: "heated_pool", name: "בריכה מחוממת", icon: "thermo" },
-    { key: "sauna", name: "סאונה", icon: "sauna" },
-    { key: "view", name: "נוף פתוח", icon: "sunset" },
-    { key: "secluded", name: "מבודד ושקט", icon: "tree" },
-    { key: "fireplace", name: "קמין", icon: "flame" },
-    { key: "kitchen", name: "מטבח מאובזר", icon: "utensils" },
-    { key: "bbq", name: "פינת מנגל", icon: "grill" },
-    { key: "breakfast", name: "ארוחת בוקר", icon: "coffee" },
-    { key: "spa", name: "עיסויים במתחם", icon: "leaf" },
-    { key: "garden", name: "חצר ודשא", icon: "tree" },
-    { key: "kids", name: "מתקנים לילדים", icon: "blocks" },
-    { key: "events", name: "מתאים לאירועים", icon: "party" },
-    { key: "kosher", name: "כשר", icon: "badge" },
-    { key: "shabbat", name: "מתאים לשומרי שבת", icon: "candle" },
-    { key: "accessible", name: "נגיש", icon: "wheelchair" },
-    { key: "pets", name: "ידידותי לכלבים", icon: "paw" },
-    { key: "wifi", name: "Wi‑Fi", icon: "wifi" },
-    { key: "parking", name: "חניה פרטית", icon: "car" }
+  /* מאפיינים לפי קבוצות (כמו בדף מתחם ובסינון) */
+  T.AMENITY_GROUPS = [
+    { key: "safety", name: "מרחב מוגן" },
+    { key: "water", name: "בריכה וספא" },
+    { key: "inside", name: "ביחידה" },
+    { key: "outside", name: "בחוץ ובמתחם" },
+    { key: "fun", name: "בילוי ואירועים" },
+    { key: "food", name: "אוכל, כשרות ושבת" },
+    { key: "access", name: "נגישות וחיות מחמד" },
+    { key: "vibe", name: "אווירה וסגנון" },
+    { key: "nearby", name: "בסביבה" }
   ];
+  T.AMENITIES = [
+    { key: "mamad", name: "ממ״ד צמוד ליחידה", icon: "shield", group: "safety" },
+    { key: "mamad_host", name: "מרחב מוגן בבית המארחים", icon: "shield", group: "safety" },
+    { key: "shelter", name: "מקלט קרוב", icon: "shield", group: "safety" },
+    { key: "jacuzzi", name: "ג׳קוזי ספא", icon: "jacuzzi", group: "water" },
+    { key: "jacuzzi_room", name: "ג׳קוזי בחדר", icon: "jacuzzi", group: "water" },
+    { key: "private_pool", name: "בריכה פרטית", icon: "pool", group: "water" },
+    { key: "heated_pool", name: "בריכה מחוממת", icon: "thermo", group: "water" },
+    { key: "indoor_pool", name: "בריכה מקורה", icon: "pool", group: "water" },
+    { key: "shared_pool", name: "בריכה במתחם", icon: "pool", group: "water" },
+    { key: "fenced_pool", name: "בריכה מגודרת", icon: "pool", group: "water" },
+    { key: "kids_pool", name: "בריכה בטיחותית לילדים", icon: "pool", group: "water" },
+    { key: "sauna", name: "סאונה", icon: "sauna", group: "water" },
+    { key: "spa", name: "עיסויים וטיפולים", icon: "leaf", group: "water" },
+    { key: "fireplace", name: "קמין", icon: "flame", group: "inside" },
+    { key: "kitchen", name: "מטבח מאובזר", icon: "utensils", group: "inside" },
+    { key: "espresso", name: "מכונת אספרסו", icon: "coffee", group: "inside" },
+    { key: "smart_tv", name: "טלוויזיה חכמה", icon: "tv", group: "inside" },
+    { key: "ac", name: "מיזוג אוויר", icon: "snow", group: "inside" },
+    { key: "wifi", name: "Wi‑Fi", icon: "wifi", group: "inside" },
+    { key: "view", name: "נוף פתוח", icon: "sunset", group: "outside" },
+    { key: "garden", name: "חצר ודשא", icon: "tree", group: "outside" },
+    { key: "bbq", name: "פינת מנגל", icon: "grill", group: "outside" },
+    { key: "balcony", name: "מרפסת פרטית", icon: "sunset", group: "outside" },
+    { key: "outdoor_shower", name: "מקלחת חוץ", icon: "bath", group: "outside" },
+    { key: "parking", name: "חניה פרטית", icon: "car", group: "outside" },
+    { key: "snooker", name: "סנוקר", icon: "ball", group: "fun" },
+    { key: "pingpong", name: "פינג פונג", icon: "ball", group: "fun" },
+    { key: "karaoke", name: "קריוקי", icon: "mic", group: "fun" },
+    { key: "kids", name: "מתקנים לילדים", icon: "blocks", group: "fun" },
+    { key: "kids_room", name: "חדר נפרד לילדים", icon: "bed", group: "fun" },
+    { key: "events", name: "מתאים לאירועים", icon: "party", group: "fun" },
+    { key: "breakfast", name: "ארוחת בוקר", icon: "coffee", group: "food" },
+    { key: "chef", name: "ארוחות שף", icon: "utensils", group: "food" },
+    { key: "kosher", name: "כשר", icon: "badge", group: "food" },
+    { key: "shabbat", name: "מתאים לשומרי שבת", icon: "candle", group: "food" },
+    { key: "accessible", name: "נגיש לבעלי מוגבלויות", icon: "wheelchair", group: "access" },
+    { key: "pets", name: "מקבלים כלבים", icon: "paw", group: "access" },
+    { key: "secluded", name: "מבודד ושקט", icon: "tree", group: "vibe" },
+    { key: "romantic", name: "אווירה רומנטית", icon: "heart", group: "vibe" },
+    { key: "design", name: "עיצוב מיוחד", icon: "sparkle", group: "vibe" },
+    { key: "stone", name: "מבנה אבן", icon: "mountain", group: "vibe" },
+    { key: "winery_near", name: "יקבים בסביבה", icon: "wine", group: "nearby" },
+    { key: "synagogue_near", name: "בית כנסת קרוב", icon: "star6", group: "nearby" },
+    { key: "trails_near", name: "מסלולי טבע", icon: "mountain", group: "nearby" },
+    { key: "beach_near", name: "קרוב לים או לכנרת", icon: "sunset", group: "nearby" }
+  ];
+  /* מה מוצג בכרטיס קודם (הכי מבוקש) */
+  T.AMENITY_PRIORITY = ["mamad", "private_pool", "heated_pool", "jacuzzi", "jacuzzi_room", "sauna", "fireplace", "view", "secluded", "kosher", "pets", "breakfast"];
 
   T.AUDIENCE = [
     { key: "couples", name: "זוגות" },
     { key: "families", name: "משפחות" },
-    { key: "groups", name: "קבוצות" }
+    { key: "groups", name: "קבוצות" },
+    { key: "friends", name: "חברים" },
+    { key: "honeymoon", name: "ירח דבש" },
+    { key: "bachelor", name: "מסיבות רווקים ורווקות" }
   ];
+
+  /* הטבות (אחוז הנחה שהמארח נותן) */
+  T.BENEFITS = [
+    { key: "reservists", name: "מילואימניקים", short: "למילואימניקים" },
+    { key: "soldiers", name: "חיילים בסדיר", short: "לחיילים" },
+    { key: "students", name: "סטודנטים", short: "לסטודנטים" },
+    { key: "seniors", name: "גיל הזהב (55+)", short: "לגיל הזהב" },
+    { key: "evacuees", name: "מפונים", short: "למפונים" }
+  ];
+  /* דירוג לפי קטגוריות (1–5), הציון הכללי מוצג מתוך 10 */
+  T.REVIEW_CATS = [
+    { key: "clean", name: "ניקיון" },
+    { key: "maintain", name: "תחזוקה" },
+    { key: "facilities", name: "מתקנים ואבזור" },
+    { key: "host", name: "יחס המארחים" },
+    { key: "privacy", name: "פרטיות" },
+    { key: "treats", name: "כיבודים ופינוקים" },
+    { key: "breakfast", name: "ארוחת בוקר", optional: true },
+    { key: "value", name: "תמורה למחיר" }
+  ];
+  T.PHOTO_CATS = [
+    { key: "general", name: "כללי" }, { key: "inside", name: "פנים" }, { key: "bedroom", name: "חדר שינה" },
+    { key: "spa", name: "ספא ורחצה" }, { key: "pool", name: "בריכה וחצר" }, { key: "view", name: "נוף וסביבה" }, { key: "food", name: "אוכל" }
+  ];
+  /* מדיניות ביטול: מ-X ימים לפני ההגעה ומעלה → Y% דמי ביטול */
+  T.CANCEL_PRESETS = [
+    { key: "flex", name: "גמישה", tiers: [{ days: 7, fee: 0 }, { days: 0, fee: 100 }] },
+    { key: "mid", name: "בינונית", tiers: [{ days: 15, fee: 0 }, { days: 8, fee: 50 }, { days: 0, fee: 100 }] },
+    { key: "strict", name: "קפדנית", tiers: [{ days: 30, fee: 0 }, { days: 14, fee: 50 }, { days: 0, fee: 100 }] }
+  ];
+  T.KIDS_POLICY = [{ key: "", name: "לא צוין" }, { key: "welcome", name: "ילדים מתקבלים בברכה" }, { key: "age", name: "מגיל מסוים" }, { key: "none", name: "מבוגרים בלבד" }];
+  T.SMOKING_POLICY = [{ key: "", name: "לא צוין" }, { key: "no", name: "אסור לעשן" }, { key: "outside", name: "בחוץ בלבד" }, { key: "yes", name: "מותר" }];
+  T.PLACE_KINDS = [
+    { key: "restaurant", name: "מסעדות", one: "מסעדה", icon: "utensils" },
+    { key: "attraction", name: "אטרקציות", one: "אטרקציה", icon: "sparkle" },
+    { key: "spa", name: "ספא וטיפולים", one: "ספא", icon: "leaf" },
+    { key: "winery", name: "יקבים", one: "יקב", icon: "wine" },
+    { key: "nature", name: "טבע ומסלולים", one: "מסלול", icon: "mountain" }
+  ];
+  T.UNIT_COUNTS = [2, 3, 4, 6, 8, 10];
 
   /* דפי נחיתה לגוגל: אזור + מאפיין (משמש גם את scripts/build.mjs) */
   T.SEO_FEATURES = [
+    { key: "mamad", phrase: "עם ממ״ד צמוד" },
     { key: "jacuzzi", phrase: "עם ג׳קוזי" },
+    { key: "sauna", phrase: "עם סאונה" },
+    { key: "fireplace", phrase: "עם קמין" },
+    { key: "indoor_pool", phrase: "עם בריכה מקורה" },
     { key: "private_pool", phrase: "עם בריכה פרטית" },
     { key: "heated_pool", phrase: "עם בריכה מחוממת" },
     { key: "secluded", phrase: "מבודדים ושקטים" },
@@ -68,18 +158,41 @@
     { key: "families", phrase: "למשפחות", audience: true },
     { key: "groups", phrase: "לקבוצות", audience: true }
   ];
+  /* כתובות לדפי יישוב: /s/<slug>/ באותיות לטיניות (אמין בכל שרת ובשיתוף). יישוב שלא ברשימה מתועתק אוטומטית. */
+  T.TOWN_SLUGS = {
+    "אודם": "odem", "אילת": "eilat", "אניעם": "aniam", "הרדוף": "harduf", "כליל": "klil", "כפר קיש": "kfar-kish", "מגדל": "migdal", "מצפה רמון": "mitzpe-ramon",
+    "נווה זוהר": "neve-zohar", "נס הרים": "nes-harim", "עין הוד": "ein-hod", "ראש פינה": "rosh-pina", "צפת": "tzfat", "מטולה": "metula", "כפר ורדים": "kfar-vradim",
+    "מעלות": "maalot", "פקיעין": "pekiin", "גוש חלב": "gush-halav", "דלתון": "dalton", "אמירים": "amirim", "מירון": "meron", "קצרין": "katzrin", "נמרוד": "nimrod",
+    "מסעדה": "masade", "נוב": "nov", "אלוני הבשן": "alonei-habashan", "קשת": "keshet", "יונתן": "yonatan", "אבני איתן": "avnei-eitan", "נאות גולן": "neot-golan",
+    "רמות": "ramot", "גבעת יואב": "givat-yoav", "טבריה": "tiberias", "כנרת": "kinneret", "יבנאל": "yavneel", "אלמגור": "almagor", "ראש הנקרה": "rosh-hanikra",
+    "שלומי": "shlomi", "יעד": "yaad", "זכרון יעקב": "zichron-yaakov", "עין זיוון": "ein-zivan", "בית לחם הגלילית": "beit-lechem-haglilit", "טל אל": "tal-el",
+    "כפר תבור": "kfar-tavor", "צפרירים": "tzafririm", "אבן ספיר": "even-sapir", "עין גדי": "ein-gedi", "ערד": "arad", "חצבה": "hatzeva", "צופר": "tzofar",
+    "שדה בוקר": "sde-boker", "עין בוקק": "ein-bokek", "צוריאל": "tzuriel", "אביבים": "avivim", "דישון": "dishon", "כפר בלום": "kfar-blum", "דפנה": "dafna",
+    "בית הלל": "beit-hillel", "שאר ישוב": "shear-yashuv", "חספין": "hispin", "כפר חרוב": "kfar-haruv", "עמירים": "amirim"
+  };
+  const TR = { "א": "a", "ב": "b", "ג": "g", "ד": "d", "ה": "h", "ו": "v", "ז": "z", "ח": "ch", "ט": "t", "י": "y", "כ": "k", "ך": "k", "ל": "l", "מ": "m", "ם": "m", "נ": "n", "ן": "n", "ס": "s", "ע": "e", "פ": "p", "ף": "f", "צ": "tz", "ץ": "tz", "ק": "k", "ר": "r", "ש": "sh", "ת": "t" };
+  T.townSlug = (name) => {
+    const n = String(name || "").trim();
+    if (T.TOWN_SLUGS[n]) return T.TOWN_SLUGS[n];
+    return n.replace(/[׳'"״]/g, "").split("").map((c) => TR[c] || (/[a-z0-9]/i.test(c) ? c.toLowerCase() : "-")).join("").replace(/-+/g, "-").replace(/^-|-$/g, "") || "town";
+  };
   /* "הגליל העליון" → "בגליל העליון", "רמת הגולן" → "ברמת הגולן" */
   T.inPlace = (name) => (String(name).startsWith("ה") ? "ב" + String(name).slice(1) : "ב" + name);
 
   T.QUICK_FILTERS = [
-    { label: "ג׳קוזי בחדר", amenity: "jacuzzi" },
-    { label: "בריכה מחוממת", amenity: "heated_pool" },
-    { label: "מבודד ושקט", amenity: "secluded" },
-    { label: "לזוגות", audience: "couples" },
-    { label: "למשפחות", audience: "families" },
-    { label: "לקבוצות", audience: "groups" },
-    { label: "כשר", amenity: "kosher" },
-    { label: "עם הכלב", amenity: "pets" }
+    { label: "ממ״ד צמוד", amenity: "mamad", icon: "shield" },
+    { label: "פנוי הלילה", flag: "tonight", icon: "moon" },
+    { label: "פנוי בסופ״ש", flag: "weekend", icon: "calendar" },
+    { label: "בריכה מחוממת", amenity: "heated_pool", icon: "thermo" },
+    { label: "ג׳קוזי ספא", amenity: "jacuzzi", icon: "jacuzzi" },
+    { label: "לזוגות בלבד", flag: "couplesOnly", icon: "heart" },
+    { label: "למשפחות", audience: "families", icon: "users" },
+    { label: "לקבוצות", audience: "groups", icon: "users" },
+    { label: "מבודד ושקט", amenity: "secluded", icon: "tree" },
+    { label: "כשר", amenity: "kosher", icon: "badge" },
+    { label: "שומרי שבת", amenity: "shabbat", icon: "candle" },
+    { label: "מקבלים כלבים", amenity: "pets", icon: "paw" },
+    { label: "הנחה למילואימניקים", benefit: "reservists", icon: "percent" }
   ];
 
   T.PLANS = [
@@ -95,7 +208,14 @@
   T.EXTRA_PER = [
     { key: "stay", name: "לשהייה" },
     { key: "night", name: "ללילה" },
-    { key: "guest", name: "לאורח" }
+    { key: "guest", name: "לאורח" },
+    { key: "guest_night", name: "לאורח ללילה" }
+  ];
+  T.LEAD_SOURCES = [
+    { key: "form", name: "בקשת הזמנה" },
+    { key: "find", name: "מצא לי צימר" },
+    { key: "contact", name: "יצירת קשר" },
+    { key: "report", name: "דיווח על מידע שגוי" }
   ];
 
   T.LEAD_STATUS = [
@@ -119,7 +239,8 @@
   /* שדות תוכן שמארח משנה רק באישור מנהל (מחירים ויומן מתעדכנים מיד) */
   T.MODERATED_FIELDS = [
     ["name", "שם"], ["type", "סוג"], ["region", "אזור"], ["settlement", "יישוב"], ["tagline", "משפט פתיחה"],
-    ["description", "תיאור"], ["photos", "תמונות"], ["amenities", "מאפיינים"], ["audience", "מתאים ל"], ["video_url", "סרטון"]
+    ["description", "תיאור"], ["photos", "תמונות"], ["amenities", "מאפיינים"], ["audience", "מתאים ל"], ["video_url", "סרטון"],
+    ["details", "תיאור מפורט, כלול באירוח, חוקי הבית ושאלות"]
   ];
 
   /* חגים (לילות) לפי לוח השנה העברי, ישראל. חושב עם Hebcal; ניתן לעריכה בהגדרות. */
@@ -153,7 +274,13 @@
     moderation: true,
     holidays: T.HOLIDAYS,
     coupons: [],
-    a11y_coordinator: ""
+    a11y_coordinator: "",
+    social: { instagram: "", facebook: "", tiktok: "", youtube: "" },
+    wa_float: true,
+    cookie_banner: true,
+    find_enabled: true,
+    /* אוספים בעמוד הבית: { id, title, sub, ids: [...] } */
+    collections: []
   };
   T.SETTINGS = T.DEFAULT_SETTINGS;
   T.HERO_DEFAULT = "assets/img/photos/hero.jpg";
@@ -386,7 +513,20 @@
     grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
     key: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M14.5 8.5l2 2"/>',
     info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.5h.01"/>',
-    mountain: '<path d="M3 19 9.5 8l4 6.5 2-3L21 19z"/>'
+    mountain: '<path d="M3 19 9.5 8l4 6.5 2-3L21 19z"/>',
+    wine: '<path d="M8 3h8l-.5 5a3.5 3.5 0 0 1-7 0zM12 11.5V20M8.5 20.5h7"/>',
+    tv: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 20.5h8M12 17v3.5"/>',
+    snow: '<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.5 4.5 12 7l2.5-2.5M9.5 19.5 12 17l2.5 2.5"/>',
+    mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/>',
+    ball: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="10.5" r="2.4"/><path d="M12 13v.01"/>',
+    star6: '<path d="M12 3 20 17H4z"/><path d="M12 21 4 7h16z"/>',
+    share: '<circle cx="17.5" cy="5.5" r="2.5"/><circle cx="6.5" cy="12" r="2.5"/><circle cx="17.5" cy="18.5" r="2.5"/><path d="m8.7 10.8 6.6-4M8.7 13.2l6.6 4"/>',
+    user: '<circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5c.8-4 3.8-6.2 7.5-6.2s6.7 2.2 7.5 6.2"/>',
+    history: '<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.7M4 4.5v4.2h4.2"/><path d="M12 8v4.3l3 1.8"/>',
+    flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
+    send: '<path d="M21 3 3 10.5l7 2.5 2.5 7z"/><path d="m10 13 4-4"/>',
+    trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4.5v1.5A3 3 0 0 0 8 10.5M16 6h3.5v1.5a3 3 0 0 1-3.5 3M12 13v4M8.5 20.5h7M10 17h4"/>',
+    door2: '<path d="M14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14M10 8l4 4-4 4M14 12H4"/>'
   };
   T.icon = (name, cls) =>
     `<svg class="ic${cls ? " " + cls : ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ICONS.info}</svg>`;
@@ -400,31 +540,42 @@
   };
 
   /* --------------------------------------------------------- מתחם ויחידות */
+  const N = (v) => Number(v) || 0;
+  T.termsOf = (l) => (l && l.terms) || {};
+  T.detailsOf = (l) => (l && l.details) || {};
   /* מתחם בלי יחידות מוגדרות הוא יחידה אחת בעצמו */
   T.unitsOf = (l) => {
+    const t = T.termsOf(l);
     if (l && Array.isArray(l.rooms) && l.rooms.length) {
       return l.rooms.map((r) => Object.assign({
-        guests_max: l.guests_max, bedrooms: 1, price_weekday: l.price_weekday, price_weekend: l.price_weekend,
-        price_holiday: l.price_holiday, guests_base: l.guests_base, blocked_dates: [], ical_blocked: [], ical_url: ""
+        guests_max: l.guests_max, bedrooms: 1, beds: 0, bathrooms: 0, size: 0, desc: "", amenities: [], photos: [],
+        price_weekday: l.price_weekday, price_weekend: l.price_weekend, price_holiday: l.price_holiday, guests_base: l.guests_base,
+        p2_weekday: 0, p2_weekend: 0, blocked_dates: [], ical_blocked: [], ical_url: ""
       }, r, {
-        guests_max: Number(r.guests_max) || Number(l.guests_max) || 2,
-        price_weekday: Number(r.price_weekday) || 0,
-        price_weekend: Number(r.price_weekend) || Number(r.price_weekday) || 0,
-        price_holiday: Number(r.price_holiday) || Number(l.price_holiday) || 0,
-        guests_base: Number(r.guests_base) || Number(l.guests_base) || 0
+        guests_max: N(r.guests_max) || N(l.guests_max) || 2,
+        price_weekday: N(r.price_weekday),
+        price_weekend: N(r.price_weekend) || N(r.price_weekday),
+        price_holiday: N(r.price_holiday) || N(l.price_holiday),
+        guests_base: N(r.guests_base) || N(l.guests_base),
+        p2_weekday: N(r.p2_weekday), p2_weekend: N(r.p2_weekend),
+        amenities: r.amenities || [], photos: (r.photos || []).filter(Boolean)
       }));
     }
     return [{
-      id: "", name: (l && l.name) || "", single: true, guests_max: Number(l.guests_max) || 2, bedrooms: l.bedrooms,
-      price_weekday: Number(l.price_weekday) || 0, price_weekend: Number(l.price_weekend) || Number(l.price_weekday) || 0,
-      price_holiday: Number(l.price_holiday) || 0, guests_base: Number(l.guests_base) || 0,
+      id: "", name: (l && l.name) || "", single: true, guests_max: N(l.guests_max) || 2, bedrooms: l.bedrooms, bathrooms: l.bathrooms,
+      beds: N(t.beds), size: N(t.size), desc: "", amenities: [], photos: [],
+      price_weekday: N(l.price_weekday), price_weekend: N(l.price_weekend) || N(l.price_weekday), price_holiday: N(l.price_holiday), guests_base: N(l.guests_base),
+      p2_weekday: N(t.p2_weekday), p2_weekend: N(t.p2_weekend),
       blocked_dates: l.blocked_dates || [], ical_blocked: l.ical_blocked || [], ical_url: l.ical_url || ""
     }];
   };
   T.unitOf = (l, id) => { const u = T.unitsOf(l); return u.find((x) => x.id === id) || u[0]; };
   T.blockedSet = (unit) => new Set([...(unit.blocked_dates || []), ...(unit.ical_blocked || [])]);
   T.fromPrice = (l) => { const p = T.unitsOf(l).map((u) => u.price_weekday).filter((v) => v > 0); return p.length ? Math.min(...p) : 0; };
+  T.weekendFrom = (l) => { const p = T.unitsOf(l).map((u) => u.price_weekend || u.price_weekday).filter((v) => v > 0); return p.length ? Math.min(...p) : 0; };
   T.isSponsored = (l) => !!(l.sponsored_until && l.sponsored_until >= T.iso(T.today()));
+  /* קיבולת: יחידה אחת, או כל היחידות יחד במתחם */
+  T.capacity = (l) => { const u = T.unitsOf(l); const one = Math.max(...u.map((x) => x.guests_max)); return u.length > 1 ? Math.max(one, u.reduce((s, x) => s + x.guests_max, 0)) : one; };
 
   /* דקה 90: לילות חמישי ושישי של סוף השבוע הקרוב */
   T.lastMinuteNights = () => {
@@ -442,6 +593,16 @@
     const nights = T.lastMinuteNights();
     return T.unitsOf(l).some((u) => { const b = T.blockedSet(u); return nights.some((n) => !b.has(n)); });
   };
+  T.unitFree = (u, ci, co) => {
+    const b = T.blockedSet(u);
+    const n = T.nightsBetween(ci, co);
+    for (let i = 0; i < n; i++) if (b.has(T.iso(T.addDays(T.parseISO(ci), i)))) return false;
+    return true;
+  };
+  T.freeUnits = (l, ci, co) => T.unitsOf(l).filter((u) => T.unitFree(u, ci, co));
+  T.freeOnNights = (l, nights) => T.unitsOf(l).some((u) => { const b = T.blockedSet(u); return nights.every((n) => !b.has(n)); });
+  T.freeTonight = (l) => T.freeOnNights(l, [T.iso(T.today())]);
+  T.freeWeekend = (l) => T.freeOnNights(l, T.lastMinuteNights());
 
   T.holidayOf = (iso, settings) => ((settings || T.SETTINGS).holidays || []).find((h) => iso >= h.from && iso <= h.to) || null;
   T.couponOf = (code, settings) => {
@@ -450,71 +611,198 @@
     const today = T.iso(T.today());
     return ((settings || T.SETTINGS).coupons || []).find((x) => x.active !== false && String(x.code).toUpperCase() === c && (!x.until || x.until >= today)) || null;
   };
+  T.benefitOf = (k) => T.BENEFITS.find((b) => b.key === k) || null;
+  T.benefitsOf = (l) => T.BENEFITS.map((b) => ({ ...b, pct: N((T.termsOf(l).benefits || {})[b.key]) })).filter((b) => b.pct > 0);
+  T.perAmount = (x, nights, guests) => N(x.price) * (x.per === "night" ? nights : x.per === "guest" ? Math.max(1, guests) : x.per === "guest_night" ? Math.max(1, guests) * nights : 1);
 
-  /* מחשבון מחיר: אמצ״ש / סופ״ש / חג, עונות, דקה 90, אורחים נוספים, תוספות וקופון */
-  T.quote = (l, ci, co, o) => {
-    o = o || {};
-    const nights = T.nightsBetween(ci, co);
-    if (!l || nights <= 0) return null;
-    const settings = o.settings || T.SETTINGS;
-    const unit = T.unitOf(l, o.unitId);
+  /* לילות של יחידה אחת: מחיר לכל לילה לפי אמצ״ש / סופ״ש / חג, מחיר 2 לילות, עונה, דקה 90, ומינימום לילות */
+  function unitNights(l, unit, ci, nights, settings) {
+    const t = T.termsOf(l);
     const blocked = T.blockedSet(unit);
     const lmNights = T.lastMinuteNights();
-    const lmPct = Number(l.lastminute_pct) || 0;
-    const groups = { weekday: { n: 0, sum: 0 }, weekend: { n: 0, sum: 0 }, holiday: { n: 0, sum: 0, names: new Set() } };
+    const lmPct = N(l.lastminute_pct);
+    const g = { weekday: { n: 0, sum: 0 }, weekend: { n: 0, sum: 0 }, holiday: { n: 0, sum: 0, names: new Set() } };
     const conflicts = [];
-    let seasonPct = 0, lmUsed = false;
+    let seasonPct = 0, lmUsed = false, minNeeded = N(l.min_nights) || 1, minReason = "";
     for (let i = 0; i < nights; i++) {
       const d = T.addDays(T.parseISO(ci), i);
       const iso = T.iso(d);
       if (blocked.has(iso)) conflicts.push(iso);
       const hol = T.holidayOf(iso, settings);
+      const wknd = T.isWeekendNight(d);
       let kind, price;
-      if (hol && unit.price_holiday) { kind = "holiday"; price = unit.price_holiday; groups.holiday.names.add(hol.label.replace(/\s\d{4}$/, "")); }
-      else if (T.isWeekendNight(d)) { kind = "weekend"; price = unit.price_weekend || unit.price_weekday; }
-      else { kind = "weekday"; price = unit.price_weekday; }
-      const season = (l.seasons || []).filter((s) => s.from && s.to && iso >= s.from && iso <= s.to).reduce((m, s) => Math.max(m, Number(s.pct) || 0), 0);
+      if (hol && unit.price_holiday) { kind = "holiday"; price = unit.price_holiday; g.holiday.names.add(hol.label.replace(/\s\d{4}$/, "")); }
+      else if (wknd) { kind = "weekend"; price = nights >= 2 && unit.p2_weekend ? unit.p2_weekend : unit.price_weekend || unit.price_weekday; }
+      else { kind = "weekday"; price = nights >= 2 && unit.p2_weekday ? unit.p2_weekday : unit.price_weekday; }
+      if (hol && N(t.min_holiday) > minNeeded) { minNeeded = N(t.min_holiday); minReason = "בחגים"; }
+      else if (wknd && N(t.min_weekend) > minNeeded) { minNeeded = N(t.min_weekend); minReason = "בסופי שבוע"; }
+      const seasons = (l.seasons || []).filter((s) => s.from && s.to && iso >= s.from && iso <= s.to);
+      const season = seasons.reduce((m, s) => Math.max(m, Number(s.pct) || 0), 0);
+      seasons.forEach((s) => { if (N(s.min) > minNeeded) { minNeeded = N(s.min); minReason = "ב" + (s.label || "עונה"); } });
       if (season) { price *= 1 + season / 100; seasonPct = Math.max(seasonPct, season); }
       if (lmPct && kind !== "holiday" && lmNights.includes(iso) && !blocked.has(iso)) { price *= 1 - lmPct / 100; lmUsed = true; }
       price = Math.round(price);
-      groups[kind].n++;
-      groups[kind].sum += price;
+      g[kind].n++;
+      g[kind].sum += price;
     }
-    const nightWord = (n) => (n === 1 ? "לילה אחד" : n === 2 ? "שני לילות" : `${n} לילות`);
+    return { g, conflicts, seasonPct, lmUsed, minNeeded, minReason, total: g.weekday.sum + g.weekend.sum + g.holiday.sum };
+  }
+  const nightWord = (n) => (n === 1 ? "לילה אחד" : n === 2 ? "שני לילות" : `${n} לילות`);
+  T.nightWord = nightWord;
+
+  /* מחשבון מחיר. o.rooms = [{unitId, guests, children}] להזמנת כמה יחידות; או o.unitId/o.guests/o.children ליחידה אחת.
+     o.extras = שמות תוספות, o.pkg = שם חבילה (לינה וארוחת בוקר…), o.benefit = מפתח הטבה, o.coupon = קוד */
+  T.quote = (l, ci, co, o) => {
+    o = o || {};
+    const nights = T.nightsBetween(ci, co);
+    if (!l || nights <= 0) return null;
+    const settings = o.settings || T.SETTINGS;
+    const t = T.termsOf(l);
+    const rows = (o.rooms && o.rooms.length ? o.rooms : [{ unitId: o.unitId, guests: o.guests, children: o.children }])
+      .map((r) => ({ unit: T.unitOf(l, r.unitId), adults: N(r.guests), children: N(r.children) }));
+    const multi = rows.length > 1;
+    const anyKids = rows.some((r) => r.children > 0);
     const lines = [];
-    if (groups.weekday.n) lines.push({ label: `${nightWord(groups.weekday.n)} באמצע שבוע`, amount: groups.weekday.sum });
-    if (groups.weekend.n) lines.push({ label: `${nightWord(groups.weekend.n)} בסופ״ש`, amount: groups.weekend.sum });
-    if (groups.holiday.n) lines.push({ label: `${nightWord(groups.holiday.n)} חג (${[...groups.holiday.names].join(", ")})`, amount: groups.holiday.sum });
-    const roomTotal = groups.weekday.sum + groups.weekend.sum + groups.holiday.sum;
-    const guests = Number(o.guests) || 0;
-    let extraGuests = 0;
-    const base = unit.guests_base;
-    if (base && guests > base && Number(l.extra_guest_price) > 0) {
-      extraGuests = (guests - base) * Number(l.extra_guest_price) * nights;
-      lines.push({ label: `${guests - base === 1 ? "אורח נוסף" : guests - base + " אורחים נוספים"} × ${nightWord(nights)}`, amount: extraGuests });
-    }
+    const conflicts = new Set();
+    let roomTotal = 0, extraGuests = 0, seasonPct = 0, lmUsed = false, minNeeded = 1, minReason = "", over = false, first = null;
+    rows.forEach((r) => {
+      const u = unitNights(l, r.unit, ci, nights, settings);
+      if (!first) first = u;
+      const g = u.g;
+      if (multi) {
+        const parts = [g.weekday.n && `${g.weekday.n} אמצ״ש`, g.weekend.n && `${g.weekend.n} סופ״ש`, g.holiday.n && `${g.holiday.n} חג`].filter(Boolean).join(" · ");
+        lines.push({ label: `${r.unit.name} (${parts})`, amount: u.total });
+      } else {
+        if (g.weekday.n) lines.push({ label: `${nightWord(g.weekday.n)} באמצע שבוע`, amount: g.weekday.sum });
+        if (g.weekend.n) lines.push({ label: `${nightWord(g.weekend.n)} בסופ״ש`, amount: g.weekend.sum });
+        if (g.holiday.n) lines.push({ label: `${nightWord(g.holiday.n)} חג (${[...g.holiday.names].join(", ")})`, amount: g.holiday.sum });
+      }
+      roomTotal += u.total;
+      u.conflicts.forEach((c) => conflicts.add(c));
+      seasonPct = Math.max(seasonPct, u.seasonPct);
+      lmUsed = lmUsed || u.lmUsed;
+      if (u.minNeeded > minNeeded) { minNeeded = u.minNeeded; minReason = u.minReason; }
+      const people = r.adults + r.children;
+      if (people > r.unit.guests_max) over = true;
+      const base = r.unit.guests_base;
+      if (base && people > base) {
+        const extra = people - base;
+        const kids = Math.min(r.children, extra), adults = extra - kids;
+        const pa = N(l.extra_guest_price), pc = N(t.extra_child_price) || pa;
+        const tail = ` × ${nightWord(nights)}${multi ? " · " + r.unit.name : ""}`;
+        if (adults && pa) {
+          const amt = adults * pa * nights; extraGuests += amt;
+          lines.push({ label: (anyKids ? (adults === 1 ? "מבוגר נוסף" : `${adults} מבוגרים נוספים`) : (adults === 1 ? "אורח נוסף" : `${adults} אורחים נוספים`)) + tail, amount: amt });
+        }
+        if (kids && pc) { const amt = kids * pc * nights; extraGuests += amt; lines.push({ label: (kids === 1 ? "ילד נוסף" : `${kids} ילדים נוספים`) + tail, amount: amt }); }
+      }
+    });
+    const guests = rows.reduce((s, r) => s + r.adults + r.children, 0);
+    let pkgTotal = 0;
+    const pkg = o.pkg ? (t.packages || []).find((p) => p.name === o.pkg) : null;
+    if (pkg && N(pkg.price)) { pkgTotal = T.perAmount(pkg, nights, guests); lines.push({ label: pkg.name, amount: pkgTotal }); }
     let extrasTotal = 0;
     (o.extras || []).forEach((name) => {
       const x = (l.extras || []).find((e) => e.name === name);
-      if (!x) return;
-      const amt = Number(x.price) * (x.per === "night" ? nights : x.per === "guest" ? Math.max(1, guests) : 1);
+      if (!x || !N(x.price)) return;
+      const amt = T.perAmount(x, nights, guests);
       extrasTotal += amt;
       lines.push({ label: x.name, amount: amt });
     });
-    const subtotal = roomTotal + extraGuests + extrasTotal;
+    const b = o.benefit ? T.benefitsOf(l).find((x) => x.key === o.benefit) : null;
+    const benefitAmt = b ? Math.round(((roomTotal + extraGuests) * b.pct) / 100) : 0;
+    if (benefitAmt) lines.push({ label: `הטבה ל${b.name} (${b.pct}%)`, amount: -benefitAmt });
+    const subtotal = roomTotal + extraGuests + pkgTotal + extrasTotal - benefitAmt;
     const coupon = T.couponOf(o.coupon, settings);
     const discount = coupon ? Math.round((subtotal * Number(coupon.pct)) / 100) : 0;
     if (discount) lines.push({ label: `קופון ${coupon.code} (${coupon.pct}%)`, amount: -discount });
     return {
-      nights, unit, lines, roomTotal, extrasTotal, extraGuests, discount, coupon, total: subtotal - discount,
-      conflicts, belowMin: nights < (Number(l.min_nights) || 1), overCapacity: guests > unit.guests_max,
-      weekday: groups.weekday.n, weekend: groups.weekend.n, holiday: groups.holiday.n, seasonPct, lastMinute: lmUsed
+      nights, unit: rows[0].unit, units: rows.map((r) => r.unit), lines, roomTotal, extrasTotal, pkgTotal, extraGuests,
+      benefit: b ? { key: b.key, name: b.name, pct: b.pct, amount: benefitAmt } : null, discount, coupon, total: subtotal - discount,
+      conflicts: [...conflicts].sort(), belowMin: nights < minNeeded, minNeeded, minReason, overCapacity: over, guests,
+      weekday: first.g.weekday.n, weekend: first.g.weekend.n, holiday: first.g.holiday.n, seasonPct, lastMinute: lmUsed
     };
   };
-  /* פנוי לתאריכים ולמספר האורחים (מספיק שיחידה אחת במתחם מתאימה) */
+  /* פנוי לתאריכים ולמספר האורחים: יחידה אחת שמתאימה, או כמה יחידות פנויות יחד */
   T.isAvailable = (l, ci, co, guests) => {
     if (!(ci && co && T.nightsBetween(ci, co) > 0)) return true;
-    return T.unitsOf(l).some((u) => (!guests || u.guests_max >= guests) && !(T.quote(l, ci, co, { unitId: u.id }).conflicts.length));
+    const free = T.freeUnits(l, ci, co);
+    if (!guests) return free.length > 0;
+    return free.some((u) => u.guests_max >= guests) || (free.length > 1 && free.reduce((s, u) => s + u.guests_max, 0) >= guests);
+  };
+  /* הלילות הפנויים הקרובים (לכפתורי ״פנוי ב־…״ בכרטיס) */
+  T.nextFreeNights = (l, days, max) => {
+    const out = [];
+    const minN = Math.max(1, N(l.min_nights));
+    for (let i = 0; i < (days || 14) && out.length < (max || 3); i++) {
+      const ci = T.iso(T.addDays(T.today(), i));
+      let n = minN;
+      let co = T.iso(T.addDays(T.parseISO(ci), n));
+      let free = T.freeUnits(l, ci, co);
+      if (!free.length) continue;
+      let qs = free.map((u) => T.quote(l, ci, co, { unitId: u.id })).filter((q) => q && q.total > 0);
+      if (qs.length && qs[0].belowMin) {
+        n = qs[0].minNeeded; co = T.iso(T.addDays(T.parseISO(ci), n));
+        free = T.freeUnits(l, ci, co);
+        if (!free.length) continue;
+        qs = free.map((u) => T.quote(l, ci, co, { unitId: u.id })).filter((q) => q && q.total > 0);
+      }
+      if (!qs.length) continue;
+      const best = qs.sort((a, b) => a.total - b.total)[0];
+      out.push({ ci, co, nights: n, total: best.total, free: free.length });
+    }
+    return out;
+  };
+  /* תאריכים חלופיים כשמה שנבחר תפוס: יחידות אחרות באותם תאריכים, או אותה יחידה בתאריכים קרובים */
+  T.altDates = (l, ci, co, unitIds) => {
+    const n = T.nightsBetween(ci, co);
+    if (n <= 0) return { units: [], dates: [] };
+    const ids = (unitIds || []).length ? unitIds : [T.unitsOf(l)[0].id];
+    const want = ids.map((id) => T.unitOf(l, id));
+    const units = T.freeUnits(l, ci, co).filter((u) => !ids.includes(u.id));
+    const dates = [];
+    const today = T.iso(T.today());
+    for (let k = 1; k <= 28 && dates.length < 3; k++) {
+      for (const sgn of [1, -1]) {
+        const s = T.iso(T.addDays(T.parseISO(ci), sgn * k));
+        if (s < today || dates.length >= 3) continue;
+        const e = T.iso(T.addDays(T.parseISO(s), n));
+        if (want.every((u) => T.unitFree(u, s, e))) dates.push({ ci: s, co: e });
+      }
+    }
+    return { units, dates: dates.sort((a, b) => a.ci.localeCompare(b.ci)) };
+  };
+
+  /* ציון: ממוצע 1–5 מוצג מתוך 10 */
+  T.score10 = (avg5) => Math.round(Number(avg5 || 0) * 20) / 10;
+  T.scoreLabel = (s10) => (s10 >= 9.5 ? "מושלם" : s10 >= 9 ? "מעולה" : s10 >= 8 ? "טוב מאוד" : s10 >= 7 ? "טוב" : "סביר");
+  /* מרחק בק״מ (קו אווירי) */
+  T.distKm = (a, b) => {
+    if (!a || !b) return null;
+    const R = 6371, rad = (x) => (x * Math.PI) / 180;
+    const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  };
+  T.coordsOf = (l) => (l && l.lat != null && l.lng != null && l.lat !== "" ? { lat: Number(l.lat), lng: Number(l.lng) } : l ? { lat: T.regionOf(l.region).lat, lng: T.regionOf(l.region).lng, approx: true } : null);
+  T.kmText = (km) => (km == null ? "" : km < 1 ? "פחות מק״מ" : `${km < 10 ? km.toFixed(1).replace(/\.0$/, "") : Math.round(km)} ק״מ`);
+
+  T.isNewListing = (l) => !!(l && l.created_at && Date.now() - new Date(l.created_at).getTime() < 30 * 864e5);
+  /* תוויות לכרטיס: בלעדי, מומלצי הגולשים, הטבות, מחיר הכי טוב, לזוגות בלבד, חדש, הכי נצפים */
+  T.badgesOf = (l, ctx) => {
+    ctx = ctx || {};
+    const out = [];
+    const t = T.termsOf(l);
+    if (l.exclusive) out.push({ k: "exclusive", t: "בלעדי ל" + ((ctx.settings || T.SETTINGS).site_name || "אתר"), icon: "sparkle" });
+    const r = ctx.ratings && ctx.ratings[l.id];
+    if (r && r.n >= 3 && r.avg >= 4.7) out.push({ k: "top", t: "מומלצי הגולשים " + new Date().getFullYear(), icon: "trophy" });
+    const bs = T.benefitsOf(l).sort((a, b) => b.pct - a.pct);
+    if (bs.length) out.push({ k: "benefit", t: `${bs[0].pct}% הנחה ${bs[0].short}`, icon: "percent" });
+    if (l.best_price) out.push({ k: "best", t: "מחיר הכי טוב", icon: "badge" });
+    if (t.couples_only) out.push({ k: "couples", t: "לזוגות בלבד", icon: "heart" });
+    if (T.isNewListing(l)) out.push({ k: "new", t: "חדש באתר", icon: "sparkle" });
+    if (ctx.top && ctx.top.slice(0, 3).includes(l.id)) out.push({ k: "popular", t: "הכי נצפים", icon: "eye" });
+    return out;
   };
 
   /* ---------------------------------------------------------- תמונות */
@@ -523,10 +811,14 @@
     if (u.includes("res.cloudinary.com") && u.includes("/upload/") && !/\/upload\/[^/]*w_\d+/.test(u)) return u.replace("/upload/", `/upload/f_auto,q_auto,w_${w || 1600}/`);
     return u;
   };
-  T.photosOf = (l) => {
+  /* תמונות המתחם, כל אחת עם קטגוריה (מהעורך), ואחריהן תמונות היחידות */
+  T.photosOf = (l, withUnits) => {
+    const cats = (T.detailsOf(l).photo_cats || []);
     const p = (l.photos || []).filter(Boolean);
-    if (p.length) return p.map((u) => ({ src: T.img(u, 1600), real: true }));
-    return T.listingScene ? [0, 1, 2, 3].map((i) => ({ src: T.listingScene(l, i), real: false })) : [];
+    let out = p.map((u, i) => ({ src: T.img(u, 1600), thumb: T.img(u, 800), real: true, cat: cats[i] || "general" }));
+    if (withUnits) T.unitsOf(l).forEach((un) => (un.photos || []).forEach((u) => out.push({ src: T.img(u, 1600), thumb: T.img(u, 800), real: true, cat: "unit:" + un.id, unit: un.name })));
+    if (!out.length && T.listingScene) out = [0, 1, 2, 3].map((i) => ({ src: T.listingScene(l, i), thumb: T.listingScene(l, i), real: false, cat: "general" }));
+    return out;
   };
   T.coverOf = (l) => (T.photosOf(l)[0] || {}).src || "";
   T.thumbOf = (l) => {
@@ -534,6 +826,34 @@
     if (!u) return T.coverOf(l);
     if (/assets\/img\/photos\/[\w-]+-1\.jpg$/.test(u)) return u.replace(/-1\.jpg$/, "-card.jpg");
     return T.img(u, 800);
+  };
+
+  /* מאפיין במתחם או באחת היחידות */
+  T.hasAmen = (l, a) => (l.amenities || []).includes(a) || T.unitsOf(l).some((u) => (u.amenities || []).includes(a));
+  /* מדרגות ביטול → שורות טקסט */
+  T.cancelLines = (tiers) => {
+    const s = (tiers || []).slice().sort((a, b) => b.days - a.days);
+    return s.map((x, i) => {
+      const prev = s[i - 1];
+      const range = i === 0 ? `עד ${x.days} ימים לפני ההגעה` : x.days === 0 ? `פחות מ־${prev.days} ימים לפני` : `${prev.days - 1}–${x.days} ימים לפני`;
+      return `${i === 0 && x.days > 0 ? `ביטול ${x.days} ימים ומעלה לפני ההגעה` : range}: ${Number(x.fee) ? `${x.fee}% דמי ביטול` : "ללא עלות"}`;
+    });
+  };
+  /* שאלות נפוצות לדף מתחם: אוטומטיות מהנתונים + שאלות שהמארח כתב (משמש גם ל-FAQPage בגוגל) */
+  T.faqOf = (l, r) => {
+    const d = T.detailsOf(l), t = T.termsOf(l), reg = T.regionOf(l.region), units = T.unitsOf(l), has = (a) => T.hasAmen(l, a);
+    const out = [];
+    out.push({ q: `איפה נמצא ${l.name}?`, a: `${l.name} נמצא ב${l.settlement}, ${reg.name}. ${(d.sections || {}).location || "הכתובת המדויקת נמסרת על ידי המארחים לאחר אישור ההזמנה."}` });
+    const pools = ["private_pool", "heated_pool", "indoor_pool", "shared_pool"].filter(has);
+    if (pools.length) out.push({ q: `יש בריכה ב${l.name}?`, a: `כן: ${pools.map((a) => T.amenityOf(a).name).join(", ")}.` });
+    if (has("jacuzzi") || has("jacuzzi_room")) out.push({ q: "יש ג׳קוזי?", a: `כן, ${[has("jacuzzi_room") && "ג׳קוזי בתוך החדר", has("jacuzzi") && "ג׳קוזי ספא"].filter(Boolean).join(" ו")}.` });
+    if (has("mamad") || has("mamad_host") || has("shelter")) out.push({ q: "יש מרחב מוגן?", a: ["mamad", "mamad_host", "shelter"].filter(has).map((a) => T.amenityOf(a).name).join(", ") + "." });
+    out.push({ q: "כמה עולה לילה?", a: `${units.length > 1 ? "החל מ־" : ""}${T.money(T.fromPrice(l))} ללילה באמצע שבוע ו${T.money(T.weekendFrom(l))} בסופ״ש. מינימום ${T.nightWord(l.min_nights || 1)}${Number(t.min_weekend) > 1 ? `, ובסופ״ש ${T.nightWord(Number(t.min_weekend))}` : ""}. את המחיר המדויק לתאריכים שלכם רואים במחשבון.` });
+    if (t.checkin || t.checkout) out.push({ q: "מה שעות הכניסה והיציאה?", a: `כניסה מ־${t.checkin || "15:00"}, יציאה עד ${t.checkout || "11:00"}${t.checkin_sat || t.checkout_sat ? `. בשבת: כניסה ${t.checkin_sat || "—"}, יציאה ${t.checkout_sat || "—"}` : ""}.` });
+    if ((t.cancel || []).length) out.push({ q: "מה מדיניות הביטול?", a: T.cancelLines(t.cancel).join(". ") + "." });
+    out.push({ q: "מקבלים כלבים?", a: has("pets") ? "כן, המתחם מקבל כלבים. כדאי לעדכן את המארחים מראש." : "המתחם לא מוגדר כמתאים לכלבים. אפשר לשאול את המארחים." });
+    if (r && r.n) out.push({ q: `מה אומרים האורחים על ${l.name}?`, a: `ציון ${T.score10(r.avg).toFixed(1)} (${T.scoreLabel(T.score10(r.avg))}) לפי ${r.n === 1 ? "חוות דעת אחת" : r.n + " חוות דעת"} מאומתות.` });
+    return out.concat((d.faq || []).filter((x) => x.q && x.a));
   };
 
   T.normalizeListing = (l) => {
@@ -545,7 +865,9 @@
       lat: l.lat === "" || l.lat == null ? null : Number(l.lat), lng: l.lng === "" || l.lng == null ? null : Number(l.lng),
       amenities: l.amenities || [], audience: l.audience || [], photos: l.photos || [], blocked_dates: (l.blocked_dates || []).slice().sort(),
       ical_blocked: l.ical_blocked || [], rooms: l.rooms || [], extras: l.extras || [], seasons: l.seasons || [],
-      sponsored_until: l.sponsored_until || null, video_url: l.video_url || "", pending: l.pending || null
+      sponsored_until: l.sponsored_until || null, video_url: l.video_url || "", pending: l.pending || null,
+      details: l.details && typeof l.details === "object" ? l.details : {}, terms: l.terms && typeof l.terms === "object" ? l.terms : {},
+      exclusive: !!l.exclusive, best_price: !!l.best_price
     });
   };
 })();

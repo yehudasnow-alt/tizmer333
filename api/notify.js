@@ -90,10 +90,21 @@ export default async function handler(req, res) {
         }
       }
     }
+    const SOURCES = { form: "בקשת הזמנה", find: "מצא לי צימר", contact: "יצירת קשר", report: "דיווח על מידע שגוי" };
+    const BENEFITS = { reservists: "מילואימניקים", soldiers: "חיילים", students: "סטודנטים", seniors: "גיל הזהב", evacuees: "מפונים" };
+    const m = r.meta && typeof r.meta === "object" ? r.meta : {};
+    const units = Array.isArray(r.rooms_req) && r.rooms_req.length > 1 ? r.rooms_req.map((x) => `${esc(x.name || x.id)} (${esc(x.guests)}${x.children ? "+" + esc(x.children) + " ילדים" : ""})`).join(", ") : "";
     const rows = [
+      row("סוג", esc(SOURCES[r.source] || r.source)),
       row("מתחם", esc(r.listing_name) + (r.unit_name ? ` · ${esc(r.unit_name)}` : "")),
-      row("תאריכים", r.check_in ? `${fmt(r.check_in)} – ${fmt(r.check_out)}` : "גמיש"),
-      row("אורחים", esc(r.guests)),
+      row("יחידות", units),
+      row("תאריכים", r.check_in ? `${fmt(r.check_in)} – ${fmt(r.check_out)}${r.flexible ? " (גמישים)" : ""}` : r.source === "report" || r.source === "contact" ? "" : "גמיש"),
+      row("אורחים", r.source === "report" || r.source === "contact" ? "" : esc(r.guests) + (r.children ? ` + ${esc(r.children)} ילדים` : "")),
+      row("אזור", esc(m.place_label || "")),
+      row("תקציב ללילה", m.budget ? "עד ₪" + esc(m.budget) : ""),
+      row("מה חשוב", esc((m.wants || []).join(", "))),
+      row("חבילה", esc(r.package)),
+      row("הטבה", esc(BENEFITS[r.benefit] || r.benefit)),
       row("תוספות", esc((r.extras || []).join(", "))),
       row("קופון", esc(r.coupon)),
       row("הערכת מחיר", r.est_total ? `₪${Number(r.est_total).toLocaleString("he-IL")}` : ""),
@@ -102,10 +113,11 @@ export default async function handler(req, res) {
       row("מייל", esc(r.email)),
       row("הודעה", esc(r.message).replace(/\n/g, "<br>"))
     ].join("");
-    const subject = `פנייה חדשה: ${r.listing_name || "מתחם"}${r.check_in ? " · " + fmt(r.check_in) : ""}`;
+    const subject = r.source === "report" ? `דיווח על מידע שגוי: ${r.listing_name || "מתחם"}` : r.source === "find" ? `מצא לי צימר: ${r.name}${r.check_in ? " · " + fmt(r.check_in) : ""}` : r.source === "contact" ? `הודעה מהאתר: ${r.name}` : `פנייה חדשה: ${r.listing_name || "מתחם"}${r.check_in ? " · " + fmt(r.check_in) : ""}`;
     const jobs = [];
     if (adminTo) jobs.push(mail({ to: adminTo, replyTo: r.email || undefined, subject, html: shell("פנייה חדשה מהאתר", rows, base && { href: `${base}/admin.html#leads`, label: "לפניות בפאנל הניהול" }) }));
-    if (host && host.toLowerCase() !== String(adminTo).toLowerCase()) {
+    /* דיווח על מידע שגוי מגיע רק למנהל */
+    if (host && r.source !== "report" && host.toLowerCase() !== String(adminTo).toLowerCase()) {
       jobs.push(mail({ to: host, replyTo: r.email || undefined, subject, html: shell("פנייה חדשה על המתחם שלך", rows, base && { href: `${base}/owner.html#leads`, label: "לממשק המארחים" }) }));
     }
     const out = await Promise.allSettled(jobs);

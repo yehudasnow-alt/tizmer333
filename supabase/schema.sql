@@ -73,6 +73,11 @@ alter table public.listings add column if not exists seasons jsonb not null defa
 alter table public.listings add column if not exists lat double precision;
 alter table public.listings add column if not exists lng double precision;
 alter table public.listings add column if not exists pending jsonb;
+-- תיאור מפורט (עובר אישור), תנאים ומחירים נוספים (לא עובר אישור), תוויות של מנהל
+alter table public.listings add column if not exists details jsonb not null default '{}'::jsonb;
+alter table public.listings add column if not exists terms jsonb not null default '{}'::jsonb;
+alter table public.listings add column if not exists exclusive boolean not null default false;
+alter table public.listings add column if not exists best_price boolean not null default false;
 create index if not exists listings_owner_idx on public.listings (owner_id);
 create index if not exists listings_active_idx on public.listings (active);
 
@@ -100,6 +105,13 @@ alter table public.leads add column if not exists coupon text not null default '
 alter table public.leads add column if not exists est_total integer not null default 0;
 alter table public.leads add column if not exists review_token text;
 alter table public.leads add column if not exists notified_at timestamptz;
+alter table public.leads add column if not exists children integer not null default 0;
+alter table public.leads add column if not exists benefit text not null default '';
+alter table public.leads add column if not exists package text not null default '';
+alter table public.leads add column if not exists rooms_req jsonb not null default '[]'::jsonb;
+alter table public.leads add column if not exists flexible boolean not null default false;
+alter table public.leads add column if not exists meta jsonb not null default '{}'::jsonb;
+alter table public.leads alter column listing_name set default '';
 create unique index if not exists leads_review_token_idx on public.leads (review_token) where review_token is not null;
 create index if not exists leads_listing_idx on public.leads (listing_id);
 create index if not exists leads_created_idx on public.leads (created_at desc);
@@ -136,6 +148,38 @@ create table if not exists public.reviews (
   updated_at  timestamptz not null default now()
 );
 create index if not exists reviews_listing_idx on public.reviews (listing_id);
+alter table public.reviews add column if not exists title text not null default '';
+alter table public.reviews add column if not exists scores jsonb not null default '{}'::jsonb;
+alter table public.reviews add column if not exists unit_name text not null default '';
+
+-- מקומות באזור: מסעדות, אטרקציות, ספא, יקבים, מסלולים (מנוהל ע"י המנהל)
+create table if not exists public.places (
+  id          text primary key default gen_random_uuid()::text,
+  name        text not null,
+  kind        text not null default 'attraction',
+  region      text not null default '',
+  settlement  text not null default '',
+  lat         double precision,
+  lng         double precision,
+  phone       text not null default '',
+  url         text not null default '',
+  blurb       text not null default '',
+  photo       text not null default '',
+  active      boolean not null default true,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+-- נרשמים לדילים במייל
+create table if not exists public.subscribers (
+  id          text primary key default gen_random_uuid()::text,
+  email       text not null check (char_length(email) between 5 and 200 and email like '%_@_%._%'),
+  name        text not null default '' check (char_length(name) <= 80),
+  regions     text[] not null default '{}',
+  source      text not null default 'site' check (char_length(source) <= 30),
+  created_at  timestamptz not null default now()
+);
+create unique index if not exists subscribers_email_idx on public.subscribers (lower(email));
 
 -- מגזין
 create table if not exists public.articles (
@@ -222,10 +266,13 @@ begin
     new.featured := old.featured;
     new.owner_id := old.owner_id;
     new.sponsored_until := old.sponsored_until;
+    new.exclusive := old.exclusive;
+    new.best_price := old.best_price;
     if public.moderation_on() then
       new.name := old.name; new.type := old.type; new.region := old.region; new.settlement := old.settlement;
       new.tagline := old.tagline; new.description := old.description; new.photos := old.photos;
       new.amenities := old.amenities; new.audience := old.audience; new.video_url := old.video_url;
+      new.details := old.details;
     else
       new.pending := null;
     end if;
@@ -256,6 +303,8 @@ drop trigger if exists leads_touch on public.leads;
 create trigger leads_touch before update on public.leads for each row execute function public.touch_updated_at();
 drop trigger if exists applications_touch on public.applications;
 create trigger applications_touch before update on public.applications for each row execute function public.touch_updated_at();
+drop trigger if exists places_touch on public.places;
+create trigger places_touch before update on public.places for each row execute function public.touch_updated_at();
 drop trigger if exists articles_touch on public.articles;
 create trigger articles_touch before update on public.articles for each row execute function public.touch_updated_at();
 
@@ -269,20 +318,39 @@ language sql stable security definer set search_path = public as $$
   limit 1;
 $$;
 
-create or replace function public.submit_review(p_token text, p_rating integer, p_text text, p_name text)
+drop function if exists public.submit_review(text, integer, text, text);
+create or replace function public.submit_review(p_token text, p_rating integer, p_text text, p_name text, p_title text default '', p_scores jsonb default '{}'::jsonb)
 returns boolean language plpgsql security definer set search_path = public as $$
 declare q public.leads;
   months text[] := array['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+  clean jsonb := '{}'::jsonb; k text; v text;
 begin
   select * into q from public.leads where review_token = p_token and status = 'closed' limit 1;
   if q.id is null then raise exception 'הקישור לחוות הדעת אינו בתוקף'; end if;
   if exists (select 1 from public.reviews where lead_id = q.id) then raise exception 'כבר נכתבה חוות דעת על ההזמנה הזאת'; end if;
   if char_length(coalesce(p_text, '')) < 10 then raise exception 'חוות הדעת קצרה מדי'; end if;
-  insert into public.reviews (listing_id, lead_id, name, rating, text, status, stay_month)
-  values (q.listing_id, q.id, left(coalesce(nullif(trim(p_name), ''), 'אורח'), 60), greatest(1, least(5, p_rating)), left(p_text, 1500), 'pending',
+  -- רק קטגוריות מוכרות, ציון שלם 1–5
+  if jsonb_typeof(p_scores) = 'object' then
+    for k, v in select * from jsonb_each_text(p_scores) loop
+      if k in ('clean','maintain','facilities','host','privacy','treats','breakfast','value') and v ~ '^[1-5]$' then
+        clean := clean || jsonb_build_object(k, v::int);
+      end if;
+    end loop;
+  end if;
+  insert into public.reviews (listing_id, lead_id, name, rating, text, title, scores, unit_name, status, stay_month)
+  values (q.listing_id, q.id, left(coalesce(nullif(trim(p_name), ''), 'אורח'), 60), greatest(1, least(5, p_rating)), left(p_text, 1500),
+          left(coalesce(p_title, ''), 120), clean, coalesce(q.unit_name, ''), 'pending',
           coalesce(months[extract(month from q.check_in)::int], ''));
   return true;
 end $$;
+
+-- 20 המתחמים הנצפים ביותר ב־30 יום (רק מזהים, בלי מספרים)
+create or replace function public.top_viewed(p_limit integer default 20)
+returns setof text language sql stable security definer set search_path = public as $$
+  select s.listing_id from public.listing_stats s join public.listings l on l.id = s.listing_id and l.active
+  where s.day >= current_date - 30 group by s.listing_id having sum(s.views) > 0
+  order by sum(s.views) desc limit greatest(1, least(coalesce(p_limit, 20), 50));
+$$;
 
 -- ספירת צפיות / הצגת טלפון / וואטסאפ
 create or replace function public.track_event(p_listing text, p_kind text)
@@ -318,7 +386,8 @@ grant execute on function public.set_ical_blocked(text, text, text[]) to service
 grant execute on function public.is_admin() to anon, authenticated;
 grant execute on function public.my_advertiser_ids() to anon, authenticated;
 grant execute on function public.review_invite(text) to anon, authenticated;
-grant execute on function public.submit_review(text, integer, text, text) to anon, authenticated;
+grant execute on function public.submit_review(text, integer, text, text, text, jsonb) to anon, authenticated;
+grant execute on function public.top_viewed(integer) to anon, authenticated;
 grant execute on function public.track_event(text, text) to anon, authenticated;
 
 -- ------------------------------------------------------------ הרשאות (RLS)
@@ -332,6 +401,8 @@ alter table public.reviews       enable row level security;
 alter table public.articles      enable row level security;
 alter table public.listing_stats enable row level security;
 alter table public.settings      enable row level security;
+alter table public.places        enable row level security;
+alter table public.subscribers   enable row level security;
 
 -- מתחמים
 drop policy if exists listings_read on public.listings;
@@ -358,10 +429,16 @@ create policy advertisers_write on public.advertisers for all to authenticated
 drop policy if exists leads_insert on public.leads;
 create policy leads_insert on public.leads for insert to anon, authenticated
   with check (status = 'new' and admin_note = '' and review_token is null and notified_at is null
-              and listing_id in (select l.id from public.listings l where l.active));
+              and char_length(meta::text) <= 4000 and char_length(rooms_req::text) <= 4000
+              and char_length(benefit) <= 30 and char_length(package) <= 120 and children between 0 and 100
+              and (listing_id in (select l.id from public.listings l where l.active)
+                   or (listing_id is null and source in ('find', 'contact'))));
 drop policy if exists leads_read on public.leads;
+-- מנהל, מארח המתחם, או האורח עצמו (לפי האימייל המאומת שלו)
 create policy leads_read on public.leads for select to authenticated
-  using (public.is_admin() or listing_id in (select l.id from public.listings l where l.owner_id in (select public.my_advertiser_ids())));
+  using (public.is_admin()
+         or listing_id in (select l.id from public.listings l where l.owner_id in (select public.my_advertiser_ids()))
+         or (email <> '' and lower(email) = lower(coalesce(auth.jwt() ->> 'email', ''))));
 drop policy if exists leads_update on public.leads;
 create policy leads_update on public.leads for update to authenticated
   using (public.is_admin() or listing_id in (select l.id from public.listings l where l.owner_id in (select public.my_advertiser_ids())))
@@ -386,6 +463,18 @@ create policy reviews_update on public.reviews for update to authenticated
   with check (public.is_admin() or listing_id in (select l.id from public.listings l where l.owner_id in (select public.my_advertiser_ids())));
 drop policy if exists reviews_delete on public.reviews;
 create policy reviews_delete on public.reviews for delete to authenticated using (public.is_admin());
+
+-- מקומות באזור
+drop policy if exists places_read on public.places;
+create policy places_read on public.places for select using (active or public.is_admin());
+drop policy if exists places_write on public.places;
+create policy places_write on public.places for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+-- נרשמים לדילים: כל אחד נרשם, רק מנהל רואה ומוחק
+drop policy if exists subscribers_insert on public.subscribers;
+create policy subscribers_insert on public.subscribers for insert to anon, authenticated with check (true);
+drop policy if exists subscribers_admin on public.subscribers;
+create policy subscribers_admin on public.subscribers for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- מגזין
 drop policy if exists articles_read on public.articles;

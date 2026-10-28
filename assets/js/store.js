@@ -7,12 +7,15 @@
     listings: ["id", "name", "type", "region", "settlement", "tagline", "description", "guests_max", "bedrooms", "bathrooms", "units", "min_nights",
       "price_weekday", "price_weekend", "price_holiday", "guests_base", "extra_guest_price", "deal_label", "deal_text", "lastminute_pct", "sponsored_until",
       "video_url", "amenities", "audience", "photos", "blocked_dates", "ical_url", "rooms", "extras", "seasons", "lat", "lng",
-      "phone", "whatsapp", "email", "owner_id", "featured", "active", "pending"],
+      "phone", "whatsapp", "email", "owner_id", "featured", "active", "pending", "details", "terms", "exclusive", "best_price"],
     advertisers: ["id", "name", "business", "phone", "email", "plan", "status", "billing_model", "lead_price", "start_date", "end_date", "notes", "payments"],
-    leads: ["id", "listing_id", "listing_name", "unit_id", "unit_name", "name", "phone", "email", "check_in", "check_out", "guests", "extras", "coupon", "est_total", "message", "status", "source", "admin_note", "review_token"],
+    leads: ["id", "listing_id", "listing_name", "unit_id", "unit_name", "name", "phone", "email", "check_in", "check_out", "guests", "children", "extras", "coupon", "est_total",
+      "message", "status", "source", "admin_note", "review_token", "benefit", "package", "rooms_req", "flexible", "meta"],
     applications: ["id", "name", "phone", "email", "business", "settlement", "region", "type", "units", "message", "status"],
-    reviews: ["id", "listing_id", "name", "rating", "text", "status", "stay_month", "reply"],
-    articles: ["id", "title", "excerpt", "body", "cover", "published"]
+    reviews: ["id", "listing_id", "name", "rating", "text", "status", "stay_month", "reply", "title", "scores", "unit_name"],
+    articles: ["id", "title", "excerpt", "body", "cover", "published"],
+    places: ["id", "name", "kind", "region", "settlement", "lat", "lng", "phone", "url", "blurb", "photo", "active"],
+    subscribers: ["id", "email", "name", "regions", "source"]
   };
   const pick = (o, cols) => {
     const out = {};
@@ -23,15 +26,30 @@
     return out;
   };
   const byNewest = (a, b) => (b.created_at || "").localeCompare(a.created_at || "");
+  const afterLogin = (h) => { try { localStorage.setItem("tamara.after", JSON.stringify({ h, t: Date.now() })); } catch (e) {} };
+  T.takeAfterLogin = () => { try { const a = JSON.parse(localStorage.getItem("tamara.after") || "null"); localStorage.removeItem("tamara.after"); return a && Date.now() - a.t < 864e5 ? a.h : ""; } catch (e) { return ""; } };
   const same = (a, b) => JSON.stringify(a == null ? null : a) === JSON.stringify(b == null ? null : b);
 
+  /* השוואה ״סמנטית״: ריק = חסר, סדר מאפיינים לא משנה, קטגוריית ״כללי״ בסוף רשימת התמונות = ברירת מחדל */
+  const canon = (v) => {
+    if (v == null || v === "") return null;
+    if (Array.isArray(v)) { const a = v.map(canon).filter((x) => x !== null); return a.length ? a : null; }
+    if (typeof v === "object") { const o = {}; Object.keys(v).sort().forEach((k) => { const c = canon(v[k]); if (c !== null) o[k] = c; }); return Object.keys(o).length ? o : null; }
+    return v;
+  };
+  const trimCats = (c) => { const a = (c || []).slice(); while (a.length && (!a[a.length - 1] || a[a.length - 1] === "general")) a.pop(); return a; };
+  T.sameField = (k, a, b) => {
+    if (k === "amenities" || k === "audience") return same([...(a || [])].sort(), [...(b || [])].sort());
+    if (k === "details") { const n = (d) => canon(Object.assign({}, d || {}, { photo_cats: trimCats((d || {}).photo_cats) })); return JSON.stringify(n(a)) === JSON.stringify(n(b)); }
+    return JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+  };
   /* מארח: שדות תוכן נשמרים כ״ממתין לאישור״, מחירים ויומן נשמרים מיד */
   T.ownerSplit = (draft, original, moderation) => {
     const row = Object.assign({}, draft);
     if (!moderation) { row.pending = null; return row; }
     const diff = {};
     T.MODERATED_FIELDS.forEach(([k]) => {
-      if (!same(draft[k], original[k])) diff[k] = draft[k];
+      if (!T.sameField(k, draft[k], original[k])) diff[k] = draft[k];
       row[k] = original[k];
     });
     row.pending = Object.keys(diff).length ? Object.assign(diff, { _at: new Date().toISOString() }) : null;
@@ -53,9 +71,9 @@
     const load = () => {
       if (db) return db;
       try { const raw = localStorage.getItem(KEY); if (raw) db = JSON.parse(raw); } catch (e) { persistent = false; }
-      if (!db || db.version !== 2) { db = T.seedData(); persist(); }
+      if (!db || db.version !== 3) { db = T.seedData(); persist(); }
       db.settings = Object.assign(T.clone(T.DEFAULT_SETTINGS), db.settings || {});
-      ["reviews", "articles", "leads", "applications", "advertisers"].forEach((k) => (db[k] = db[k] || []));
+      ["reviews", "articles", "leads", "applications", "advertisers", "places", "subscribers"].forEach((k) => (db[k] = db[k] || []));
       db.stats = db.stats || {};
       return db;
     };
@@ -134,10 +152,30 @@
         if (!inv) throw new Error("הקישור לחוות הדעת כבר שומש או שאינו בתוקף");
         const q = db.leads.find((x) => x.review_token === token);
         const month = new Intl.DateTimeFormat("he-IL", { month: "long" }).format(T.parseISO(q.check_in) || new Date());
-        return upsert("reviews", { listing_id: q.listing_id, lead_id: q.id, name: String(r.name || "").slice(0, 60), rating: Math.max(1, Math.min(5, Number(r.rating) || 5)), text: String(r.text || "").slice(0, 1500), status: "pending", stay_month: month }, "v-");
+        const scores = {};
+        Object.entries(r.scores || {}).forEach(([k, v]) => { if (T.REVIEW_CATS.some((c) => c.key === k) && Number(v) >= 1 && Number(v) <= 5) scores[k] = Math.round(Number(v)); });
+        return upsert("reviews", { listing_id: q.listing_id, lead_id: q.id, name: String(r.name || "").slice(0, 60), rating: Math.max(1, Math.min(5, Number(r.rating) || 5)), text: String(r.text || "").slice(0, 1500), title: String(r.title || "").slice(0, 120), scores, unit_name: q.unit_name || "", status: "pending", stay_month: month }, "v-");
       },
       async updateReview(id, patch) { return upsert("reviews", Object.assign({}, patch, { id }), "v-"); },
       async deleteReview(id) { remove("reviews", id); },
+      /* מקומות באזור (מסעדות, אטרקציות…) */
+      async listPlaces(o) { load(); const p = T.clone(db.places).sort((a, b) => (a.name || "").localeCompare(b.name || "", "he")); return o && o.all ? p : p.filter((x) => x.active !== false); },
+      async savePlace(p) { return upsert("places", p, "p-"); },
+      async deletePlace(id) { remove("places", id); },
+      /* מנויים לדילים במייל */
+      async addSubscriber(x) {
+        load();
+        const email = String(x.email || "").trim().toLowerCase();
+        if (db.subscribers.some((s) => s.email === email)) return { duplicate: true };
+        return upsert("subscribers", { email, name: String(x.name || "").slice(0, 80), regions: x.regions || [], source: x.source || "site" }, "s-", true);
+      },
+      async listSubscribers() { load(); return T.clone(db.subscribers).sort(byNewest); },
+      async deleteSubscriber(id) { remove("subscribers", id); },
+      /* הכי נצפים ב־30 יום (לתווית בכרטיס) */
+      async topViewed(n) { const st = await this.stats(30); const ids = new Set(db.listings.filter((l) => l.active).map((l) => l.id)); return Object.entries(st).filter(([id, x]) => ids.has(id) && x.v > 0).sort((a, b) => b[1].v - a[1].v).slice(0, n || 20).map(([id]) => id); },
+      /* הפניות שנשלחו מהדפדפן הזה */
+      async myGuestLeads(ids) { load(); const set = new Set(ids || []); return T.clone(db.leads.filter((q) => set.has(q.id))).sort(byNewest); },
+      async guestUser() { return null; },
       /* מגזין */
       async listArticles(o) { load(); const a = T.clone(db.articles).sort(byNewest); return o && o.all ? a : a.filter((x) => x.published); },
       async saveArticle(a) { return upsert("articles", a, "m-"); },
@@ -181,7 +219,7 @@
       exportAll() { load(); const x = T.clone(db); delete x.stats; return x; },
       async importAll(data) {
         load();
-        ["listings", "advertisers", "leads", "applications", "reviews", "articles"].forEach((t) => { if (Array.isArray(data[t])) db[t] = data[t]; });
+        ["listings", "advertisers", "leads", "applications", "reviews", "articles", "places", "subscribers"].forEach((t) => { if (Array.isArray(data[t])) db[t] = data[t]; });
         if (data.settings) db.settings = Object.assign({}, db.settings, data.settings);
         persist();
         emit();
@@ -189,7 +227,7 @@
       async reset() { db = T.seedData(); persist(); emit(); },
       async clearDemo() {
         load();
-        ["listings", "leads", "applications", "reviews", "articles"].forEach((t) => (db[t] = db[t].filter((x) => !x.demo)));
+        ["listings", "leads", "applications", "reviews", "articles", "places"].forEach((t) => (db[t] = db[t].filter((x) => !x.demo)));
         const ids = new Set(db.listings.map((l) => l.id));
         db.reviews = db.reviews.filter((r) => ids.has(r.listing_id));
         db.advertisers = db.advertisers.filter((a) => db.listings.some((l) => l.owner_id === a.id));
@@ -274,9 +312,37 @@
         return ok(await q.order("created_at", { ascending: false }).limit(1000));
       },
       async reviewInvite(token) { const r = ok(await sb.rpc("review_invite", { p_token: token })); return (Array.isArray(r) ? r[0] : r) || null; },
-      async submitReview(token, r) { ok(await sb.rpc("submit_review", { p_token: token, p_rating: Number(r.rating), p_text: r.text, p_name: r.name })); return true; },
+      async submitReview(token, r) { ok(await sb.rpc("submit_review", { p_token: token, p_rating: Number(r.rating), p_text: r.text, p_name: r.name, p_title: r.title || "", p_scores: r.scores || {} })); return true; },
       async updateReview(id, patch) { const row = pick(patch, COLS.reviews); delete row.id; ok(await sb.from("reviews").update(row).eq("id", id)); emit(); },
       async deleteReview(id) { ok(await sb.from("reviews").delete().eq("id", id)); emit(); },
+      async listPlaces(o) {
+        let q = sb.from("places").select("*");
+        if (!(o && o.all)) q = q.eq("active", true);
+        return ok(await q.order("name").limit(2000));
+      },
+      async savePlace(p) { return save("places", p, COLS.places); },
+      async deletePlace(id) { ok(await sb.from("places").delete().eq("id", id)); emit(); },
+      async addSubscriber(x) {
+        const row = pick({ email: String(x.email || "").trim().toLowerCase(), name: String(x.name || "").slice(0, 80), regions: x.regions || [], source: x.source || "site" }, COLS.subscribers);
+        const r = await sb.from("subscribers").insert(row);
+        if (r.error && r.error.code === "23505") return { duplicate: true };
+        ok(r);
+        return row;
+      },
+      async listSubscribers() { return ok(await sb.from("subscribers").select("*").order("created_at", { ascending: false }).limit(5000)); },
+      async deleteSubscriber(id) { ok(await sb.from("subscribers").delete().eq("id", id)); emit(); },
+      async topViewed(n) { const r = await sb.rpc("top_viewed", { p_limit: n || 20 }); return r.error ? [] : flat(r.data); },
+      /* אורח מחובר רואה את הפניות שנשלחו מהאימייל שלו; בלי חיבור – רק מה שנשמר בדפדפן */
+      async myGuestLeads() {
+        const u = await store.getUser();
+        if (!u || !u.email) return [];
+        const rows = ok(await sb.from("leads").select("id,listing_id,listing_name,unit_name,check_in,check_out,guests,children,status,created_at,est_total,source,email").order("created_at", { ascending: false }).limit(200));
+        return rows.filter((q) => String(q.email || "").toLowerCase() === u.email.toLowerCase());
+      },
+      async guestUser() { const u = await store.getUser(); return u ? { email: u.email } : null; },
+      /* אחרי הכניסה Supabase מחזיר את הטוקן ב-# של הכתובת, לכן היעד (#me-leads) נשמר בצד ומופעל כשהכניסה מצליחה */
+      async signInGuest(email) { afterLogin("me-leads"); ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } })); return true; },
+      async signInGuestGoogle() { afterLogin("me-leads"); ok(await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } })); },
       async listArticles(o) {
         let q = sb.from("articles").select("*");
         if (!(o && o.all)) q = q.eq("published", true);
@@ -341,9 +407,10 @@
       async myLeads() { return ok(await sb.from("leads").select("*").order("created_at", { ascending: false }).limit(1000)); },
       async myReviews() { return ok(await sb.from("reviews").select("*").order("created_at", { ascending: false }).limit(500)); },
       async exportAll() {
-        const [listings, advertisers, leads, applications, reviews, articles, settings] = await Promise.all([store.listListings({ all: true }), store.listAdvertisers(), store.listLeads(), store.listApplications(), store.listReviews({ all: true }), store.listArticles({ all: true }), store.getSettings()]);
-        return { listings, advertisers, leads, applications, reviews, articles, settings };
+        const [listings, advertisers, leads, applications, reviews, articles, settings, places, subscribers] = await Promise.all([store.listListings({ all: true }), store.listAdvertisers(), store.listLeads(), store.listApplications(), store.listReviews({ all: true }), store.listArticles({ all: true }), store.getSettings(), store.listPlaces({ all: true }), store.listSubscribers()]);
+        return { listings, advertisers, leads, applications, reviews, articles, settings, places, subscribers };
       },
+
       async importAll(data) {
         /* ייבוא מההדגמה: מפרסמים, מתחמים (בלי מתחמי הדוגמה), מאמרים והגדרות */
         const idMap = {};
@@ -357,6 +424,12 @@
           row.owner_id = idMap[row.owner_id] || null;
           row.photos = (row.photos || []).filter((p) => !String(p).startsWith("data:"));
           ok(await sb.from("listings").insert(row));
+        }
+        for (const p of data.places || []) {
+          if (p.demo) continue;
+          const row = pick(p, COLS.places); delete row.id;
+          if (String(row.photo || "").startsWith("data:")) row.photo = "";
+          ok(await sb.from("places").insert(row));
         }
         for (const m of data.articles || []) {
           if (m.demo) continue;
