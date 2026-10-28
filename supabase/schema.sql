@@ -404,6 +404,16 @@ create policy settings_read on public.settings for select using (true);
 drop policy if exists settings_write on public.settings;
 create policy settings_write on public.settings for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
+-- ------------------------------------------------------------ גישה לטבלאות דרך ה-API
+-- גם אם בפרויקט כובתה האפשרות "Automatically expose new tables".
+-- מה שכל משתמש רואה ומשנה בפועל נקבע ע"י מדיניות ה-RLS שלמעלה.
+grant usage on schema public to anon, authenticated, service_role;
+grant select, insert, update, delete on all tables in schema public to anon, authenticated;
+grant all on all tables in schema public to service_role;
+grant execute on function public.is_service() to anon, authenticated, service_role;
+grant execute on function public.moderation_on() to anon, authenticated, service_role;
+grant execute on all functions in schema public to service_role;
+
 -- ------------------------------------------------------------ תמונות (אם לא משתמשים ב-Cloudinary)
 
 insert into storage.buckets (id, name, public) values ('photos', 'photos', true) on conflict (id) do nothing;
