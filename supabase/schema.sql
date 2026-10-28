@@ -172,9 +172,12 @@ returns boolean language sql stable security definer set search_path = public as
   select exists (select 1 from public.admins a where lower(a.email) = lower(coalesce(auth.jwt() ->> 'email', '')));
 $$;
 
+-- השרת (מפתח Secret / service_role) או עורך ה-SQL של Supabase.
+-- נבדק גם לפי התפקיד בפועל, כך שזה עובד עם המפתחות החדשים (sb_secret_) ועם הישנים.
 create or replace function public.is_service()
-returns boolean language sql stable as $$
-  select coalesce(auth.jwt() ->> 'role', '') = 'service_role';
+returns boolean language sql stable security invoker as $$
+  select coalesce(auth.jwt() ->> 'role', '') = 'service_role'
+      or current_user in ('service_role', 'postgres', 'supabase_admin');
 $$;
 
 create or replace function public.my_advertiser_ids()
@@ -196,8 +199,9 @@ begin
 end $$;
 
 -- מארח: לא משנה פרסום, קידום, שיוך או סנכרון; תוכן עובר דרך pending כשהאישור פעיל
+-- security invoker: רץ בהרשאות של מי שמעדכן, כדי ש-is_service יזהה אותו נכון
 create or replace function public.protect_listing_columns()
-returns trigger language plpgsql security definer set search_path = public as $$
+returns trigger language plpgsql security invoker set search_path = public as $$
 begin
   -- תאריכים מסונכרנים נכתבים רק ע"י השרת (גם מנהל לא דורס אותם משמירה ישנה בעורך)
   if not public.is_service() then
@@ -232,7 +236,7 @@ end $$;
 
 -- מארח: בחוות דעת מותר לשנות רק את התגובה
 create or replace function public.protect_review_columns()
-returns trigger language plpgsql security definer set search_path = public as $$
+returns trigger language plpgsql security invoker set search_path = public as $$
 begin
   if not public.is_admin() and not public.is_service() then
     new.listing_id := old.listing_id; new.lead_id := old.lead_id; new.name := old.name;
@@ -296,7 +300,7 @@ end $$;
 
 -- סנכרון iCal (נקרא רק מהשרת עם Service Role): מעדכן יחידה אחת בלי לגעת בשאר השדות
 create or replace function public.set_ical_blocked(p_listing text, p_unit text, p_dates text[])
-returns void language plpgsql security definer set search_path = public as $$
+returns void language plpgsql security invoker set search_path = public as $$
 begin
   if not public.is_service() then raise exception 'not allowed'; end if;
   if coalesce(p_unit, '') = '' then

@@ -5,7 +5,10 @@
 export const env = (k, d = "") => (process.env[k] || d).trim();
 
 const SB = () => env("SUPABASE_URL").replace(/\/+$/, "");
-const SERVICE = () => env("SUPABASE_SERVICE_ROLE_KEY");
+/* מפתח השרת: החדש (sb_secret_…) או הישן (service_role) – שני השמות נתמכים */
+const SERVICE = () => env("SUPABASE_SECRET_KEY") || env("SUPABASE_SERVICE_ROLE_KEY");
+/* מפתחות חדשים נשלחים רק ב-apikey; מפתחות ישנים (JWT) גם ב-Authorization */
+const keyHeaders = (key) => (key.startsWith("sb_") ? { apikey: key } : { apikey: key, Authorization: `Bearer ${key}` });
 
 export function send(res, status, data, headers = {}) {
   res.statusCode = status;
@@ -20,7 +23,7 @@ export function send(res, status, data, headers = {}) {
 }
 
 export function requireEnv(res, keys) {
-  const missing = keys.filter((k) => !env(k));
+  const missing = keys.filter((k) => (k === "SUPABASE_SERVICE_ROLE_KEY" ? !SERVICE() : !env(k))).map((k) => (k === "SUPABASE_SERVICE_ROLE_KEY" ? "SUPABASE_SECRET_KEY" : k));
   if (missing.length) { send(res, 503, { error: "missing env: " + missing.join(", ") }); return false; }
   return true;
 }
@@ -30,8 +33,7 @@ export async function db(path, { method = "GET", body, prefer } = {}) {
   const r = await fetch(`${SB()}/rest/v1/${path}`, {
     method,
     headers: {
-      apikey: SERVICE(),
-      Authorization: `Bearer ${SERVICE()}`,
+      ...keyHeaders(SERVICE()),
       "Content-Type": "application/json",
       ...(prefer ? { Prefer: prefer } : {})
     },

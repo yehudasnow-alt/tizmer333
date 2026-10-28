@@ -44,7 +44,8 @@
 4. **Authentication → URL Configuration**: ‏**Site URL** = כתובת האתר. ב-**Redirect URLs** מוסיפים `https://הדומיין/admin.html` ו-`https://הדומיין/owner.html`.
 5. כניסה עם Google (לא חובה): ב-[Google Cloud Console](https://console.cloud.google.com) → **APIs & Services → Credentials → Create OAuth client ID** (Web). ב-**Authorized redirect URIs**: ‏`https://<project-ref>.supabase.co/auth/v1/callback`. את ה-Client ID וה-Secret מדביקים ב-Supabase: **Authentication → Sign In / Providers → Google**.
 6. מיילי כניסה למארחים: שירות המיילים המובנה של Supabase מוגבל מאוד. ב-**Authentication → Emails → SMTP Settings**: ‏host `smtp.resend.com`, ‏port `465`, ‏user `resend`, ‏password = מפתח ה-API של Resend.
-7. **Project Settings → API**: מעתיקים את **Project URL**, את **anon public**, ואת **service_role** (סודי!).
+7. **Project Settings → API Keys**: מעתיקים את ה-**Publishable key** (מתחיל ב-`sb_publishable_`) ואת ה-**Secret key** (מתחיל ב-`sb_secret_`, סודי!). את **Project URL** (בצורה `https://xxxx.supabase.co`) מוצאים בכפתור **Connect** בראש הדף.
+   > בפרויקטים ישנים יש במקומם anon ו-service_role. גם הם עובדים, אבל Supabase מפסיקה אותם בסוף 2026, אז עדיף החדשים.
 
 ### 3 · Resend (מיילים)
 1. [resend.com](https://resend.com) → **Domains → Add domain** → מוסיפים את רשומות ה-DNS אצל רשם הדומיין.
@@ -61,8 +62,8 @@
 | משתנה | ערך | סודי? |
 |---|---|---|
 | `SUPABASE_URL` | Project URL | לא |
-| `SUPABASE_ANON_KEY` | anon public | לא |
-| `SUPABASE_SERVICE_ROLE_KEY` | service_role | **כן** |
+| `SUPABASE_PUBLISHABLE_KEY` | Publishable key (`sb_publishable_…`) | לא |
+| `SUPABASE_SECRET_KEY` | Secret key (`sb_secret_…`) | **כן** |
 | `SITE_URL` | `https://www.tamara.co.il` | לא |
 | `RESEND_API_KEY` | מ-Resend | **כן** |
 | `NOTIFY_FROM` | `תמרה <noreply@tamara.co.il>` | לא |

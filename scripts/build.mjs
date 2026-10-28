@@ -33,9 +33,11 @@ const ctx = { window: {}, console };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(ROOT, "assets/js/config.js"), "utf8"), ctx);
 const cfg = Object.assign({}, ctx.window.TAMARA_CONFIG || {});
-if (env("SUPABASE_URL") && env("SUPABASE_ANON_KEY")) {
+/* המפתח הציבורי: החדש (sb_publishable_…) או הישן (anon) – שני השמות נתמכים */
+const PUBLIC_KEY = env("SUPABASE_PUBLISHABLE_KEY") || env("SUPABASE_ANON_KEY");
+if (env("SUPABASE_URL") && PUBLIC_KEY) {
   cfg.SUPABASE_URL = env("SUPABASE_URL");
-  cfg.SUPABASE_ANON_KEY = env("SUPABASE_ANON_KEY");
+  cfg.SUPABASE_ANON_KEY = PUBLIC_KEY;
 }
 if (env("CLOUDINARY_CLOUD_NAME")) cfg.CLOUDINARY_CLOUD_NAME = env("CLOUDINARY_CLOUD_NAME");
 const pub = { SUPABASE_URL: cfg.SUPABASE_URL || "", SUPABASE_ANON_KEY: cfg.SUPABASE_ANON_KEY || "", CLOUDINARY_CLOUD_NAME: cfg.CLOUDINARY_CLOUD_NAME || "" };
@@ -53,7 +55,7 @@ const T = app.window.Tamara;
 /* ------------------------------------------------------------ נתונים */
 async function rest(table, query) {
   const r = await fetch(`${pub.SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/${table}?${query}`, {
-    headers: { apikey: pub.SUPABASE_ANON_KEY, Authorization: `Bearer ${pub.SUPABASE_ANON_KEY}` }
+    headers: pub.SUPABASE_ANON_KEY.startsWith("sb_") ? { apikey: pub.SUPABASE_ANON_KEY } : { apikey: pub.SUPABASE_ANON_KEY, Authorization: `Bearer ${pub.SUPABASE_ANON_KEY}` }
   });
   if (!r.ok) throw new Error(`${table}: ${r.status} ${await r.text()}`);
   return r.json();
