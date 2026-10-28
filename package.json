@@ -1,0 +1,11 @@
+{
+  "name": "tamara-zimmers",
+  "private": true,
+  "type": "module",
+  "description": "תמרה – צימרים ווילות: אתר סטטי + פונקציות Vercel + Supabase",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs && npx --yes serve dist"
+  },
+  "engines": { "node": ">=18" }
+}

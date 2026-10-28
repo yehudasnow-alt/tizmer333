@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ניהול | תמרה</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#1B262C">
+<link rel="icon" type="image/png" href="assets/img/favicon.png">
+<link rel="stylesheet" href="assets/css/fonts.css">
+<link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="assets/css/tamara.css">
+<style>html,body{min-height:100%}body{margin:0}</style>
+</head>
+<body data-mode="admin" dir="rtl">
+<div id="app"></div>
+<script src="assets/js/config.js"></script>
+<script>
+(function () {
+  var c = window.TAMARA_CONFIG || {}, list = [];
+  if (c.SUPABASE_URL && c.SUPABASE_ANON_KEY) list.push("assets/vendor/supabase.js");
+  list.push("assets/vendor/leaflet/leaflet.js", "assets/js/core.js", "assets/js/scene.js", "assets/js/seed.js", "assets/js/store.js", "assets/js/admin.js");
+  (function next() { var s = list.shift(); if (!s) return; var el = document.createElement("script"); el.src = s; el.onload = next; el.onerror = next; document.body.appendChild(el); })();
+})();
+</script>
+</body>
+</html>
