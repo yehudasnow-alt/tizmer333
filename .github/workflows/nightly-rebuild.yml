@@ -7,12 +7,20 @@ on:
   workflow_dispatch:
 jobs:
   rebuild:
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - name: Trigger Vercel deploy hook
         env:
           DEPLOY_HOOK_URL: ${{ secrets.DEPLOY_HOOK_URL }}
         run: |
           if [ -z "$DEPLOY_HOOK_URL" ]; then echo "DEPLOY_HOOK_URL not set – skipping"; exit 0; fi
-          curl -fsS --max-time 30 -X POST "$DEPLOY_HOOK_URL"
+          URL="$(printf '%s' "$DEPLOY_HOOK_URL" | tr -d '[:space:]')"
+          case "$URL" in
+            https://api.vercel.com/v1/integrations/deploy/*) ;;
+            *) echo "::error::DEPLOY_HOOK_URL is not a Vercel deploy hook. It must start with https://api.vercel.com/v1/integrations/deploy/ (Vercel → Settings → Git → Deploy Hooks)"; exit 1 ;;
+          esac
+          code=$(curl -sS -o resp.txt -w '%{http_code}' --connect-timeout 15 --max-time 60 --retry 3 --retry-delay 10 --retry-all-errors -X POST "$URL") || { echo "::error::Vercel did not answer (curl exit $?). Try again in a few minutes."; exit 1; }
+          echo "HTTP $code"; cat resp.txt; echo
+          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then echo "::error::Vercel answered HTTP $code. Create the deploy hook again and update the secret."; exit 1; fi
+          echo "Deploy started – see Vercel → Deployments"
