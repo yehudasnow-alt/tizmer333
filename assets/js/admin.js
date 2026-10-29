@@ -1521,7 +1521,11 @@
     else if (act === "set-flag") { const k = el.dataset.k; A.settings[k] = A.settings[k] === false; el.setAttribute("aria-checked", A.settings[k] !== false); }
     else if (act === "col-add") settingsRows("collections", (rows) => rows.push({ id: T.uid("c"), title: "", sub: "", ids: [] }));
     else if (act === "col-del") settingsRows("collections", (rows) => rows.splice(Number(el.dataset.i), 1));
-    else if (act === "toggle") { const l = A.listings.find((x) => x.id === id); const k = el.dataset.k; save(() => T.store.saveListing(Object.assign({}, l, { [k]: !l[k] })), k === "active" ? (!l.active ? "המתחם מוצג באתר" : "המתחם הוסתר") : !l.featured ? "נוסף לנבחרי העונה" : "הוסר מנבחרי העונה"); }
+    else if (act === "toggle") {
+      const l = A.listings.find((x) => x.id === id); const k = el.dataset.k;
+      /* מתחם בלי מחיר לא עולה לאתר (אחרת מוצג ₪0 ללילה) */
+      if (k === "active" && !l.active && !(T.fromPrice(l) > 0)) { T.toast("אי אפשר להציג באתר מתחם בלי מחיר ללילה. פותחים את העורך, מוסיפים מחיר ושומרים.", "err"); return; }
+      save(() => T.store.saveListing(Object.assign({}, l, { [k]: !l[k] })), k === "active" ? (!l.active ? "המתחם מוצג באתר" : "המתחם הוסתר") : !l.featured ? "נוסף לנבחרי העונה" : "הוסר מנבחרי העונה"); }
     else if (act === "sponsor") { const l = A.listings.find((x) => x.id === id); const on = T.isSponsored(l); save(() => T.store.saveListing(Object.assign({}, l, { sponsored_until: on ? null : T.iso(T.addDays(T.today(), 30)) })), on ? "המיקום הממומן בוטל" : "ממומן ל־30 יום"); }
     else if (act === "ask-del") {
       const kind = el.dataset.kind;
