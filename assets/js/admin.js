@@ -215,6 +215,11 @@
   function draftFor(id) {
     if (A.drafts[id]) return A.drafts[id];
     let src = id === "new" ? blankListing() : A.listings.find((l) => l.id === id);
+    if (id === "new" && A.newOwner) {
+      const a = A.advertisers.find((x) => x.id === A.newOwner);
+      if (a) Object.assign(src, { owner_id: a.id, name: a.business || "", phone: a.phone || "", whatsapp: a.phone || "", email: a.email || "" });
+      A.newOwner = null;
+    }
     if (!src) return null;
     if (!IS_ADMIN) src = T.withPending(src);
     A.drafts[id] = T.clone(src);
@@ -393,7 +398,8 @@
             <div class="toggle-row"><span>נבחרי העונה<small>בראש עמוד הבית</small></span><button class="switch" type="button" role="switch" aria-checked="${!!d.featured}" data-act="ed-switch" data-k="featured" aria-label="נבחרי העונה"></button></div>
             <div class="toggle-row"><span>בלעדי לאתר<small>תווית ״בלעדי לתמרה״ בכרטיס</small></span><button class="switch" type="button" role="switch" aria-checked="${!!d.exclusive}" data-act="ed-switch" data-k="exclusive" aria-label="בלעדי לאתר"></button></div>
             <div class="toggle-row"><span>מחיר הכי טוב<small>המארח התחייב שאין מחיר זול יותר באתר אחר</small></span><button class="switch" type="button" role="switch" aria-checked="${!!d.best_price}" data-act="ed-switch" data-k="best_price" aria-label="מחיר הכי טוב"></button></div>
-            <label class="field" style="margin-top:12px"><span>מפרסם (לקוח)</span><select class="select" name="owner_id"><option value="">ללא</option>${A.advertisers.map((a) => `<option value="${esc(a.id)}" ${d.owner_id === a.id ? "selected" : ""}>${esc(a.business || a.name)}</option>`).join("")}</select></label>
+            <label class="field" style="margin-top:12px"><span>שייך ללקוח (מפרסם)</span><select class="select" name="owner_id" data-act-change="ed-owner"><option value="">ללא לקוח</option>${A.advertisers.map((a) => `<option value="${esc(a.id)}" ${d.owner_id === a.id ? "selected" : ""}>${esc(a.business || a.name)}${a.email ? " · " + esc(a.email) : ""}</option>`).join("")}</select></label>
+            <p class="note ${d.owner_id ? "note-ok" : "note-warn"}" id="owner-note" style="margin-top:8px">${I(d.owner_id ? "check" : "info")}<span>${d.owner_id ? "הלקוח רואה ועורך את המתחם בממשק המארחים שלו (אחרי שמירה)." : "המתחם לא משויך לאף לקוח, ולכן לא מופיע בממשק המארחים. בוחרים לקוח ושומרים."}</span></p>
           </div>` : `<div class="panel"><h2>פרסום</h2><p class="muted" style="font-size:var(--t-s)">${d.active ? "המתחם מוצג באתר." : orig && orig.pending && orig.pending._publish ? `נשלח לבדיקה ${T.fmtStamp(orig.pending._at)}. נעדכן אתכם במייל כשהמתחם יעלה לאוויר.` : "המתחם עוד לא מוצג באתר. כשהכרטיס מוכן, שולחים לבדיקה וצוות האתר מפעיל אותו."}</p>
             ${!d.active && orig && !(orig.pending && orig.pending._publish) ? `<button class="btn btn-primary btn-block" type="button" data-act="ed-publish" style="margin-top:10px">${I("send")}שמירה ושליחה לפרסום</button>` : ""}</div>`}
           <div class="panel"><h2>שלמות הכרטיס</h2>${completeness(d)}</div>
@@ -1251,7 +1257,9 @@
             <label class="field"><span>אמצעי</span><select class="select" name="method">${PAY_METHODS.map(([k, n]) => `<option value="${k}">${n}</option>`).join("")}</select></label>
             <label class="field"><span>הערה / מס׳ קבלה</span><input class="input" name="note" maxlength="80"></label>
             <button class="btn btn-line" type="submit">${I("plus")}רישום תשלום</button></form></div>
-        <div class="panel"><h2>מתחמים</h2>${ls.length ? `<ul class="list-plain">${ls.map((l) => `<li><span><a class="name" href="#edit-${esc(l.id)}">${esc(l.name)}</a> <span class="muted">· ${esc(l.settlement || "")}</span></span><span>${l.active ? (st.visible ? '<span class="pill pill-ok">מוצג</span>' : '<span class="pill pill-danger">מוסתר (מנוי)</span>') : '<span class="pill pill-muted">מוסתר</span>'} ${pendingPill(l)}</span></li>`).join("")}</ul>` : `<p class="muted">אין מתחמים משויכים. משייכים מתחם בעורך המתחם (״מפרסם״).</p>`}</div>
+        <div class="panel"><h2>מתחמים</h2>${ls.length ? `<ul class="list-plain">${ls.map((l) => `<li><span><a class="name" href="#edit-${esc(l.id)}">${esc(l.name)}</a> <span class="muted">· ${esc(l.settlement || "")}</span></span><span>${l.active ? (st.visible ? '<span class="pill pill-ok">מוצג</span>' : '<span class="pill pill-danger">מוסתר (מנוי)</span>') : '<span class="pill pill-muted">מוסתר</span>'} ${pendingPill(l)}</span></li>`).join("")}</ul>` : `<p class="muted" style="font-size:var(--t-s)">עוד אין מתחמים משויכים ללקוח, ולכן ממשק המארחים שלו ריק.</p>`}
+          <div class="btn-row"><button class="btn btn-primary btn-sm" type="button" data-act="client-new-listing" data-id="${esc(a.id)}">${I("plus")}מתחם חדש ללקוח</button>
+            ${A.listings.some((l) => l.owner_id !== a.id) ? `<label class="field" style="flex:1 1 220px"><span class="sr">שיוך מתחם קיים</span><select class="select" data-act-change="assign-listing" data-id="${esc(a.id)}"><option value="">שיוך מתחם קיים ללקוח…</option>${A.listings.filter((l) => l.owner_id !== a.id).map((l) => `<option value="${esc(l.id)}">${esc(l.name)}${l.owner_id ? " (כרגע: " + esc(advName(l.owner_id)) + ")" : " (לא משויך)"}</option>`).join("")}</select></label>` : ""}</div></div>
         <div class="panel"><h2>פניות אחרונות</h2>${leads.length ? leads.slice(0, 5).map(leadRow).join("") : `<p class="muted">עוד לא הגיעו פניות.</p>`}</div>
       </div><div>
         <div class="panel"><h2>פרטי הלקוח</h2><ul class="list-plain">${kv("איש קשר", esc(a.name))}${kv("טלפון", a.phone ? `<a href="tel:${esc(a.phone)}" dir="ltr">${esc(a.phone)}</a>` : "")}${kv("אימייל", a.email ? `<span dir="ltr">${esc(a.email)}</span>` : '<span class="muted">חסר</span>')}${kv("ח.פ / ע.מ", esc(a.tax_id || ""))}${kv("כתובת", esc(a.address || ""))}${kv("מקור", a.source === "signup" ? "הרשמה עצמית באתר" : "נוסף בפאנל")}${kv("תנאי שימוש", a.terms_version ? `אושרו${a.terms_at ? " ב־" + T.fmtDate(String(a.terms_at).slice(0, 10)) : ""} (גרסה ${esc(a.terms_version)})` : "")}${kv("התראות", (a.prefs || {}).notify_leads === false ? "ביקש לא לקבל מייל על פניות" : "")}</ul>${a.notes ? `<p class="msg" style="margin-top:10px">״${esc(a.notes)}״</p>` : ""}</div>
@@ -1491,6 +1499,7 @@
     else if (act === "pay-del") { const a = A.advertisers.find((x) => x.id === id); const i = Number(el.dataset.i); save(() => T.store.saveAdvertiser({ id, payments: (a.payments || []).filter((p, k) => k !== i) }), "התשלום נמחק"); }
     else if (act === "client-invite") { el.disabled = true; try { const r = await T.store.account("invite", { id }); await reload(); rerenderKeepScroll(); T.toast(r.sent === "reset" ? "ללקוח כבר יש חשבון: נשלח אליו מייל לבחירת סיסמה" : "נשלחה הזמנה ל־" + r.email); } catch (ex) { el.disabled = false; T.toast(ex.message, "err"); } }
     else if (act === "client-link") { el.disabled = true; try { const r = await T.store.account("link", { id }); A.linkFor = { id, link: r.link }; rerenderKeepScroll(); } catch (ex) { el.disabled = false; T.toast(ex.message, "err"); } }
+    else if (act === "client-new-listing") { const d = A.drafts.new; if (d && d._dirty) { d.owner_id = id; } else { delete A.drafts.new; A.newOwner = id; } location.hash = "new"; }
     else if (act === "act-reload") { A.audit = undefined; rerenderKeepScroll(); }
     /* מיילים, משימה יומית ותחזוקה */
     else if (act === "mail-test") { el.disabled = true; try { const r = await T.store.mail("test"); T.toast(r && r.demo ? "במצב הדגמה לא נשלחים מיילים" : r && r.skipped ? "המייל לא נשלח: " + r.skipped : "נשלח מייל בדיקה ל־" + A.email); } catch (ex) { T.toast(ex.message, "err"); } el.disabled = false; }
@@ -1717,6 +1726,16 @@
     else if (t.id === "pf-region") { A.pf.region = t.value; rerenderKeepScroll(); }
     else if (t.id === "sf-region") { A.sf.region = t.value; rerenderKeepScroll(); }
     else if (t.id === "act-f") { A.actF = t.value; rerenderKeepScroll(); }
+    else if (t.dataset.actChange === "assign-listing" && t.value) {
+      const l = A.listings.find((x) => x.id === t.value), a = A.advertisers.find((x) => x.id === t.dataset.id);
+      if (!l || !a) return;
+      try { await T.store.saveListing(Object.assign({}, l, { owner_id: a.id })); delete A.drafts[l.id]; await reload(); rerenderKeepScroll(); T.toast(`${l.name} שויך ל${a.business || a.name}. הוא מופיע עכשיו בממשק המארחים שלו.`); }
+      catch (ex) { fail("השיוך נכשל", ex); }
+    }
+    else if (t.dataset.actChange === "ed-owner") {
+      const n = $("#owner-note");
+      if (n) { n.className = "note " + (t.value ? "note-ok" : "note-warn"); n.innerHTML = I(t.value ? "check" : "info") + `<span>${t.value ? "הלקוח יראה ויערוך את המתחם בממשק המארחים שלו אחרי שתלחצו שמירה." : "המתחם לא משויך לאף לקוח, ולכן לא מופיע בממשק המארחים. בוחרים לקוח ושומרים."}</span>`; }
+    }
     else if (t.id === "place-photo" && t.files[0]) {
       const f = t.closest("form");
       try { T.toast("מעלה תמונה…"); f.photo.value = await T.store.uploadPhoto(t.files[0]); const img = document.createElement("img"); img.src = T.img(f.photo.value, 300); img.alt = ""; img.style.cssText = "width:120px;aspect-ratio:4/3;object-fit:cover;border-radius:10px"; const old = t.closest("div").querySelector("img"); if (old) old.replaceWith(img); else t.closest("div").prepend(img); T.toast("התמונה עלתה. לחצו שמירה."); }
