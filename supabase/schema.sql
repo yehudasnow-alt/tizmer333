@@ -2,6 +2,7 @@
 -- תמרה – צימרים ווילות · סכמת מסד הנתונים ל-Supabase
 -- מריצים: Supabase → SQL Editor → New query → הדבקה → Run
 -- בטוח להריץ שוב גם על מסד קיים (מוסיף רק מה שחסר, לא מוחק נתונים).
+-- אחרי כל עדכון של האתר מהמאגר מריצים את הקובץ הזה שוב (גרסה 3).
 -- =====================================================================
 
 -- ------------------------------------------------------------ טבלאות
@@ -382,6 +383,11 @@ begin
 end $$;
 revoke execute on function public.set_ical_blocked(text, text, text[]) from public, anon, authenticated;
 grant execute on function public.set_ical_blocked(text, text, text[]) to service_role;
+
+-- גרסת הסכמה: האתר בודק אותה ב"בדיקת מערכת" בפאנל הניהול. מעלים את המספר בכל שינוי מבני.
+create or replace function public.schema_version()
+returns integer language sql immutable as $$ select 3 $$;
+grant execute on function public.schema_version() to anon, authenticated;
 
 grant execute on function public.is_admin() to anon, authenticated;
 grant execute on function public.my_advertiser_ids() to anon, authenticated;

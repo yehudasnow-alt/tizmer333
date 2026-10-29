@@ -1081,3 +1081,14 @@ input[type="range"] { width: 100%; accent-color: var(--navy); }
 .amen-picks.chips input { width: 14px; height: 14px; margin: 0; }
 .amen-picks.chips .ic { width: 15px; height: 15px; }
 .unit-more summary .hint { font-weight: 400; margin-inline-start: 6px; }
+/* בדיקת מערכת ופס אזהרה */
+.schema-banner { margin-bottom: 16px; }
+.schema-banner a { color: inherit; font-weight: 600; }
+.todo.sys { gap: 10px; }
+.todo.sys li { align-items: flex-start; }
+.todo.sys li .ic { margin-top: 3px; }
+.todo.sys li small { display: block; color: var(--muted); font-size: var(--t-xs); margin-top: 2px; }
+.todo.sys li.bad .ic { color: var(--danger); }
+.todo.sys li.bad b { color: var(--ink); }
+.todo.sys li.opt .ic { color: var(--warn); }
+.steps-list { margin: 0; padding-inline-start: 20px; display: grid; gap: 8px; font-size: var(--t-s); line-height: 1.7; }

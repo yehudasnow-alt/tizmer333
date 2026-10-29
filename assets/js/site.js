@@ -1569,7 +1569,7 @@
       const email = (fd.get("email") || "").trim();
       if (!emailOk(email)) { const i = form.elements.email; i.setAttribute("aria-invalid", "true"); i.focus(); T.toast("כתובת האימייל לא נראית תקינה", "err"); return; }
       try { const r = await T.store.addSubscriber({ email, regions: fd.get("region") ? [fd.get("region")] : [], source: location.hash.slice(1) || "home" }); form.reset(); T.toast(r && r.duplicate ? "האימייל הזה כבר רשום. תודה!" : "נרשמתם! הדילים הבאים יגיעו למייל."); }
-      catch (ex) { T.toast("ההרשמה לא הצליחה: " + ex.message, "err"); }
+      catch (ex) { T.toast(/^ההרשמה/.test(ex.message) ? ex.message : "ההרשמה לא הצליחה: " + ex.message, "err"); }
     } else if (kind === "guest-login") {
       const email = (fd.get("email") || "").trim();
       if (!emailOk(email)) { T.toast("כתובת האימייל לא נראית תקינה", "err"); return; }
@@ -1594,7 +1594,7 @@
       } catch (ex) { bad("#rev-err", ex.message); }
     }
   });
-  window.addEventListener("hashchange", () => { if (location.hash.slice(1) === "main") return; closeMega(); const mn = $("#mobile-nav.open"); if (mn) mn.classList.remove("open"); render().then(() => { window.scrollTo(0, 0); $("#main").focus({ preventScroll: true }); }); });
+  window.addEventListener("hashchange", () => { if (/access_token=|error_description=/.test(location.hash)) { location.reload(); return; } if (location.hash.slice(1) === "main") return; closeMega(); const mn = $("#mobile-nav.open"); if (mn) mn.classList.remove("open"); render().then(() => { window.scrollTo(0, 0); $("#main").focus({ preventScroll: true }); }); });
   window.addEventListener("scroll", () => { const tb = $("#topbar"); if (tb) tb.classList.toggle("scrolled", window.scrollY > 10); }, { passive: true });
 
   /* ---------------------------------------------------------------- boot */
@@ -1632,7 +1632,22 @@
       if (!h || h === "home" || h.startsWith("me") || h === "magazine" || h === "top") render();
       else if ($("#results")) renderResults();
     });
-    if (T.isLive && T.store.client) T.store.client.auth.onAuthStateChange((ev) => { if (ev !== "SIGNED_IN") return; const h = T.takeAfterLogin(); if (h) { setTimeout(() => { if (location.hash.slice(1) === h) render(); else location.hash = h; }, 0); } else if (location.hash.startsWith("#me")) render(); });
+    /* SIGNED_IN יכול לקרות עוד לפני שהמאזין נרשם (הטוקן נקרא מהכתובת בטעינה), ולכן גם INITIAL_SESSION */
+    if (T.isLive && T.store.client) T.store.client.auth.onAuthStateChange((ev, session) => {
+      if (!session || (ev !== "SIGNED_IN" && ev !== "INITIAL_SESSION")) return;
+      /* לשונית אחרת שקיבלה את הכניסה בסנכרון לא "גונבת" את היעד מהלשונית שנפתחה מהקישור */
+      const stored = T.authFromUrl ? T.takeAfterLogin() : "";
+      const h = T.authFromUrl ? T.afterParam || stored : "";
+      if (h) { T.authFromUrl = false; if (T.afterParam) { T.afterParam = ""; try { history.replaceState(history.state, "", location.pathname + location.hash); } catch (e) {} } }
+      /* Supabase מוחק את הטוקן מהכתובת רק אחרי האירוע, לכן מחכים שהכתובת תתנקה ואז עוברים ליעד */
+      const go = (n) => {
+        if (/access_token=/.test(location.hash) && n < 60) return setTimeout(() => go(n + 1), 50);
+        if (location.hash.slice(1) === h) render(); else location.hash = h;
+        if (n < 61) setTimeout(() => { if (location.hash.slice(1) !== h) go(61); }, 400);
+      };
+      if (h) go(0);
+      else if (ev === "SIGNED_IN" && location.hash.startsWith("#me")) render();
+    });
   }
   boot();
 })();

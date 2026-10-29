@@ -26,6 +26,14 @@
     return out;
   };
   const byNewest = (a, b) => (b.created_at || "").localeCompare(a.created_at || "");
+  /* גרסת הסכמה שהקוד הזה מצפה לה (supabase/schema.sql → public.schema_version()) */
+  T.SCHEMA_VERSION = 3;
+  /* מה חסר במסד (טבלאות/עמודות/פונקציות) לפי שגיאות שחזרו מהשרת */
+  T.schemaIssues = T.schemaIssues || new Set();
+  /* האם הדף הזה נפתח מקישור כניסה (הטוקן בכתובת)? רק לשונית כזו עוברת ליעד אחרי הכניסה */
+  T.authFromUrl = typeof location !== "undefined" && /access_token=|error_description=/.test(location.hash || "");
+  /* היעד אחרי הכניסה נשמר גם בכתובת הקישור (?after=me-leads), כך שזה עובד גם כשפותחים את המייל במכשיר אחר */
+  T.afterParam = (() => { try { const v = new URLSearchParams(location.search).get("after") || ""; return /^me(-[a-z]+)?$/.test(v) ? v : ""; } catch (e) { return ""; } })();
   const afterLogin = (h) => { try { localStorage.setItem("tamara.after", JSON.stringify({ h, t: Date.now() })); } catch (e) {} };
   T.takeAfterLogin = () => { try { const a = JSON.parse(localStorage.getItem("tamara.after") || "null"); localStorage.removeItem("tamara.after"); return a && Date.now() - a.t < 864e5 ? a.h : ""; } catch (e) { return ""; } };
   const same = (a, b) => JSON.stringify(a == null ? null : a) === JSON.stringify(b == null ? null : b);
@@ -210,6 +218,7 @@
       async getUser() { return ss("tamara.demo.admin") === "1" ? { email: "demo@tamara", admin: true } : ownerId() ? { email: "owner", ownerId: ownerId() } : null; },
       async isAdmin() { return ss("tamara.demo.admin") === "1"; },
       async whoami() { return { email: ss("tamara.demo.admin") === "1" ? "demo" : "", admin: ss("tamara.demo.admin") === "1" }; },
+      async schemaCheck() { return [{ group: "db", label: "מצב הדגמה", ok: true, detail: "האתר עוד לא מחובר ל-Supabase. הנתונים נשמרים רק בדפדפן הזה." }]; },
       async signInAdmin() { ss("tamara.demo.admin", "1"); return true; },
       async signInOwnerDemo(id) { ss("tamara.demo.owner", id); return true; },
       async signOut() { ss("tamara.demo.admin", null); ss("tamara.demo.owner", null); },
@@ -244,10 +253,30 @@
     const sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
     const listeners = new Set();
     const emit = () => listeners.forEach((f) => f());
+    /* טבלה, עמודה או פונקציה שחסרות במסד = הסכמה לא עודכנה (צריך להריץ שוב את supabase/schema.sql) */
+    const isMissing = (err, status) => !!err && (/^(42P01|PGRST205|PGRST202|42883|PGRST204|42703)$/.test(String(err.code || "")) || /does not exist|in the schema cache/i.test(String(err.message || "")) || (status === 404 && !err.code));
+    const missingName = (m) => {
+      m = String(m || ""); let x;
+      if ((x = m.match(/'(\w+)' column of '(\w+)'/))) return x[2] + "." + x[1];
+      if ((x = m.match(/column "?([\w.]+)"? of relation "(\w+)"/))) return x[2] + "." + x[1];
+      if ((x = m.match(/column ([\w]+\.[\w]+) does not exist/))) return x[1];
+      if ((x = m.match(/(?:relation|table) ['"](?:public\.)?(\w+)['"]/))) return x[1];
+      if ((x = m.match(/function (?:public\.)?(\w+)/))) return x[1] + "()";
+      return "";
+    };
+    const noteMissing = (err) => { const n = missingName(err.message) || "?"; T.schemaIssues.add(n); return n; };
     const ok = (res) => {
-      if (res.error) { const e = new Error(res.error.message || "שגיאת שרת"); e.code = res.error.code; throw e; }
+      if (res.error) {
+        const missing = isMissing(res.error, res.status);
+        const name = missing ? noteMissing(res.error) : "";
+        const e = new Error(missing ? `מסד הנתונים לא מעודכן לגרסה הזו של האתר (חסר: ${name}). צריך להריץ שוב את supabase/schema.sql ב-Supabase (SQL Editor → Run).` : res.error.message || "שגיאת שרת");
+        e.code = res.error.code; e.missing = missing; e.original = res.error.message;
+        throw e;
+      }
       return res.data;
     };
+    /* קריאה שלא מפילה את כל הדף אם הטבלה עוד לא קיימת */
+    const soft = (res, fallback, name) => { if (res.error && isMissing(res.error, res.status)) { if (res.error.message) noteMissing(res.error); else T.schemaIssues.add(name || "?"); return fallback; } return ok(res); };
     let adminCache = null;
     sb.auth.onAuthStateChange(() => { adminCache = null; });
     const flat = (rows) => (rows || []).map((x) => (x && typeof x === "object" ? Object.values(x)[0] : x));
@@ -290,7 +319,29 @@
       async addLead(q) {
         const row = pick(Object.assign({}, q, { status: "new", source: q.source || "form", review_token: null }), COLS.leads);
         row.id = T.uuid();
-        ok(await sb.from("leads").insert(row));
+        /* מסד ישן בלי העמודות החדשות: הפנייה בכל זאת נשמרת, והפרטים הנוספים נכנסים לטקסט ההודעה */
+        const extra = () => {
+          const m = row.meta || {}, parts = [];
+          (row.rooms_req || []).forEach((r) => parts.push(`${r.name}: ${r.guests} מבוגרים${r.children ? ` + ${r.children} ילדים` : ""}`));
+          if (row.children) parts.push(`ילדים: ${row.children}`);
+          if (row.package) parts.push(`חבילה: ${row.package}`);
+          if (row.benefit) parts.push(`הטבה: ${(T.benefitOf(row.benefit) || { name: row.benefit }).name}`);
+          if (row.flexible) parts.push("תאריכים גמישים");
+          if (m.place_label) parts.push(`איפה: ${m.place_label}`);
+          if (m.budget) parts.push(`תקציב עד ${m.budget} ללילה`);
+          if ((m.wants || []).length) parts.push(`חשוב: ${m.wants.join(", ")}`);
+          return parts.join(" · ");
+        };
+        let noted = false;
+        for (let i = 0; i < 12; i++) {
+          const r = await sb.from("leads").insert(row);
+          if (!r.error) break;
+          const col = /^(PGRST204|42703)$/.test(String(r.error.code)) ? (missingName(r.error.message).split(".")[1] || "") : "";
+          if (!col || !(col in row) || ["name", "phone", "listing_id"].includes(col)) ok(r);
+          if (!noted) { const x = extra(); if (x) row.message = [row.message, `[${x}]`].filter(Boolean).join("\n"); noted = true; }
+          T.schemaIssues.add("leads." + col);
+          delete row[col];
+        }
         store.notify("lead", row.id);
         return row;
       },
@@ -313,13 +364,18 @@
         return ok(await q.order("created_at", { ascending: false }).limit(1000));
       },
       async reviewInvite(token) { const r = ok(await sb.rpc("review_invite", { p_token: token })); return (Array.isArray(r) ? r[0] : r) || null; },
-      async submitReview(token, r) { ok(await sb.rpc("submit_review", { p_token: token, p_rating: Number(r.rating), p_text: r.text, p_name: r.name, p_title: r.title || "", p_scores: r.scores || {} })); return true; },
+      async submitReview(token, r) {
+        const res = await sb.rpc("submit_review", { p_token: token, p_rating: Number(r.rating), p_text: r.text, p_name: r.name, p_title: r.title || "", p_scores: r.scores || {} });
+        /* מסד ישן: הגרסה הקודמת של הפונקציה (בלי כותרת ודירוג לפי קטגוריות) */
+        if (res.error && isMissing(res.error)) { noteMissing(res.error); ok(await sb.rpc("submit_review", { p_token: token, p_rating: Number(r.rating), p_text: [r.title, r.text].filter(Boolean).join("\n"), p_name: r.name })); return true; }
+        ok(res); return true;
+      },
       async updateReview(id, patch) { const row = pick(patch, COLS.reviews); delete row.id; ok(await sb.from("reviews").update(row).eq("id", id)); emit(); },
       async deleteReview(id) { ok(await sb.from("reviews").delete().eq("id", id)); emit(); },
       async listPlaces(o) {
         let q = sb.from("places").select("*");
         if (!(o && o.all)) q = q.eq("active", true);
-        return ok(await q.order("name").limit(2000));
+        return soft(await q.order("name").limit(2000), [], "places");
       },
       async savePlace(p) { return save("places", p, COLS.places); },
       async deletePlace(id) { ok(await sb.from("places").delete().eq("id", id)); emit(); },
@@ -327,12 +383,13 @@
         const row = pick({ email: String(x.email || "").trim().toLowerCase(), name: String(x.name || "").slice(0, 80), regions: x.regions || [], source: x.source || "site" }, COLS.subscribers);
         const r = await sb.from("subscribers").insert(row);
         if (r.error && r.error.code === "23505") return { duplicate: true };
+        if (r.error && isMissing(r.error, r.status)) { T.schemaIssues.add("subscribers"); throw new Error("ההרשמה לדיוור עוד לא הופעלה באתר. נסו שוב בקרוב."); }
         ok(r);
         return row;
       },
-      async listSubscribers() { return ok(await sb.from("subscribers").select("*").order("created_at", { ascending: false }).limit(5000)); },
+      async listSubscribers() { return soft(await sb.from("subscribers").select("*").order("created_at", { ascending: false }).limit(5000), [], "subscribers"); },
       async deleteSubscriber(id) { ok(await sb.from("subscribers").delete().eq("id", id)); emit(); },
-      async topViewed(n) { const r = await sb.rpc("top_viewed", { p_limit: n || 20 }); return r.error ? [] : flat(r.data); },
+      async topViewed(n) { const r = await sb.rpc("top_viewed", { p_limit: n || 20 }); if (r.error && isMissing(r.error)) noteMissing(r.error); return r.error ? [] : flat(r.data); },
       /* אורח מחובר רואה את הפניות שנשלחו מהאימייל שלו; בלי חיבור – רק מה שנשמר בדפדפן */
       async myGuestLeads() {
         const u = await store.getUser();
@@ -342,8 +399,8 @@
       },
       async guestUser() { const u = await store.getUser(); return u ? { email: u.email } : null; },
       /* אחרי הכניסה Supabase מחזיר את הטוקן ב-# של הכתובת, לכן היעד (#me-leads) נשמר בצד ומופעל כשהכניסה מצליחה */
-      async signInGuest(email) { afterLogin("me-leads"); ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } })); return true; },
-      async signInGuestGoogle() { afterLogin("me-leads"); ok(await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } })); },
+      async signInGuest(email) { afterLogin("me-leads"); ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname + "?after=me-leads" } })); return true; },
+      async signInGuestGoogle() { afterLogin("me-leads"); ok(await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname + "?after=me-leads" } })); },
       async listArticles(o) {
         let q = sb.from("articles").select("*");
         if (!(o && o.all)) q = q.eq("published", true);
@@ -408,10 +465,37 @@
         adminCache = !r.error && r.data === true;
         return { email: u.email || "", admin: adminCache, rpcError: r.error ? r.error.message : "" };
       },
+      /* בדיקת מערכת: האם כל הטבלאות, העמודות והפונקציות של הגרסה הזו קיימות במסד */
+      async schemaCheck() {
+        const out = [];
+        const probe = async (label, table, cols) => { const r = await sb.from(table).select(cols).limit(0); out.push({ group: "db", label, ok: !r.error, detail: r.error ? (isMissing(r.error) ? "חסר: " + (missingName(r.error.message) || table) : r.error.message) : "" }); };
+        await probe("טבלת מתחמים + שדות התוכן החדשים", "listings", "id,details,terms,exclusive,best_price,pending,rooms,extras,seasons,video_url,ical_blocked");
+        await probe("טבלת לקוחות (מפרסמים)", "advertisers", "id,billing_model,lead_price,payments");
+        await probe("טבלת פניות + שדות חדשים", "leads", "id,children,benefit,package,rooms_req,flexible,meta,source");
+        await probe("חוות דעת + דירוג לפי קטגוריות", "reviews", "id,title,scores,unit_name,reply");
+        await probe("מה עושים באזור", "places", "id,name,kind,region,lat,lng");
+        await probe("מנויי דיוור", "subscribers", "id,email,regions");
+        await probe("בקשות הצטרפות", "applications", "id,status");
+        await probe("מגזין", "articles", "id,published");
+        await probe("סטטיסטיקות צפיות", "listing_stats", "listing_id,day,views");
+        await probe("הגדרות האתר", "settings", "id,data");
+        const v = await sb.rpc("schema_version");
+        out.push({ group: "db", label: "גרסת מסד הנתונים", ok: !v.error && Number(v.data) >= T.SCHEMA_VERSION, detail: v.error ? "גרסה ישנה (לפני " + T.SCHEMA_VERSION + ")" : "גרסה " + v.data + (Number(v.data) < T.SCHEMA_VERSION ? ", נדרשת " + T.SCHEMA_VERSION : "") });
+        const tv = await sb.rpc("top_viewed", { p_limit: 1 });
+        out.push({ group: "db", label: "פונקציית ״הכי נצפים״", ok: !tv.error, detail: tv.error ? tv.error.message : "" });
+        const u = await store.whoami().catch(() => ({ email: "", admin: false }));
+        out.push({ group: "auth", label: "החשבון המחובר הוא מנהל", ok: !!u.admin, detail: u.email ? u.email : "לא מחובר" });
+        let h = null;
+        try { const r = await fetch("/api/health", { cache: "no-store" }); h = r.ok ? await r.json() : { error: "שגיאה " + r.status }; } catch (e) { h = { error: e.message }; }
+        if (h && h.checks) Object.values(h.checks).forEach((c) => out.push({ group: "server", label: c.label, ok: c.ok, detail: c.detail || "", optional: !!c.optional }));
+        else out.push({ group: "server", label: "פונקציות השרת (/api)", ok: false, detail: (h && h.error) || "לא זמין" });
+        return out;
+      },
       async signInAdmin(email, password) { ok(await sb.auth.signInWithPassword({ email, password })); adminCache = null; return true; },
       async signInOwnerLink(email) { ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } })); return true; },
       async signInGoogle() { ok(await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } })); },
-      async signOut() { await sb.auth.signOut(); adminCache = null; },
+      /* יציאה רק בדפדפן הזה (לא מנתקת מכשירים אחרים של אותו משתמש) */
+      async signOut() { await sb.auth.signOut({ scope: "local" }); adminCache = null; },
       async myAdvertisers() { const ids = await myIds(); if (!ids.length) return []; return ok(await sb.from("advertisers").select("*").in("id", ids)); },
       async myListings() { const ids = await myIds(); if (!ids.length) return []; return ok(await sb.from("listings").select("*").in("owner_id", ids).order("created_at", { ascending: false })).map(T.normalizeListing); },
       async myLeads() { return ok(await sb.from("leads").select("*").order("created_at", { ascending: false }).limit(1000)); },

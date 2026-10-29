@@ -84,7 +84,7 @@
     const newLeads = A.leads.filter((q) => q.status === "new").length;
     const items = IS_ADMIN
       ? [["dashboard", "chart", "סקירה"], ["listings", "home", "מתחמים", A.listings.length], ["leads", "inbox", "פניות", newLeads], ["moderation", "shield", "אישורי תוכן", pendingListings().length], ["reviews", "star", "חוות דעת", pendingReviews().length],
-        ["advertisers", "briefcase", "לקוחות"], ["billing", "receipt", "חיובים"], ["applications", "user-plus", "בקשות הצטרפות", A.applications.filter((a) => a.status === "new").length], ["places", "map", "מה עושים באזור"], ["articles", "book", "מגזין"], ["subscribers", "mail", "מנויי דיוור"], ["site-settings", "sliders", "הגדרות"]]
+        ["advertisers", "briefcase", "לקוחות"], ["billing", "receipt", "חיובים"], ["applications", "user-plus", "בקשות הצטרפות", A.applications.filter((a) => a.status === "new").length], ["places", "map", "מה עושים באזור"], ["articles", "book", "מגזין"], ["subscribers", "mail", "מנויי דיוור"], ["site-settings", "sliders", "הגדרות"], ["system", "shield", "בדיקת מערכת", T.isLive && T.schemaIssues && T.schemaIssues.size ? "!" : 0]]
       : [["my", "home", "המתחמים שלי"], ["leads", "inbox", "פניות", newLeads], ["reviews", "star", "חוות דעת"]];
     const isCur = (k) => cur === k || (k === "listings" && (cur.startsWith("edit-") || cur === "new")) || (k === "my" && cur.startsWith("edit-"));
     return `<div class="app">
@@ -99,7 +99,7 @@
           <button type="button" data-act="logout">${I("logout")}<span>יציאה</span></button>
         </div>
       </aside>
-      <main class="main" id="main" tabindex="-1">${content}</main>
+      <main class="main" id="main" tabindex="-1">${schemaBanner()}${content}</main>
     </div>`;
   }
 
@@ -923,6 +923,19 @@
         : `<div class="empty"><h3>עוד אין נרשמים</h3><p>טופס ההרשמה מופיע בעמוד הבית, בדילים ובתחתית האתר.</p></div>`}</div>`;
   }
 
+  /* ================================================================ system check */
+  function viewSystem() {
+    const r = A.sys;
+    const groups = [["db", "מסד הנתונים (Supabase)"], ["auth", "כניסה והרשאות"], ["server", "שרת והגדרות ב-Vercel"]];
+    const bad = r ? r.filter((x) => !x.ok && !x.optional) : [];
+    const dbBad = r ? r.some((x) => x.group === "db" && !x.ok) : false;
+    return ph("בדיקת מערכת", "בודק שהאתר, מסד הנתונים והשרת מחוברים ומעודכנים. לא משנה שום נתון.", `<button class="btn btn-primary" type="button" data-act="sys-run" ${A.sysBusy ? "disabled" : ""}>${I("refresh")}${r ? "בדיקה חוזרת" : "הרצת בדיקה"}</button>`) + `
+      ${!r ? `<div class="panel"><p class="muted">${A.sysBusy ? "בודק…" : "לחצו ״הרצת בדיקה״."}</p></div>` : `
+      <div class="panel" style="margin-bottom:16px">${bad.length ? `<p class="note note-warn">${I("info")}<span><b>${bad.length} דברים צריכים תיקון.</b> ${dbBad ? "רוב התקלות במסד נפתרות בהרצה אחת של supabase/schema.sql ב-SQL Editor של Supabase." : ""}</span></p>` : `<p class="note note-ok">${I("check")}<span><b>הכל מחובר ועובד.</b></span></p>`}</div>
+      ${groups.map(([g, n]) => { const items = r.filter((x) => x.group === g); return items.length ? `<div class="panel"><h2>${n}</h2><ul class="todo sys">${items.map((x) => `<li class="${x.ok ? "ok" : x.optional ? "opt" : "bad"}">${I(x.ok ? "check" : "info")}<span><b>${esc(x.label)}</b>${x.detail ? `<small>${esc(x.detail)}</small>` : ""}</span></li>`).join("")}</ul></div>` : ""; }).join("")}
+      ${dbBad ? `<div class="panel"><h2>איך מעדכנים את מסד הנתונים</h2><ol class="steps-list"><li>בגיטהאב, במאגר של האתר, פותחים את הקובץ <b>supabase/schema.sql</b> ולוחצים על כפתור ההעתקה (Copy raw file).</li><li>ב-Supabase: <b>SQL Editor</b> → <b>New query</b> → מדביקים → <b>Run</b>. ההרצה בטוחה ולא מוחקת נתונים.</li><li>חוזרים לכאן ולוחצים ״בדיקה חוזרת״.</li></ol></div>` : ""}`}`;
+  }
+
   /* ================================================================ settings */
   function viewSettings() {
     const s = A.settings;
@@ -949,7 +962,7 @@
                 <div style="display:flex;gap:8px;flex-wrap:wrap"><label class="btn btn-line">${I("upload")}העלאת תמונה<input type="file" accept="image/*" class="sr" id="hero-input"></label>${s.hero_image ? `<button class="btn btn-ghost" type="button" data-act="hero-clear">חזרה לתמונת ברירת המחדל</button>` : ""}<span class="hint" style="width:100%">מומלץ צילום רוחבי, לפחות 2000 פיקסלים ברוחב.</span></div></div></section>
             <section class="panel"><h2>חגים (לילות במחיר חג)</h2><div class="rows-edit">${(s.holidays || []).map((h, i) => `<div class="row-edit"><label class="field"><span>חג</span><input class="input" data-hol="${i}" data-k="label" value="${esc(h.label)}"></label><label class="field"><span>מהלילה של</span><input class="input" type="date" data-hol="${i}" data-k="from" value="${esc(h.from)}"></label><label class="field"><span>עד הלילה של</span><input class="input" type="date" data-hol="${i}" data-k="to" value="${esc(h.to)}"></label><button class="mini-btn" type="button" data-act="hol-del" data-i="${i}" aria-label="הסרה">${I("trash")}</button></div>`).join("")}
               <button class="btn btn-line btn-sm" type="button" data-act="hol-add" style="justify-self:start">${I("plus")}חג</button></div><p class="hint" style="margin-top:8px">התאריכים חושבו לפי הלוח העברי (ישראל). אפשר להוסיף גם ימי שיא משלכם.</p></section>
-            <section class="panel"><h2>אוספים בעמוד הבית <span class="hint">שורת מתחמים עם כותרת, למשל ״חופשה רומנטית בחורף״</span></h2><div class="rows-edit">${(s.collections || []).map((c, i) => `<div class="row-edit" style="flex-direction:column;align-items:stretch">
+            <section class="panel"><h2>אוספים בעמוד הבית <span class="hint">שורת מתחמים עם כותרת, למשל ״חופשה רומנטית בחורף״. אוסף מופיע כשיש בו לפחות 2 מתחמים פעילים.</span></h2><div class="rows-edit">${(s.collections || []).map((c, i) => `<div class="row-edit" style="flex-direction:column;align-items:stretch">
                 <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap"><label class="field" style="flex:1 1 200px"><span>כותרת</span><input class="input" data-col="${i}" data-k="title" value="${esc(c.title || "")}" maxlength="50"></label><label class="field" style="flex:2 1 240px"><span>משפט משנה</span><input class="input" data-col="${i}" data-k="sub" value="${esc(c.sub || "")}" maxlength="110"></label><button class="mini-btn" type="button" data-act="col-del" data-i="${i}" aria-label="הסרת אוסף">${I("trash")}</button></div>
                 <details${(c.ids || []).length ? "" : " open"}><summary class="hint" style="cursor:pointer;margin-top:8px">${(c.ids || []).length} מתחמים באוסף · בחירה</summary><div class="amen-picks" style="margin-top:8px">${A.listings.map((l) => `<label><input type="checkbox" data-colid="${i}" value="${esc(l.id)}" ${(c.ids || []).includes(l.id) ? "checked" : ""}>${esc(l.name)}</label>`).join("")}</div></details></div>`).join("")}
               <button class="btn btn-line btn-sm" type="button" data-act="col-add" style="justify-self:start">${I("plus")}אוסף</button></div></section>
@@ -1016,7 +1029,7 @@
     if (h !== "articles") A.editArticle = null;
     let html;
     if (IS_ADMIN) {
-      const routes = { dashboard: viewDashboard, listings: viewListings, leads: viewLeads, moderation: viewModeration, reviews: viewReviews, advertisers: viewAdvertisers, billing: viewBilling, applications: viewApplications, articles: viewArticles, places: viewPlaces, subscribers: viewSubscribers, "site-settings": viewSettings };
+      const routes = { dashboard: viewDashboard, listings: viewListings, leads: viewLeads, moderation: viewModeration, reviews: viewReviews, advertisers: viewAdvertisers, billing: viewBilling, applications: viewApplications, articles: viewArticles, places: viewPlaces, subscribers: viewSubscribers, "site-settings": viewSettings, system: viewSystem };
       if (h === "new") html = viewEditor("new");
       else if (h.startsWith("edit-")) html = viewEditor(h.slice(5));
       else html = (routes[h] || viewDashboard)();
@@ -1028,21 +1041,30 @@
     }
     app.innerHTML = shell(html);
     if ($("#editor")) bindEditor();
+    if (IS_ADMIN && h === "system" && !A.sys && !A.sysBusy) setTimeout(() => { const b = $('[data-act="sys-run"]'); if (b) b.click(); }, 0);
     document.title = (IS_ADMIN ? "ניהול" : "ממשק מארחים") + " | " + A.settings.site_name;
   }
   function rerenderKeepScroll() { const y = window.scrollY; render(); window.scrollTo(0, y); }
 
+  /* טוען כל חלק בנפרד: אם טבלה אחת נכשלת, השאר עדיין נטענים ומוצגים */
   async function reload() {
-    try {
-      if (IS_ADMIN) {
-        const [listings, advertisers, leads, applications, reviews, articles, settings, stats, places, subscribers] = await Promise.all([T.store.listListings({ all: true }), T.store.listAdvertisers(), T.store.listLeads(), T.store.listApplications(), T.store.listReviews({ all: true }), T.store.listArticles({ all: true }), T.store.getSettings(), T.store.stats(30), T.store.listPlaces({ all: true }), T.store.listSubscribers()]);
-        Object.assign(A, { listings, advertisers, leads, applications, reviews, articles, settings, stats, places, subscribers });
-      } else {
-        const [listings, advertisers, leads, reviews, settings, stats] = await Promise.all([T.store.myListings(), T.store.myAdvertisers(), T.store.myLeads(), T.store.myReviews(), T.store.getSettings(), T.store.stats(30)]);
-        Object.assign(A, { listings, advertisers, leads, reviews, settings, stats });
-      }
-      T.SETTINGS = A.settings;
-    } catch (e) { fail("טעינת הנתונים נכשלה", e); }
+    const jobs = IS_ADMIN
+      ? { listings: () => T.store.listListings({ all: true }), advertisers: () => T.store.listAdvertisers(), leads: () => T.store.listLeads(), applications: () => T.store.listApplications(), reviews: () => T.store.listReviews({ all: true }), articles: () => T.store.listArticles({ all: true }), settings: () => T.store.getSettings(), stats: () => T.store.stats(30), places: () => T.store.listPlaces({ all: true }), subscribers: () => T.store.listSubscribers() }
+      : { listings: () => T.store.myListings(), advertisers: () => T.store.myAdvertisers(), leads: () => T.store.myLeads(), reviews: () => T.store.myReviews(), settings: () => T.store.getSettings(), stats: () => T.store.stats(30) };
+    const keys = Object.keys(jobs);
+    const res = await Promise.allSettled(keys.map((k) => jobs[k]()));
+    const errs = [];
+    res.forEach((r, i) => { if (r.status === "fulfilled") A[keys[i]] = r.value; else errs.push(r.reason); });
+    T.SETTINGS = A.settings;
+    const denied = errs.find(isDenied), other = errs.find((e) => !isDenied(e) && !e.missing);
+    if (denied) await fail("טעינת הנתונים נכשלה", denied);
+    else if (other) T.toast("חלק מהנתונים לא נטענו: " + other.message, "err");
+  }
+  /* פס אזהרה בראש כל מסך כשמסד הנתונים לא מעודכן לגרסה של האתר */
+  function schemaBanner() {
+    if (!T.isLive || !T.schemaIssues || !T.schemaIssues.size) return "";
+    const list = [...T.schemaIssues].slice(0, 6).join(", ");
+    return `<div class="note note-warn schema-banner" role="alert">${I("info")}<span><b>מסד הנתונים לא מעודכן לגרסה הזו של האתר.</b> ${IS_ADMIN ? `כדי לתקן: ב-Supabase פותחים <b>SQL Editor</b>, מדביקים את כל הקובץ <b>supabase/schema.sql</b> מהמאגר בגיטהאב ולוחצים <b>Run</b>. זה בטוח ולא מוחק נתונים. אחר כך מרעננים את הדף.` : "צוות האתר צריך לעדכן את מסד הנתונים. בינתיים חלק מהאפשרויות לא יישמרו."} <span class="hint">(חסר: ${esc(list)})</span>${IS_ADMIN ? ` <a href="#system">לבדיקת מערכת</a>` : ""}</span></div>`;
   }
   async function checkAuth() {
     if (!T.isLive) return IS_ADMIN ? T.store.isAdmin() : (await T.store.myAdvertisers()).length > 0;
@@ -1101,6 +1123,7 @@
     else if (act === "qf-status") { A.qf.status = el.dataset.v; rerenderKeepScroll(); }
     else if (act === "rf") { A.rf = el.dataset.v; rerenderKeepScroll(); }
     else if (act === "pf-kind") { A.pf.kind = el.dataset.v; rerenderKeepScroll(); }
+    else if (act === "sys-run") { A.sysBusy = true; rerenderKeepScroll(); try { A.sys = await T.store.schemaCheck(); } catch (ex) { A.sys = [{ group: "db", label: "הבדיקה נכשלה", ok: false, detail: ex.message }]; } A.sysBusy = false; rerenderKeepScroll(); }
     else if (act === "leads-csv") downloadCSV(`leads-${T.iso(T.today())}.csv`, ["התקבלה", "סוג", "סטטוס", "שם", "טלפון", "אימייל", "מתחם", "יחידה", "הגעה", "עזיבה", "מבוגרים", "ילדים", "הערכה", "פרטים", "הודעה"], A.leads.map((q) => [q.created_at, T.statusName(T.LEAD_SOURCES, q.source || "form"), T.statusName(T.LEAD_STATUS, q.status), q.name, q.phone, q.email, q.listing_name, q.unit_name, q.check_in, q.check_out, q.guests, q.children, q.est_total, unesc(leadDetails(q).join(" | ")), q.message]));
     else if (act === "subs-copy") T.copy(A.subscribers.filter((x) => !A.sf.region || !(x.regions || []).length || x.regions.includes(A.sf.region)).map((x) => x.email).join(", "));
     else if (act === "subs-csv") downloadCSV(`subscribers-${T.iso(T.today())}.csv`, ["email", "name", "regions", "created_at"], A.subscribers.map((x) => [x.email, x.name, (x.regions || []).map((k) => T.regionOf(k).name).join(" / "), x.created_at]));
@@ -1365,7 +1388,8 @@
     }
   });
   document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; if ($("#deny")) $("#deny").remove(); else if ($("#modal")) $("#modal").remove(); });
-  window.addEventListener("hashchange", () => { render(); window.scrollTo(0, 0); });
+  /* קישור כניסה שנפתח בלשונית שכבר פתוחה: טוענים מחדש כדי ש-Supabase יקרא את הטוקן מהכתובת */
+  window.addEventListener("hashchange", () => { if (/access_token=|error_description=/.test(location.hash)) { location.reload(); return; } render(); window.scrollTo(0, 0); });
   /* חזרה בכפתור "אחורה" משחזרת את הדף מהזיכרון: בודקים מחדש שהחשבון עדיין מחובר */
   window.addEventListener("pageshow", async (e) => {
     if (!e.persisted || !T.isLive || !A.ready) return;
