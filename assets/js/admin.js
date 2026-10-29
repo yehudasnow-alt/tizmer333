@@ -47,6 +47,37 @@
     return siteAbs("review-" + token);
   };
 
+  /* ================================================================ שגיאות הרשאה */
+  /* כשמסד הנתונים חוסם פעולה (RLS), בודקים מי מחובר ומסבירים בדיוק מה לתקן, במקום הודעה טכנית */
+  const isDenied = (ex) => /row-level security|permission denied|42501|not authorized|JWT/i.test(String(ex && ((ex.message || "") + " " + (ex.code || ""))));
+  async function fail(prefix, ex) {
+    if (T.isLive && isDenied(ex)) { await explainDenied(ex); return; }
+    T.toast(prefix + ": " + ((ex && ex.message) || ex), "err");
+  }
+  async function explainDenied(ex) {
+    let w = { email: "", admin: false };
+    try { w = await T.store.whoami(); } catch (e) {}
+    if (!w.email) {
+      try { await T.store.signOut(); } catch (e) {}
+      A.authed = false; A.loginMsg = { tone: "warn", text: "ההתחברות פגה, ולכן הפעולה לא נשמרה. היכנסו שוב ונסו שוב." }; render();
+      return;
+    }
+    if (!IS_ADMIN) { T.toast(`אין הרשאה לפעולה הזו לחשבון ${w.email}. אם זו טעות, פנו לצוות האתר.`, "err"); return; }
+    const q = (x) => String(x).replace(/'/g, "''");
+    const fix = w.admin
+      ? { text: `החשבון שמחובר (${w.email}) מוגדר כמנהל, אבל כללי ההרשאה במסד הנתונים לא מעודכנים. ב-Supabase פותחים SQL Editor, מדביקים שוב את כל הקובץ supabase/schema.sql מהמאגר ולוחצים Run. אחר כך מנסים שוב.`, sql: "" }
+      : { text: `אתם מחוברים בתור ${w.email}, אבל האימייל הזה לא רשום כמנהל במסד הנתונים, ולכן השמירה נחסמה. ב-Supabase פותחים SQL Editor, מריצים את השורה הזו, ואז יוצאים ונכנסים שוב:`, sql: `insert into public.admins (email) values (lower('${q(w.email)}')) on conflict do nothing;` };
+    const old = $("#deny"); if (old) old.remove();
+    /* חלון נפרד, כדי שטופס שהיה פתוח (למשל לקוח חדש) לא יימחק */
+    document.body.insertAdjacentHTML("beforeend", `<div class="modal-back" id="deny" style="z-index:120"><div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="deny-title">
+      <div class="modal-head"><h2 id="deny-title">הפעולה נחסמה</h2><button class="icon-btn" type="button" data-act="deny-close" aria-label="סגירה">${I("x")}</button></div>
+      <p style="line-height:1.7">${esc(fix.text)}</p>
+      ${fix.sql ? `<span class="copy-field"><input class="input" dir="ltr" readonly value="${esc(fix.sql)}" aria-label="פקודת SQL"><button class="mini-btn" type="button" data-act="copy" data-text="${esc(fix.sql)}" aria-label="העתקה">${I("copy")}</button></span>` : ""}
+      <p class="hint">ההודעה המקורית: ${esc(ex && ex.message)}</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-line" type="button" data-act="logout">יציאה</button><button class="btn btn-primary" type="button" data-act="deny-close">הבנתי</button></div></div></div>`);
+    $('#deny [data-act="deny-close"]').focus();
+  }
+
   /* ================================================================ layout */
   function shell(content) {
     const cur = location.hash.slice(1) || (IS_ADMIN ? "dashboard" : "my");
@@ -499,7 +530,7 @@
     if (!list.length) return;
     T.toast(list.length > 1 ? `מעלה ${list.length} תמונות…` : "מעלה תמונה…");
     for (const f of list) {
-      try { d.photos.push(await T.store.uploadPhoto(f)); } catch (e) { T.toast("העלאה נכשלה: " + e.message, "err"); break; }
+      try { d.photos.push(await T.store.uploadPhoto(f)); } catch (e) { fail("העלאה נכשלה", e); break; }
     }
     $("#photos").innerHTML = photosHTML(d);
     bindEditor();
@@ -591,7 +622,7 @@
       await reload();
       T.toast(!IS_ADMIN && saved.pending ? "נשמר. שינויי התוכן נשלחו לאישור." : wasNew ? "המתחם נוצר" + (saved.active ? "" : ". הפעילו אותו כשהוא מוכן.") : "נשמר");
       if (wasNew) location.hash = "edit-" + saved.id; else rerenderKeepScroll();
-    } catch (e) { T.toast(e.code === "quota" ? e.message : "השמירה נכשלה: " + e.message, "err"); }
+    } catch (e) { if (e.code === "quota") T.toast(e.message, "err"); else fail("השמירה נכשלה", e); }
   }
 
   /* ================================================================ moderation */
@@ -1010,12 +1041,13 @@
         Object.assign(A, { listings, advertisers, leads, reviews, settings, stats });
       }
       T.SETTINGS = A.settings;
-    } catch (e) { T.toast("טעינת הנתונים נכשלה: " + e.message, "err"); }
+    } catch (e) { fail("טעינת הנתונים נכשלה", e); }
   }
   async function checkAuth() {
     if (!T.isLive) return IS_ADMIN ? T.store.isAdmin() : (await T.store.myAdvertisers()).length > 0;
     const user = await T.store.getUser();
     if (!user) return false;
+    A.email = user.email || "";
     if (IS_ADMIN) {
       if (await T.store.isAdmin()) return true;
       A.loginMsg = { tone: "warn", text: "החשבון מחובר אבל לא מוגדר כמנהל. הוסיפו את האימייל לטבלת admins (שלב 4 במדריך)." };
@@ -1049,14 +1081,15 @@
   }
   document.addEventListener("click", async (e) => {
     const el = e.target.closest("[data-act]");
-    if (!el) { if (e.target.id === "modal") $("#modal").remove(); return; }
+    if (!el) { if (e.target.id === "deny") $("#deny").remove(); else if (e.target.id === "modal") $("#modal").remove(); return; }
     const act = el.dataset.act;
     const id = el.dataset.id;
-    const save = async (fn, msg) => { try { await fn(); await reload(); rerenderKeepScroll(); if (msg) T.toast(msg); } catch (ex) { T.toast("הפעולה נכשלה: " + ex.message, "err"); } };
+    const save = async (fn, msg) => { try { await fn(); await reload(); rerenderKeepScroll(); if (msg) T.toast(msg); } catch (ex) { fail("הפעולה נכשלה", ex); } };
     if (act === "demo-admin") { await T.store.signInAdmin(); A.authed = true; await reload(); render(); }
     else if (act === "demo-owner") { await T.store.signInOwnerDemo($("#demo-owner").value); A.authed = true; await reload(); location.hash = "my"; render(); }
     else if (act === "google") { try { await T.store.signInGoogle(); } catch (ex) { A.loginMsg = { tone: "warn", text: "הכניסה עם Google לא הוגדרה עדיין: " + ex.message }; render(); } }
-    else if (act === "logout") { await T.store.signOut(); A.authed = false; A.loginMsg = null; if (!IS_ADMIN && !T.isLive) A.advertisers = await T.store.listAdvertisers(); render(); }
+    else if (act === "deny-close") $("#deny").remove();
+    else if (act === "logout") { ["#modal", "#deny"].forEach((x) => { const m = $(x); if (m) m.remove(); }); await T.store.signOut(); A.authed = false; A.loginMsg = null; if (!IS_ADMIN && !T.isLive) A.advertisers = await T.store.listAdvertisers(); render(); }
     else if (act === "lf-status") { A.lf.status = el.dataset.v; rerenderKeepScroll(); }
     else if (act === "qf-status") { A.qf.status = el.dataset.v; rerenderKeepScroll(); }
     else if (act === "rf") { A.rf = el.dataset.v; rerenderKeepScroll(); }
@@ -1113,7 +1146,7 @@
         rerenderKeepScroll();
         if (r.errors && r.errors.length) T.toast("חלק מהיומנים לא סונכרנו: " + r.errors.map((x) => x.error).join(" · "), "err");
         else T.toast(r.units ? "היומן סונכרן" : "אין קישור iCal שמור לסנכרון");
-      } catch (ex) { el.disabled = false; T.toast("הסנכרון נכשל: " + ex.message, "err"); }
+      } catch (ex) { el.disabled = false; fail("הסנכרון נכשל", ex); }
     }
     /* editor */
     else if (act === "ed-switch") { const d = A.drafts[A.editId]; d[el.dataset.k] = !d[el.dataset.k]; el.setAttribute("aria-checked", d[el.dataset.k]); markDirty(); }
@@ -1175,7 +1208,7 @@
           <p class="muted" style="font-weight:300">קישור אישי ל${esc(q.name)}. הוא עובד פעם אחת, ורק להזמנה הזאת.</p>
           <span class="copy-field"><input class="input" readonly value="${esc(link)}" aria-label="קישור לחוות דעת"><button class="mini-btn" type="button" data-act="copy" data-text="${esc(link)}" aria-label="העתקה">${I("copy")}</button></span>
           <a class="btn btn-primary" href="${esc(T.waLink(q.phone, msg))}" target="_blank" rel="noopener">${I("chat")}שליחה לאורח בוואטסאפ</a></div></div>`);
-      } catch (ex) { T.toast("יצירת הקישור נכשלה: " + ex.message, "err"); }
+      } catch (ex) { fail("יצירת הקישור נכשלה", ex); }
     }
     /* advertisers & billing */
     else if (act === "adv-edit") { const a = id ? A.advertisers.find((x) => x.id === id) : { plan: "basic", status: "active", billing_model: "subscription" }; document.body.insertAdjacentHTML("beforeend", advModal(a)); $("#modal input:not([type=hidden])").focus(); }
@@ -1206,7 +1239,7 @@
         await reload();
         T.toast("נוצרו לקוח ומתחם מוסתר. השלימו פרטים ושמרו.");
         location.hash = "edit-" + l.id;
-      } catch (ex) { T.toast("האישור נכשל: " + ex.message, "err"); }
+      } catch (ex) { fail("האישור נכשל", ex); }
     } else if (act === "app-reject") save(() => T.store.updateApplication(id, { status: "rejected" }));
     /* articles */
     else if (act === "art-new") { A.editArticle = { title: "", excerpt: "", body: "", cover: "", published: false }; rerenderKeepScroll(); }
@@ -1252,7 +1285,7 @@
     else if (t.id === "place-photo" && t.files[0]) {
       const f = t.closest("form");
       try { T.toast("מעלה תמונה…"); f.photo.value = await T.store.uploadPhoto(t.files[0]); const img = document.createElement("img"); img.src = T.img(f.photo.value, 300); img.alt = ""; img.style.cssText = "width:120px;aspect-ratio:4/3;object-fit:cover;border-radius:10px"; const old = t.closest("div").querySelector("img"); if (old) old.replaceWith(img); else t.closest("div").prepend(img); T.toast("התמונה עלתה. לחצו שמירה."); }
-      catch (ex) { T.toast("ההעלאה נכשלה: " + ex.message, "err"); }
+      catch (ex) { fail("ההעלאה נכשלה", ex); }
     }
     else if (t.id === "bill-month") { A.billMonth = t.value; rerenderKeepScroll(); }
     else if (t.dataset.roomPhoto != null && t.files.length) {
@@ -1261,21 +1294,21 @@
       if (!r) return;
       const files = Array.from(t.files).filter((f) => f.type.startsWith("image/")).slice(0, 8);
       T.toast(files.length > 1 ? `מעלה ${files.length} תמונות…` : "מעלה תמונה…");
-      for (const f of files) { try { r.photos = (r.photos || []).concat(await T.store.uploadPhoto(f)); } catch (ex) { T.toast("העלאה נכשלה: " + ex.message, "err"); break; } }
+      for (const f of files) { try { r.photos = (r.photos || []).concat(await T.store.uploadPhoto(f)); } catch (ex) { fail("העלאה נכשלה", ex); break; } }
       d._dirty = true; rerenderKeepScroll();
     }
     else if (t.id === "hero-input" && t.files[0]) {
       try { T.toast("מעלה תמונה…"); const url = await T.store.uploadPhoto(t.files[0]); await T.store.saveSettings(Object.assign({}, A.settings, { hero_image: url })); await reload(); rerenderKeepScroll(); T.toast("תמונת הבאנר עודכנה"); }
-      catch (ex) { T.toast(ex.code === "quota" ? ex.message : "ההעלאה נכשלה: " + ex.message, "err"); }
+      catch (ex) { if (ex.code === "quota") T.toast(ex.message, "err"); else fail("ההעלאה נכשלה", ex); }
     } else if (t.id === "art-cover" && t.files[0]) {
       try { T.toast("מעלה תמונה…"); const f = $("form[data-form=article]"); Object.assign(A.editArticle, { title: f.title.value, excerpt: f.excerpt.value, body: f.body.value, published: f.published.checked }); A.editArticle.cover = await T.store.uploadPhoto(t.files[0]); rerenderKeepScroll(); }
-      catch (ex) { T.toast("ההעלאה נכשלה: " + ex.message, "err"); }
+      catch (ex) { fail("ההעלאה נכשלה", ex); }
     } else if (t.dataset.actChange === "lead-status") {
       try { await T.store.updateLead(t.dataset.id, { status: t.value }); await reload(); rerenderKeepScroll(); T.toast(t.value === "closed" ? "סומן כהזמנה. אפשר לבקש חוות דעת (כוכב)." : "הסטטוס עודכן"); }
-      catch (ex) { T.toast("העדכון נכשל: " + ex.message, "err"); }
+      catch (ex) { fail("העדכון נכשל", ex); }
     } else if (t.dataset.actChange === "lead-note") {
       try { await T.store.updateLead(t.dataset.id, { admin_note: t.value }); const q = A.leads.find((x) => x.id === t.dataset.id); q.admin_note = t.value; T.toast("ההערה נשמרה"); }
-      catch (ex) { T.toast("השמירה נכשלה: " + ex.message, "err"); }
+      catch (ex) { fail("השמירה נכשלה", ex); }
     }
   });
   document.addEventListener("submit", async (e) => {
@@ -1298,7 +1331,7 @@
       a.lead_price = Number(a.lead_price) || 0;
       if (!a.id) { delete a.id; a.payments = []; }
       try { await T.store.saveAdvertiser(a); $("#modal").remove(); await reload(); rerenderKeepScroll(); T.toast("נשמר"); }
-      catch (ex) { T.toast("השמירה נכשלה: " + ex.message, "err"); }
+      catch (ex) { fail("השמירה נכשלה", ex); }
     } else if (kind === "place") {
       const pl = Object.fromEntries(fd.entries());
       if (!String(pl.name || "").trim()) { T.toast("חסר שם למקום", "err"); return; }
@@ -1307,7 +1340,7 @@
       if (row.url && !/^https?:\/\//.test(row.url)) row.url = "https://" + row.url;
       if (pl.id) row.id = pl.id;
       try { await T.store.savePlace(row); $("#modal").remove(); await reload(); rerenderKeepScroll(); T.toast("נשמר"); }
-      catch (ex) { T.toast("השמירה נכשלה: " + ex.message, "err"); }
+      catch (ex) { fail("השמירה נכשלה", ex); }
     } else if (kind === "settings") {
       readSettingsForm();
       const s = Object.assign({}, A.settings);
@@ -1316,15 +1349,15 @@
       s.coupons = (s.coupons || []).filter((c) => c.code && c.pct);
       s.collections = (s.collections || []).filter((c) => String(c.title || "").trim() && (c.ids || []).length).map((c) => ({ id: c.id || T.uid("c"), title: c.title.trim(), sub: String(c.sub || "").trim(), ids: c.ids }));
       try { await T.store.saveSettings(s); await reload(); rerenderKeepScroll(); T.toast("ההגדרות נשמרו"); }
-      catch (ex) { T.toast("השמירה נכשלה: " + ex.message, "err"); }
+      catch (ex) { fail("השמירה נכשלה", ex); }
     } else if (kind === "article") {
       const a = Object.assign({}, A.editArticle, { title: fd.get("title").trim(), excerpt: fd.get("excerpt").trim(), body: fd.get("body"), published: !!fd.get("published") });
       if (!a.title) { T.toast("חסרה כותרת", "err"); return; }
       try { const saved = await T.store.saveArticle(a); A.editArticle = T.clone(saved); await reload(); rerenderKeepScroll(); T.toast(a.published ? "נשמר ופורסם" : "נשמר כטיוטה"); }
-      catch (ex) { T.toast("השמירה נכשלה: " + ex.message, "err"); }
+      catch (ex) { fail("השמירה נכשלה", ex); }
     }
   });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("#modal")) $("#modal").remove(); });
+  document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; if ($("#deny")) $("#deny").remove(); else if ($("#modal")) $("#modal").remove(); });
   window.addEventListener("hashchange", () => { render(); window.scrollTo(0, 0); });
   window.addEventListener("beforeunload", (e) => { if (Object.values(A.drafts).some((d) => d._dirty)) { e.preventDefault(); e.returnValue = ""; } });
 
@@ -1337,7 +1370,12 @@
     A.ready = true;
     render();
     T.store.onChange(async () => { if (!A.authed || A.editId || A.editArticle) return; await reload(); if (!$("#modal")) rerenderKeepScroll(); });
-    if (T.isLive && T.store.client) T.store.client.auth.onAuthStateChange(async (ev) => { if (ev === "SIGNED_IN" && !A.authed) { A.authed = await checkAuth(); if (A.authed) await reload(); render(); } });
+    if (T.isLive && T.store.client) T.store.client.auth.onAuthStateChange(async (ev, session) => {
+      if (ev === "SIGNED_IN" && !A.authed) { A.authed = await checkAuth(); if (A.authed) await reload(); render(); }
+      /* יציאה בלשונית אחרת, או התחברות של משתמש אחר באותו דפדפן: לא ממשיכים לעבוד בשם החשבון הקודם */
+      else if (ev === "SIGNED_OUT" && A.authed) { A.authed = false; A.loginMsg = { tone: "info", text: "החשבון התנתק. היכנסו שוב כדי להמשיך." }; render(); }
+      else if (A.authed && session && session.user && A.email && session.user.email !== A.email) { A.authed = await checkAuth(); if (A.authed) await reload(); else if (!A.loginMsg) A.loginMsg = { tone: "warn", text: "בדפדפן הזה התחבר עכשיו חשבון אחר. היכנסו שוב." }; render(); }
+    });
   }
   boot();
 })();

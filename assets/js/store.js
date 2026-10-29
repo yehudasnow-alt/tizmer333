@@ -209,6 +209,7 @@
       /* כניסה בהדגמה */
       async getUser() { return ss("tamara.demo.admin") === "1" ? { email: "demo@tamara", admin: true } : ownerId() ? { email: "owner", ownerId: ownerId() } : null; },
       async isAdmin() { return ss("tamara.demo.admin") === "1"; },
+      async whoami() { return { email: ss("tamara.demo.admin") === "1" ? "demo" : "", admin: ss("tamara.demo.admin") === "1" }; },
       async signInAdmin() { ss("tamara.demo.admin", "1"); return true; },
       async signInOwnerDemo(id) { ss("tamara.demo.owner", id); return true; },
       async signOut() { ss("tamara.demo.admin", null); ss("tamara.demo.owner", null); },
@@ -398,6 +399,15 @@
       },
       async getUser() { const { data } = await sb.auth.getSession(); return data && data.session ? data.session.user : null; },
       async isAdmin() { if (adminCache !== null) return adminCache; const r = await sb.rpc("is_admin"); adminCache = !r.error && r.data === true; return adminCache; },
+      /* בדיקה טרייה מול השרת: מי מחובר עכשיו והאם הוא מנהל (לאבחון כשפעולה נחסמת) */
+      async whoami() {
+        const { data } = await sb.auth.getUser();
+        const u = data && data.user;
+        if (!u) return { email: "", admin: false };
+        const r = await sb.rpc("is_admin");
+        adminCache = !r.error && r.data === true;
+        return { email: u.email || "", admin: adminCache, rpcError: r.error ? r.error.message : "" };
+      },
       async signInAdmin(email, password) { ok(await sb.auth.signInWithPassword({ email, password })); adminCache = null; return true; },
       async signInOwnerLink(email) { ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } })); return true; },
       async signInGoogle() { ok(await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } })); },
