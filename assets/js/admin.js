@@ -125,7 +125,8 @@
         <button class="btn btn-line btn-block" type="button" data-act="google">כניסה עם חשבון Google</button>`;
     }
     if (!IS_ADMIN && A.adminHere) body = `<h1>ממשק מארחים</h1>`;
-    return `<div class="login"><div class="login-card"><img class="logo" src="${LOGO_S}" alt="${esc(A.settings.site_name)}">${body}${msg ? `<p class="note note-${msg.tone || "info"}" role="status">${esc(msg.text)}</p>` : ""}${!IS_ADMIN && A.adminHere ? `<a class="btn btn-primary btn-block" href="admin.html#advertisers">${I("briefcase")}לפאנל הניהול · לקוחות</a>` : ""}<a class="link-more" style="justify-self:center" href="${siteURL()}">${I("back")} חזרה לאתר</a></div></div>`;
+    const outBtn = T.isLive && (A.signedInAs || A.adminHere) ? `<button class="btn btn-ghost btn-block" type="button" data-act="logout">יציאה מהחשבון ${esc(A.signedInAs || A.email || "")}</button>` : "";
+    return `<div class="login"><div class="login-card"><img class="logo" src="${LOGO_S}" alt="${esc(A.settings.site_name)}">${body}${msg ? `<p class="note note-${msg.tone || "info"}" role="status">${esc(msg.text)}</p>` : ""}${!IS_ADMIN && A.adminHere ? `<a class="btn btn-primary btn-block" href="admin.html#advertisers">${I("briefcase")}לפאנל הניהול · לקוחות</a>` : ""}${outBtn}<a class="link-more" style="justify-self:center" href="${siteURL()}">${I("back")} חזרה לאתר</a></div></div>`;
   }
 
   /* ================================================================ dashboard */
@@ -1071,10 +1072,12 @@
     const user = await T.store.getUser();
     if (!user) return false;
     A.email = user.email || "";
+    /* לא מנתקים אוטומטית: הכניסה משותפת לכל הלשוניות של האתר, וניתוק כאן היה מנתק גם לשוניות אחרות */
+    A.signedInAs = "";
     if (IS_ADMIN) {
       if (await T.store.isAdmin()) return true;
-      A.loginMsg = { tone: "warn", text: "החשבון מחובר אבל לא מוגדר כמנהל. הוסיפו את האימייל לטבלת admins (שלב 4 במדריך)." };
-      await T.store.signOut();
+      A.signedInAs = user.email || "";
+      A.loginMsg = { tone: "warn", text: `החשבון ${user.email} מחובר, אבל לא מוגדר כמנהל. אם זו טעות: ב-Supabase → SQL Editor מוסיפים את האימייל לטבלת admins (שלב 2.3 במדריך). אפשר גם להיכנס כאן עם חשבון מנהל אחר.` };
       return false;
     }
     if ((await T.store.myAdvertisers()).length) return true;
@@ -1084,8 +1087,8 @@
       A.loginMsg = { tone: "info", text: `אתם מחוברים כמנהל (${user.email}). כדי לראות את ממשק המארחים כמו מארח, הוסיפו בפאנל הניהול לקוח עם האימייל הזה ושייכו אליו מתחם, ואז רעננו את הדף.` };
       return false;
     }
-    A.loginMsg = { tone: "warn", text: "לא מצאנו לקוח עם האימייל הזה. פנו לצוות האתר כדי שיעדכנו את האימייל אצלם." };
-    await T.store.signOut();
+    A.signedInAs = user.email || "";
+    A.loginMsg = { tone: "warn", text: `לא מצאנו לקוח עם האימייל ${user.email}. פנו לצוות האתר כדי שיעדכנו את האימייל אצלם, או היכנסו עם אימייל אחר.` };
     return false;
   }
 
@@ -1118,7 +1121,7 @@
     else if (act === "demo-owner") { await T.store.signInOwnerDemo($("#demo-owner").value); A.authed = true; await reload(); location.hash = "my"; render(); }
     else if (act === "google") { try { await T.store.signInGoogle(); } catch (ex) { A.loginMsg = { tone: "warn", text: "הכניסה עם Google לא הוגדרה עדיין: " + ex.message }; render(); } }
     else if (act === "deny-close") $("#deny").remove();
-    else if (act === "logout") { ["#modal", "#deny"].forEach((x) => { const m = $(x); if (m) m.remove(); }); await T.store.signOut(); A.authed = false; A.loginMsg = null; if (!IS_ADMIN && !T.isLive) A.advertisers = await T.store.listAdvertisers(); render(); }
+    else if (act === "logout") { ["#modal", "#deny"].forEach((x) => { const m = $(x); if (m) m.remove(); }); A.signedInAs = ""; A.adminHere = false; await T.store.signOut(); A.authed = false; A.loginMsg = null; if (!IS_ADMIN && !T.isLive) A.advertisers = await T.store.listAdvertisers(); render(); }
     else if (act === "lf-status") { A.lf.status = el.dataset.v; rerenderKeepScroll(); }
     else if (act === "qf-status") { A.qf.status = el.dataset.v; rerenderKeepScroll(); }
     else if (act === "rf") { A.rf = el.dataset.v; rerenderKeepScroll(); }
