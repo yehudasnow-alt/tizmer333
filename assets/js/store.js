@@ -8,10 +8,10 @@
       "price_weekday", "price_weekend", "price_holiday", "guests_base", "extra_guest_price", "deal_label", "deal_text", "lastminute_pct", "sponsored_until",
       "video_url", "amenities", "audience", "photos", "blocked_dates", "ical_url", "rooms", "extras", "seasons", "lat", "lng",
       "phone", "whatsapp", "email", "owner_id", "featured", "active", "pending", "details", "terms", "exclusive", "best_price"],
-    advertisers: ["id", "name", "business", "phone", "email", "plan", "status", "billing_model", "lead_price", "start_date", "end_date", "notes", "payments"],
+    advertisers: ["id", "name", "business", "phone", "email", "plan", "status", "billing_model", "lead_price", "start_date", "end_date", "notes", "payments", "tax_id", "address", "prefs", "source", "invited_at", "renewal_requested_at", "terms_version", "terms_at"],
     leads: ["id", "listing_id", "listing_name", "unit_id", "unit_name", "name", "phone", "email", "check_in", "check_out", "guests", "children", "extras", "coupon", "est_total",
       "message", "status", "source", "admin_note", "review_token", "benefit", "package", "rooms_req", "flexible", "meta"],
-    applications: ["id", "name", "phone", "email", "business", "settlement", "region", "type", "units", "message", "status"],
+    applications: ["id", "name", "phone", "email", "business", "settlement", "region", "type", "units", "message", "status", "tax_id", "advertiser_id", "marketing"],
     reviews: ["id", "listing_id", "name", "rating", "text", "status", "stay_month", "reply", "title", "scores", "unit_name"],
     articles: ["id", "title", "excerpt", "body", "cover", "published"],
     places: ["id", "name", "kind", "region", "settlement", "lat", "lng", "phone", "url", "blurb", "photo", "active"],
@@ -21,17 +21,20 @@
     const out = {};
     cols.forEach((c) => {
       if (o[c] === undefined) return;
-      out[c] = o[c] === "" && (/_date$|_until$|^check_|_id$/.test(c) || c === "lat" || c === "lng") && c !== "id" ? null : o[c];
+      out[c] = o[c] === "" && (/_date$|_until$|^check_|_id$|_at$/.test(c) || c === "lat" || c === "lng") && c !== "id" && c !== "tax_id" ? null : o[c];
     });
     return out;
   };
   const byNewest = (a, b) => (b.created_at || "").localeCompare(a.created_at || "");
   /* גרסת הסכמה שהקוד הזה מצפה לה (supabase/schema.sql → public.schema_version()) */
-  T.SCHEMA_VERSION = 3;
+  T.SCHEMA_VERSION = 4;
   /* מה חסר במסד (טבלאות/עמודות/פונקציות) לפי שגיאות שחזרו מהשרת */
   T.schemaIssues = T.schemaIssues || new Set();
   /* האם הדף הזה נפתח מקישור כניסה (הטוקן בכתובת)? רק לשונית כזו עוברת ליעד אחרי הכניסה */
   T.authFromUrl = typeof location !== "undefined" && /access_token=|error_description=/.test(location.hash || "");
+  /* סוג הקישור מהמייל: signup (אימות הרשמה), recovery (איפוס סיסמה), invite (הזמנה), magiclink */
+  T.authLinkType = (() => { try { return new URLSearchParams((location.hash || "").slice(1)).get("type") || ""; } catch (e) { return ""; } })();
+  T.authLinkError = (() => { try { const p = new URLSearchParams((location.hash || "").slice(1)); return p.get("error_description") || p.get("error_code") || ""; } catch (e) { return ""; } })();
   /* היעד אחרי הכניסה נשמר גם בכתובת הקישור (?after=me-leads), כך שזה עובד גם כשפותחים את המייל במכשיר אחר */
   T.afterParam = (() => { try { const v = new URLSearchParams(location.search).get("after") || ""; return /^me(-[a-z]+)?$/.test(v) ? v : ""; } catch (e) { return ""; } })();
   const afterLogin = (h) => { try { localStorage.setItem("tamara.after", JSON.stringify({ h, t: Date.now() })); } catch (e) {} };
@@ -52,15 +55,19 @@
     return JSON.stringify(canon(a)) === JSON.stringify(canon(b));
   };
   /* מארח: שדות תוכן נשמרים כ״ממתין לאישור״, מחירים ויומן נשמרים מיד */
+  /* מתחם חדש שעוד לא פורסם: המארח יכול לבקש פרסום (_publish), והבקשה נשמרת עד שהמנהל מפעיל אותו */
   T.ownerSplit = (draft, original, moderation) => {
     const row = Object.assign({}, draft);
-    if (!moderation) { row.pending = null; return row; }
+    delete row._publish;
+    const publish = !!draft._publish || !!(original && original.pending && original.pending._publish && !original.active);
+    const flag = (pend) => (publish ? Object.assign(pend || { _at: new Date().toISOString() }, { _publish: true }) : pend);
+    if (!moderation) { row.pending = flag(null); return row; }
     const diff = {};
     T.MODERATED_FIELDS.forEach(([k]) => {
       if (!T.sameField(k, draft[k], original[k])) diff[k] = draft[k];
       row[k] = original[k];
     });
-    row.pending = Object.keys(diff).length ? Object.assign(diff, { _at: new Date().toISOString() }) : null;
+    row.pending = flag(Object.keys(diff).length ? Object.assign(diff, { _at: new Date().toISOString() }) : null);
     return row;
   };
   T.withPending = (l) => {
@@ -130,7 +137,7 @@
       async getListing(id) { load(); const l = db.listings.find((x) => x.id === id); return l ? T.normalizeListing(l) : null; },
       async saveListing(l) { return upsert("listings", T.normalizeListing(l), "l-"); },
       async saveListingAsOwner(draft, original) { load(); return upsert("listings", T.normalizeListing(T.ownerSplit(draft, original, db.settings.moderation !== false)), "l-"); },
-      async approvePending(id) { load(); const l = db.listings.find((x) => x.id === id); if (!l || !l.pending) return; const m = T.withPending(l); m.pending = null; return upsert("listings", m, "l-"); },
+      async approvePending(id, o) { load(); const l = db.listings.find((x) => x.id === id); if (!l || !l.pending) return; const m = T.withPending(l); m.pending = null; if (o && o.activate) m.active = true; return upsert("listings", m, "l-"); },
       async rejectPending(id) { return upsert("listings", { id, pending: null }, "l-"); },
       async deleteListing(id) { remove("listings", id); },
       /* מפרסמים */
@@ -175,7 +182,7 @@
         load();
         const email = String(x.email || "").trim().toLowerCase();
         if (db.subscribers.some((s) => s.email === email)) return { duplicate: true };
-        return upsert("subscribers", { email, name: String(x.name || "").slice(0, 80), regions: x.regions || [], source: x.source || "site" }, "s-", true);
+        return upsert("subscribers", { email, name: String(x.name || "").slice(0, 80), regions: x.regions || [], source: x.source || "site", token: T.token(), confirmed_at: new Date().toISOString() }, "s-", true);
       },
       async listSubscribers() { load(); return T.clone(db.subscribers).sort(byNewest); },
       async deleteSubscriber(id) { remove("subscribers", id); },
@@ -220,7 +227,36 @@
       async whoami() { return { email: ss("tamara.demo.admin") === "1" ? "demo" : "", admin: ss("tamara.demo.admin") === "1" }; },
       async schemaCheck() { return [{ group: "db", label: "מצב הדגמה", ok: true, detail: "האתר עוד לא מחובר ל-Supabase. הנתונים נשמרים רק בדפדפן הזה." }]; },
       async signInAdmin() { ss("tamara.demo.admin", "1"); return true; },
+      async signInPassword() { return true; },
+      async authInfo() { return {}; },
       async signInOwnerDemo(id) { ss("tamara.demo.owner", id); return true; },
+      /* בהדגמה אין סיסמאות ומיילים: ההרשמה נשמרת כבקשת הצטרפות מאומתת */
+      async signUpHost(f) { load(); upsert("applications", { status: "new", name: f.name, business: f.business, phone: f.phone, email: f.email, settlement: f.settlement, region: f.region, type: f.type, units: f.units, message: f.message || "", tax_id: f.tax_id || "", verified: true, terms_version: T.HOST_TERMS_VERSION }, "j-", true); return { demo: true }; },
+      async resendSignup() { return true; },
+      async sendPasswordReset() { return true; },
+      async updatePassword() { return true; },
+      async claimHostSignup() { return { status: "none" }; },
+      async myApplication() { return null; },
+      async updateMyProfile(p) { load(); const a = db.advertisers.find((x) => x.id === ownerId()); if (a) { Object.assign(a, { name: p.name || a.name, phone: p.phone || a.phone, address: p.address || "", tax_id: p.tax_id || "", prefs: Object.assign({}, a.prefs, p.prefs) }); persist(); emit(); } return true; },
+      async requestRenewal() { load(); const a = db.advertisers.find((x) => x.id === ownerId()); if (a) { a.renewal_requested_at = new Date().toISOString(); persist(); emit(); } return true; },
+      async adminStatus() { return { admin: ss("tamara.demo.admin") === "1", mfa_required: false, aal: "aal1" }; },
+      async mfaFactors() { return []; },
+      async mfaEnroll() { throw new Error("אימות דו-שלבי זמין באתר המחובר"); },
+      async mfaVerify() { return true; },
+      async mfaUnenroll() { return true; },
+      async mfaLevel() { return { currentLevel: "aal1", nextLevel: "aal1" }; },
+      async adminSetMfa() { return true; },
+      async signInOwnerLink() { return true; },
+      async listAudit() { return []; },
+      async listAdmins() { return [{ email: "demo@tamara", mfa_required: false }]; },
+      async addAdmin() { throw new Error("ניהול מנהלים זמין באתר המחובר"); },
+      async removeAdmin() { throw new Error("ניהול מנהלים זמין באתר המחובר"); },
+      async account() { throw new Error("שליחת מיילים זמינה אחרי חיבור האתר ל-Supabase ול-Resend"); },
+      async mail() { return { demo: true }; },
+      async runDaily() { throw new Error("המשימה היומית רצה רק באתר המחובר"); },
+      async cleanupPhotos() { throw new Error("ניקוי תמונות זמין באתר המחובר"); },
+      async confirmSubscriber(token) { load(); const x = db.subscribers.find((s) => s.token === token); if (x) { x.confirmed_at = new Date().toISOString(); persist(); } return !!x; },
+      async unsubscribe(token) { load(); const x = db.subscribers.find((s) => s.token === token); if (x) { x.unsubscribed_at = new Date().toISOString(); persist(); } return !!x; },
       async signOut() { ss("tamara.demo.admin", null); ss("tamara.demo.owner", null); },
       async myAdvertisers() { load(); return T.clone(db.advertisers.filter((a) => a.id === ownerId())); },
       async myListings() { load(); return db.listings.filter((l) => l.owner_id === ownerId()).map(T.normalizeListing); },
@@ -292,6 +328,12 @@
       return data;
     };
     const token = async () => { const { data } = await sb.auth.getSession(); return data && data.session ? data.session.access_token : ""; };
+    const api = async (path, body) => {
+      const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (await token()) }, body: JSON.stringify(body || {}) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "שגיאת שרת " + r.status);
+      return j;
+    };
     const store = {
       mode: "live",
       persistent: true,
@@ -309,7 +351,7 @@
         const s = await store.getSettings();
         return T.normalizeListing(await save("listings", T.ownerSplit(T.normalizeListing(draft), original, s.moderation !== false), COLS.listings));
       },
-      async approvePending(id) { const l = await store.getListing(id); if (!l || !l.pending) return; const m = T.withPending(l); m.pending = null; return store.saveListing(m); },
+      async approvePending(id, o) { const l = await store.getListing(id); if (!l || !l.pending) return; const m = T.withPending(l); m.pending = null; if (o && o.activate) m.active = true; return store.saveListing(m); },
       async rejectPending(id) { ok(await sb.from("listings").update({ pending: null }).eq("id", id)); emit(); },
       async deleteListing(id) { ok(await sb.from("listings").delete().eq("id", id)); emit(); },
       async listAdvertisers() { return ok(await sb.from("advertisers").select("*").order("created_at", { ascending: false })); },
@@ -379,14 +421,24 @@
       },
       async savePlace(p) { return save("places", p, COLS.places); },
       async deletePlace(id) { ok(await sb.from("places").delete().eq("id", id)); emit(); },
+      /* הרשמה לדיוור בהסכמה כפולה: נשלח מייל אישור, ורק אחרי לחיצה המנוי פעיל */
       async addSubscriber(x) {
-        const row = pick({ email: String(x.email || "").trim().toLowerCase(), name: String(x.name || "").slice(0, 80), regions: x.regions || [], source: x.source || "site" }, COLS.subscribers);
-        const r = await sb.from("subscribers").insert(row);
-        if (r.error && r.error.code === "23505") return { duplicate: true };
-        if (r.error && isMissing(r.error, r.status)) { T.schemaIssues.add("subscribers"); throw new Error("ההרשמה לדיוור עוד לא הופעלה באתר. נסו שוב בקרוב."); }
-        ok(r);
-        return row;
+        const r = await sb.rpc("subscribe", { p_email: String(x.email || "").trim().toLowerCase(), p_name: String(x.name || "").slice(0, 80), p_regions: x.regions || [], p_source: x.source || "site" });
+        if (r.error && isMissing(r.error, r.status)) {
+          /* מסד ישן בלי הפונקציה: הרשמה ישירה */
+          const row = pick({ email: String(x.email || "").trim().toLowerCase(), name: String(x.name || "").slice(0, 80), regions: x.regions || [], source: x.source || "site" }, COLS.subscribers);
+          const r2 = await sb.from("subscribers").insert(row);
+          if (r2.error && r2.error.code === "23505") return { duplicate: true };
+          if (r2.error && isMissing(r2.error, r2.status)) { T.schemaIssues.add("subscribers"); throw new Error("ההרשמה לדיוור עוד לא הופעלה באתר. נסו שוב בקרוב."); }
+          ok(r2); return row;
+        }
+        const out = ok(r) || {};
+        if (out.status === "already") return { duplicate: true };
+        if (out.status === "new") store.notify("subscribe", out.id);
+        return { pending: true };
       },
+      async confirmSubscriber(token) { return !!ok(await sb.rpc("subscriber_confirm", { p_token: token })); },
+      async unsubscribe(token) { return !!ok(await sb.rpc("subscriber_unsubscribe", { p_token: token })); },
       async listSubscribers() { return soft(await sb.from("subscribers").select("*").order("created_at", { ascending: false }).limit(5000), [], "subscribers"); },
       async deleteSubscriber(id) { ok(await sb.from("subscribers").delete().eq("id", id)); emit(); },
       async topViewed(n) { const r = await sb.rpc("top_viewed", { p_limit: n || 20 }); if (r.error && isMissing(r.error)) noteMissing(r.error); return r.error ? [] : flat(r.data); },
@@ -438,9 +490,12 @@
           if (!up.ok) throw new Error((j.error && j.error.message) || "העלאה ל-Cloudinary נכשלה");
           return j.secure_url;
         }
-        const path = `${new Date().getFullYear()}/${T.uid("p")}.jpg`;
-        ok(await sb.storage.from("photos").upload(path, blob, { contentType: "image/jpeg", upsert: false }));
-        return sb.storage.from("photos").getPublicUrl(path).data.publicUrl;
+        /* שני גדלים: מלא (2000px) לגלריה, וקטן (800px) לכרטיסים ולרשימות – טעינה מהירה בטלפון */
+        const name = `${new Date().getFullYear()}/p2-${T.uid("").replace(/[^a-z0-9]/gi, "").toLowerCase()}`;
+        const small = await T.resizeImage(file, 800, 0.82);
+        ok(await sb.storage.from("photos").upload(name + ".jpg", blob, { contentType: "image/jpeg", upsert: false, cacheControl: "31536000" }));
+        try { ok(await sb.storage.from("photos").upload(name + "-sm.jpg", small, { contentType: "image/jpeg", upsert: false, cacheControl: "31536000" })); } catch (e) {}
+        return sb.storage.from("photos").getPublicUrl(name + ".jpg").data.publicUrl;
       },
       notify(type, id) { try { fetch("/api/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, id }), keepalive: true }).catch(() => {}); } catch (e) {} },
       icalExportUrl(listingId, unitId) { return `${location.origin}/api/ical?listing=${encodeURIComponent(listingId)}${unitId ? "&unit=" + encodeURIComponent(unitId) : ""}`; },
@@ -470,12 +525,13 @@
         const out = [];
         const probe = async (label, table, cols) => { const r = await sb.from(table).select(cols).limit(0); out.push({ group: "db", label, ok: !r.error, detail: r.error ? (isMissing(r.error) ? "חסר: " + (missingName(r.error.message) || table) : r.error.message) : "" }); };
         await probe("טבלת מתחמים + שדות התוכן החדשים", "listings", "id,details,terms,exclusive,best_price,pending,rooms,extras,seasons,video_url,ical_blocked");
-        await probe("טבלת לקוחות (מפרסמים)", "advertisers", "id,billing_model,lead_price,payments");
+        await probe("טבלת לקוחות (מפרסמים)", "advertisers", "id,billing_model,lead_price,payments,tax_id,prefs,invited_at,renewal_requested_at");
         await probe("טבלת פניות + שדות חדשים", "leads", "id,children,benefit,package,rooms_req,flexible,meta,source");
         await probe("חוות דעת + דירוג לפי קטגוריות", "reviews", "id,title,scores,unit_name,reply");
         await probe("מה עושים באזור", "places", "id,name,kind,region,lat,lng");
-        await probe("מנויי דיוור", "subscribers", "id,email,regions");
-        await probe("בקשות הצטרפות", "applications", "id,status");
+        await probe("מנויי דיוור (הסכמה כפולה)", "subscribers", "id,email,regions,confirmed_at,unsubscribed_at");
+        await probe("בקשות הצטרפות והרשמה עצמית", "applications", "id,status,verified,tax_id,advertiser_id");
+        await probe("יומן פעולות", "audit_log", "id,at,actor,entity");
         await probe("מגזין", "articles", "id,published");
         await probe("סטטיסטיקות צפיות", "listing_stats", "listing_id,day,views");
         await probe("הגדרות האתר", "settings", "id,data");
@@ -491,11 +547,61 @@
         else out.push({ group: "server", label: "פונקציות השרת (/api)", ok: false, detail: (h && h.error) || "לא זמין" });
         return out;
       },
-      async signInAdmin(email, password) { ok(await sb.auth.signInWithPassword({ email, password })); adminCache = null; return true; },
+      async signInAdmin(email, password, captchaToken) { ok(await sb.auth.signInWithPassword({ email, password, options: captchaToken ? { captchaToken } : undefined })); adminCache = null; return true; },
+      async signInPassword(email, password, captchaToken) { return store.signInAdmin(email, password, captchaToken); },
+      /* מצב החשבון של כל לקוח (נוצר / אומת / נכנס לאחרונה), לפי האימייל */
+      async authInfo(emails) {
+        const list = [...new Set((emails || []).map((e) => String(e || "").trim().toLowerCase()).filter(Boolean))];
+        if (!list.length) return {};
+        const r = await sb.rpc("admin_auth_info", { p_emails: list });
+        if (r.error) { if (isMissing(r.error, r.status)) noteMissing(r.error); return {}; }
+        const out = {}; (r.data || []).forEach((x) => (out[x.email] = x)); return out;
+      },
+      /* הרשמת מארח: Supabase שולח מייל אימות; הפרטים נשמרים בחשבון עד שהמייל מאומת */
+      async signUpHost(f, captchaToken) {
+        const data = { kind: "host", name: f.name, business: f.business, phone: f.phone, settlement: f.settlement, region: f.region, type: f.type, units: String(f.units || 1), tax_id: f.tax_id || "", message: f.message || "", terms_version: T.HOST_TERMS_VERSION, marketing: f.marketing ? "true" : "false" };
+        const r = ok(await sb.auth.signUp({ email: f.email, password: f.password, options: { emailRedirectTo: location.origin + "/owner.html?welcome=1", data, captchaToken: captchaToken || undefined } }));
+        /* אם אישור מייל כבוי בפרויקט, החשבון נפתח מיד */
+        return { session: !!(r && r.session), existing: !!(r && r.user && Array.isArray(r.user.identities) && !r.user.identities.length) };
+      },
+      async resendSignup(email) { ok(await sb.auth.resend({ type: "signup", email, options: { emailRedirectTo: location.origin + "/owner.html?welcome=1" } })); return true; },
+      async sendPasswordReset(email, captchaToken) { ok(await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname + "?reset=1", captchaToken: captchaToken || undefined })); return true; },
+      async updatePassword(password) { ok(await sb.auth.updateUser({ password })); return true; },
+      async claimHostSignup() { const r = await sb.rpc("claim_host_signup"); if (r.error && isMissing(r.error, r.status)) { noteMissing(r.error); return { status: "none" }; } return ok(r) || { status: "none" }; },
+      async myApplication() { const r = await sb.rpc("my_application"); if (r.error && isMissing(r.error, r.status)) return null; return ok(r) || null; },
+      async updateMyProfile(p) { return !!ok(await sb.rpc("update_my_profile", { p_name: p.name || "", p_phone: p.phone || "", p_address: p.address || "", p_tax_id: p.tax_id || "", p_prefs: p.prefs || {} })); },
+      async requestRenewal() { const r = ok(await sb.rpc("request_renewal")); await store.mail("renewal").catch(() => {}); return !!r; },
+      /* אימות דו-שלבי למנהלים */
+      async adminStatus() { const r = await sb.rpc("admin_status"); if (r.error) return { admin: await store.isAdmin(), mfa_required: false, aal: "aal1" }; return r.data; },
+      async mfaFactors() { const r = await sb.auth.mfa.listFactors(); return (r.data && r.data.totp) || []; },
+      async mfaEnroll() {
+        /* מנקה ניסיונות קודמים שלא הושלמו */
+        const all = await sb.auth.mfa.listFactors();
+        for (const f of ((all.data && all.data.all) || []).filter((x) => x.status !== "verified")) await sb.auth.mfa.unenroll({ factorId: f.id });
+        return ok(await sb.auth.mfa.enroll({ factorType: "totp", friendlyName: "תמרה " + new Date().toISOString().slice(0, 10) }));
+      },
+      async mfaVerify(factorId, code) { ok(await sb.auth.mfa.challengeAndVerify({ factorId, code: String(code).replace(/\s/g, "") })); adminCache = null; return true; },
+      async mfaUnenroll(factorId) { ok(await sb.auth.mfa.unenroll({ factorId })); return true; },
+      async mfaLevel() { const r = await sb.auth.mfa.getAuthenticatorAssuranceLevel(); return r.data || { currentLevel: "aal1", nextLevel: "aal1" }; },
+      async adminSetMfa(on) { ok(await sb.rpc("admin_set_mfa", { p_on: !!on })); adminCache = null; return true; },
+      async listAdmins() { return ok(await sb.from("admins").select("*").order("email")); },
+      async addAdmin(email) { ok(await sb.from("admins").insert({ email: String(email).trim().toLowerCase() })); emit(); },
+      async removeAdmin(email) { ok(await sb.from("admins").delete().eq("email", email)); emit(); },
+      async listAudit(o) {
+        let q = sb.from("audit_log").select("*").order("at", { ascending: false }).limit((o && o.limit) || 200);
+        if (o && o.entity) q = q.eq("entity", o.entity);
+        if (o && o.ids && o.ids.length) q = q.in("entity_id", o.ids);
+        return soft(await q, [], "audit_log");
+      },
+      /* פעולות שרת שדורשות מפתח סודי או שליחת מייל */
+      async account(action, payload) { return api("/api/account", Object.assign({ action }, payload)); },
+      async mail(type, id, extra) { return api("/api/mail", Object.assign({ type, id }, extra || {})); },
+      async runDaily(dry) { return api("/api/daily" + (dry ? "?dry=1" : ""), {}); },
+      async cleanupPhotos(dry) { return api("/api/cleanup" + (dry ? "?dry=1" : ""), {}); },
       async signInOwnerLink(email) { ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } })); return true; },
       async signInGoogle() { ok(await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } })); },
       /* יציאה רק בדפדפן הזה (לא מנתקת מכשירים אחרים של אותו משתמש) */
-      async signOut() { await sb.auth.signOut({ scope: "local" }); adminCache = null; },
+      async signOut(everywhere) { await sb.auth.signOut({ scope: everywhere ? "global" : "local" }); adminCache = null; },
       async myAdvertisers() { const ids = await myIds(); if (!ids.length) return []; return ok(await sb.from("advertisers").select("*").in("id", ids)); },
       async myListings() { const ids = await myIds(); if (!ids.length) return []; return ok(await sb.from("listings").select("*").in("owner_id", ids).order("created_at", { ascending: false })).map(T.normalizeListing); },
       async myLeads() { return ok(await sb.from("leads").select("*").order("created_at", { ascending: false }).limit(1000)); },

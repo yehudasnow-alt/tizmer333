@@ -1,0 +1,36 @@
+# גיבוי שבועי מוצפן של מסד הנתונים (טבלאות האתר: מתחמים, לקוחות, פניות, חוות דעת, הגדרות...)
+# צריך להגדיר ב-GitHub → Settings → Secrets and variables → Actions:
+#   SUPABASE_DB_URL     מחרוזת החיבור מ-Supabase → Connect → Session pooler (פורט 5432, עובד ב-IPv4)
+#   BACKUP_PASSPHRASE   סיסמה ארוכה להצפנת הגיבוי (שומרים אותה גם אצלכם, בלעדיה אי אפשר לשחזר)
+# הגיבוי נשמר 30 יום ב-Actions → הריצה → Artifacts. הוא מוצפן, כי במאגר ציבורי גם אחרים יכולים להוריד קבצים כאלה.
+# שחזור: openssl enc -d -aes-256-cbc -pbkdf2 -in tamara.dump.enc -out tamara.dump  ואז  pg_restore --no-owner -d "<DB_URL>" tamara.dump
+name: Weekly DB backup
+on:
+  schedule:
+    - cron: "20 2 * * 0"
+  workflow_dispatch:
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Dump and encrypt
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then echo "SUPABASE_DB_URL / BACKUP_PASSPHRASE not set – skipping"; echo "SKIP=1" >> "$GITHUB_ENV"; exit 0; fi
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+          /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" --schema=public --no-owner --no-privileges -Fc -f tamara.dump
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:BACKUP_PASSPHRASE -in tamara.dump -out tamara.dump.enc
+          rm tamara.dump
+          ls -lh tamara.dump.enc
+      - name: Keep for 30 days
+        if: env.SKIP != '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tamara-db-${{ github.run_id }}
+          path: tamara.dump.enc
+          retention-days: 30

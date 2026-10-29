@@ -1092,3 +1092,41 @@ input[type="range"] { width: 100%; accent-color: var(--navy); }
 .todo.sys li.bad b { color: var(--ink); }
 .todo.sys li.opt .ic { color: var(--warn); }
 .steps-list { margin: 0; padding-inline-start: 20px; display: grid; gap: 8px; font-size: var(--t-s); line-height: 1.7; }
+/* חשבונות: כניסה, סיסמה, אימות דו-שלבי */
+.auth-form { display: grid; gap: 12px; }
+.login-card .auth-forgot { justify-self: start; font-size: var(--t-xs); margin-top: -4px; }
+.login-card .auth-back { justify-self: center; font-size: var(--t-s); }
+.auth-or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: var(--t-xs); }
+.auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.login-card .auth-foot { font-size: var(--t-s); }
+.login-card .auth-foot a { color: var(--navy); font-weight: 500; }
+.login-card .note { text-align: start; }
+.login-card .note code, .panel code.secret { direction: ltr; unicode-bidi: isolate; font-size: 12px; background: rgba(255,255,255,.6); padding: 2px 6px; border-radius: 6px; word-break: break-all; }
+.login-card .list-plain li { font-size: var(--t-s); }
+.pw-rules { gap: 4px; font-size: var(--t-xs); }
+.input.otp { font-size: 1.6rem; letter-spacing: .35em; text-align: center; font-variant-numeric: tabular-nums; }
+.qr { margin: 10px 0; width: 196px; padding: 8px; background: #fff; border: 1px solid var(--line); border-radius: var(--r-m, 12px); }
+.qr img { display: block; width: 180px; height: 180px; }
+.inline-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; margin-top: 8px; }
+@media (max-width: 520px) { .inline-form { grid-template-columns: minmax(0, 1fr); } }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+.btn-col { display: grid; gap: 8px; margin-top: 12px; }
+.panel.onboard { border-color: var(--blue); background: linear-gradient(var(--sky-50), var(--white) 60%); }
+a.note { color: var(--navy); }
+/* כרטיס לקוח */
+.pay-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; align-items: end; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); }
+.pay-form .btn { justify-self: start; }
+.link-box { display: grid; gap: 8px; margin-top: 10px; padding: 12px; border-radius: var(--r-s); background: var(--sky-50); }
+.link-box .btn { justify-self: start; }
+.audit { list-style: none; margin: 0; padding: 0; display: grid; }
+.audit li { display: grid; grid-template-columns: 118px minmax(0, 1fr) auto; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: var(--t-xs); align-items: baseline; }
+.audit li:last-child { border: 0; }
+.audit .when { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.audit .who { color: var(--muted); max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) { .audit li { grid-template-columns: minmax(0, 1fr); gap: 2px; } .audit .who { max-width: none; } }
+/* הרשמת מארחים, מלכודת לרובוטים */
+.hp { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.join-mode { margin: 14px 0 4px; }
+.textpage ul li b { color: var(--ink); }
+.panel > h2 .h-ic { display: inline-flex; align-items: center; gap: 8px; }
+.join-mode { display: inline-flex; width: auto; max-width: 100%; }

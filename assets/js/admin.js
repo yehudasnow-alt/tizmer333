@@ -12,7 +12,8 @@
   const LOGO_S = "assets/img/brand/logo-stacked-ink.svg";
 
   const A = {
-    ready: false, authed: false, loginMsg: null,
+    ready: false, authed: false, loginMsg: null, loginMode: "login", gate: "", needPassword: false, invite: false, mfaFactor: null, lastEmail: "",
+    af: { tab: "all", q: "" }, authInfo: {}, audit: undefined, actF: "", acct: null, enroll: null, daily: null, cleanup: null, welcome: false, app: null, linkFor: null, clientAudit: null, route: "",
     listings: [], advertisers: [], leads: [], applications: [], reviews: [], articles: [], places: [], subscribers: [], stats: {}, settings: T.clone(T.DEFAULT_SETTINGS),
     pf: { region: "", kind: "" }, sf: { region: "" },
     drafts: {}, editId: null, calStart: null, calUnit: "",
@@ -27,19 +28,16 @@
   const nightsTxt = (q) => { const n = T.nightsBetween(q.check_in, q.check_out); return n > 0 ? (n === 1 ? "לילה אחד" : `${n} לילות`) : ""; };
   const pendingReviews = () => A.reviews.filter((r) => r.status === "pending");
   const pendingListings = () => A.listings.filter((l) => l.pending);
+  /* שינויי תוכן שממתינים (לא רק בקשת פרסום של מתחם חדש) */
+  const contentPending = (l) => !!l.pending && T.MODERATED_FIELDS.some(([k]) => l.pending[k] !== undefined);
+  const pendingPill = (l) => (contentPending(l) ? '<span class="pill pill-warn">ממתין לאישור</span>' : l.pending && l.pending._publish && !l.active ? '<span class="pill pill-navy">ביקש פרסום</span>' : "");
   const statusPill = (k) => {
     const tone = { new: "info", in_progress: "warn", closed: "ok", lost: "muted", approved: "ok", rejected: "muted", pending: "warn" }[k] || "muted";
     const name = k === "approved" ? "אושרה" : k === "rejected" ? "נדחתה" : k === "pending" ? "ממתינה" : T.statusName(T.LEAD_STATUS, k);
     return `<span class="pill pill-${tone}">${esc(name)}</span>`;
   };
-  const advPill = (a) => {
-    const days = T.daysUntil(a.end_date);
-    if (a.status === "paused") return `<span class="pill pill-muted">מושהה</span>`;
-    if (days === null) return `<span class="pill pill-muted">ללא תאריך</span>`;
-    if (days < 0) return `<span class="pill pill-danger">הסתיים לפני ${-days} ימים</span>`;
-    if (days <= 30) return `<span class="pill pill-warn">${days === 0 ? "מסתיים היום" : `עוד ${days} ימים`}</span>`;
-    return `<span class="pill pill-ok">${a.status === "trial" ? "ניסיון · " : ""}עד ${T.fmtDate(a.end_date)}</span>`;
-  };
+  /* מצב המנוי (פעיל / ניסיון / מסתיים / ימי חסד / הסתיים) – אותו חישוב כמו במסד הנתונים */
+  const advPill = (a) => { const st = T.subState(a, A.settings); return `<span class="pill pill-${st.tone}">${esc(st.label)}</span>`; };
   const ph = (title, sub, acts) => `<div class="ph"><div><h1>${title}</h1>${sub ? `<p>${sub}</p>` : ""}</div>${acts ? `<div class="acts">${acts}</div>` : ""}</div>`;
   const reviewLink = async (q) => {
     let token = q.review_token;
@@ -84,9 +82,9 @@
     const newLeads = A.leads.filter((q) => q.status === "new").length;
     const items = IS_ADMIN
       ? [["dashboard", "chart", "סקירה"], ["listings", "home", "מתחמים", A.listings.length], ["leads", "inbox", "פניות", newLeads], ["moderation", "shield", "אישורי תוכן", pendingListings().length], ["reviews", "star", "חוות דעת", pendingReviews().length],
-        ["advertisers", "briefcase", "לקוחות"], ["billing", "receipt", "חיובים"], ["applications", "user-plus", "בקשות הצטרפות", A.applications.filter((a) => a.status === "new").length], ["places", "map", "מה עושים באזור"], ["articles", "book", "מגזין"], ["subscribers", "mail", "מנויי דיוור"], ["site-settings", "sliders", "הגדרות"], ["system", "shield", "בדיקת מערכת", T.isLive && T.schemaIssues && T.schemaIssues.size ? "!" : 0]]
-      : [["my", "home", "המתחמים שלי"], ["leads", "inbox", "פניות", newLeads], ["reviews", "star", "חוות דעת"]];
-    const isCur = (k) => cur === k || (k === "listings" && (cur.startsWith("edit-") || cur === "new")) || (k === "my" && cur.startsWith("edit-"));
+        ["advertisers", "briefcase", "לקוחות", A.advertisers.filter(renewalAsked).length], ["billing", "receipt", "חיובים"], ["applications", "user-plus", "בקשות הצטרפות", A.applications.filter((a) => a.status === "new").length], ["places", "map", "מה עושים באזור"], ["articles", "book", "מגזין"], ["subscribers", "mail", "מנויי דיוור"], ["activity", "history", "יומן פעולות"], ["site-settings", "sliders", "הגדרות"], ["system", "shield", "בדיקת מערכת", T.isLive && T.schemaIssues && T.schemaIssues.size ? "!" : 0]]
+      : [["my", "home", "המתחמים שלי"], ["leads", "inbox", "פניות", newLeads], ["reviews", "star", "חוות דעת"], ["account", "user", "החשבון שלי"]];
+    const isCur = (k) => cur === k || (k === "listings" && (cur.startsWith("edit-") || cur === "new")) || (k === "my" && cur.startsWith("edit-")) || (k === "advertisers" && cur.startsWith("client-"));
     return `<div class="app">
       <aside class="side">
         <a class="brand" href="${siteURL()}" title="לאתר"><img src="${LOGO_W}" alt="${esc(A.settings.site_name)}"></a>
@@ -95,7 +93,7 @@
         <nav aria-label="ניווט בפאנל">${items.map(([k, ic, t, n]) => `<a href="#${k}" ${isCur(k) ? 'aria-current="page"' : ""} title="${t}">${I(ic)}<span class="lbl">${t}</span>${n ? `<span class="count">${n}</span>` : ""}</a>`).join("")}</nav>
         <div class="side-foot">
           <a href="${siteURL()}" target="_blank" rel="noopener">${I("external")}<span>צפייה באתר</span></a>
-          ${IS_ADMIN ? `<a href="owner.html">${I("users")}<span>ממשק מארחים</span></a>` : ""}
+          ${IS_ADMIN ? `<a href="#account" ${cur === "account" ? 'aria-current="page"' : ""}>${I("user")}<span>החשבון שלי</span></a><a href="owner.html">${I("users")}<span>ממשק מארחים</span></a>` : ""}
           <button type="button" data-act="logout">${I("logout")}<span>יציאה</span></button>
         </div>
       </aside>
@@ -113,20 +111,10 @@
         : `<h1>כניסת מארחים</h1><p>במצב הדגמה בוחרים מפרסם ורואים את המסך שלו. באתר החי המארח נכנס עם קישור למייל או עם Google.</p>
            <label class="field"><span>כניסה בתור</span><select class="select" id="demo-owner">${A.advertisers.map((a) => `<option value="${esc(a.id)}">${esc(a.business)} · ${esc(a.name)}</option>`).join("")}</select></label>
            <button class="btn btn-primary btn-lg btn-block" type="button" data-act="demo-owner">כניסה</button>`;
-    } else if (IS_ADMIN) {
-      body = `<h1>כניסה לניהול</h1><form data-form="login" style="display:grid;gap:12px" novalidate>
-          <label class="field"><span>אימייל</span><input class="input" name="email" type="email" dir="ltr" autocomplete="username" required></label>
-          <label class="field"><span>סיסמה</span><input class="input" name="password" type="password" dir="ltr" autocomplete="current-password" required></label>
-          <button class="btn btn-primary btn-lg btn-block" type="submit">כניסה</button></form>`;
-    } else {
-      body = `<h1>כניסת מארחים</h1><p>הזינו את האימייל שמסרתם לנו, ונשלח אליו קישור כניסה.</p>
-        <form data-form="owner-login" style="display:grid;gap:12px" novalidate><label class="field"><span>אימייל</span><input class="input" name="email" type="email" dir="ltr" autocomplete="email" required></label>
-        <button class="btn btn-primary btn-lg btn-block" type="submit">שליחת קישור כניסה</button></form>
-        <button class="btn btn-line btn-block" type="button" data-act="google">כניסה עם חשבון Google</button>`;
-    }
+    } else body = liveLogin();
     if (!IS_ADMIN && A.adminHere) body = `<h1>ממשק מארחים</h1>`;
     const outBtn = T.isLive && (A.signedInAs || A.adminHere) ? `<button class="btn btn-ghost btn-block" type="button" data-act="logout">יציאה מהחשבון ${esc(A.signedInAs || A.email || "")}</button>` : "";
-    return `<div class="login"><div class="login-card"><img class="logo" src="${LOGO_S}" alt="${esc(A.settings.site_name)}">${body}${msg ? `<p class="note note-${msg.tone || "info"}" role="status">${esc(msg.text)}</p>` : ""}${!IS_ADMIN && A.adminHere ? `<a class="btn btn-primary btn-block" href="admin.html#advertisers">${I("briefcase")}לפאנל הניהול · לקוחות</a>` : ""}${outBtn}<a class="link-more" style="justify-self:center" href="${siteURL()}">${I("back")} חזרה לאתר</a></div></div>`;
+    return `<div class="login"><div class="login-card"><img class="logo" src="${LOGO_S}" alt="${esc(A.settings.site_name)}">${body}${msg ? loginNote() : ""}${!IS_ADMIN && A.adminHere ? `<a class="btn btn-primary btn-block" href="admin.html#advertisers">${I("briefcase")}לפאנל הניהול · לקוחות</a>` : ""}${outBtn}<a class="link-more" style="justify-self:center" href="${siteURL()}">${I("back")} חזרה לאתר</a></div></div>`;
   }
 
   /* ================================================================ dashboard */
@@ -141,7 +129,8 @@
     const sponsored = A.listings.filter((l) => l.owner_id === a.id && l.sponsored_until && l.sponsored_until >= from).length * (Number(A.settings.sponsored_price) || 0);
     const active = a.status !== "paused" && a.status !== "ended" && (!a.start_date || a.start_date <= to);
     const total = active ? sub + perLead + sponsored : 0;
-    const paid = (a.payments || []).find((p) => p.month === month);
+    const inMonth = (a.payments || []).filter((p) => p.month === month);
+    const paid = inMonth.length ? { amount: inMonth.reduce((s, p) => s + (Number(p.amount) || 0), 0), paid_at: inMonth[0].paid_at || new Date().toISOString() } : null;
     return { leads, sub: active ? sub : 0, perLead: active ? perLead : 0, sponsored: active ? sponsored : 0, total, paid, model, active };
   }
   function viewDashboard() {
@@ -208,7 +197,7 @@
             <td>${esc(advName(l.owner_id)) || '<span class="muted">—</span>'}</td>
             <td><span class="big">${T.money(T.fromPrice(l))}</span>${T.unitsOf(l).length > 1 ? '<div class="sub">החל מ</div>' : ""}</td>
             <td class="num">${T.num(st.v)}</td><td class="num">${leadsFor(l.id).length}</td>
-            <td style="white-space:nowrap">${l.active ? '<span class="pill pill-ok">מוצג</span>' : '<span class="pill pill-muted">מוסתר</span>'} ${l.pending ? '<span class="pill pill-warn">ממתין לאישור</span>' : ""} ${T.isSponsored(l) ? '<span class="pill pill-navy">ממומן</span>' : ""} ${l.exclusive ? '<span class="pill pill-info">בלעדי</span>' : ""} ${l.best_price ? '<span class="pill pill-info">מחיר הכי טוב</span>' : ""}</td>
+            <td style="white-space:nowrap">${l.active ? '<span class="pill pill-ok">מוצג</span>' : '<span class="pill pill-muted">מוסתר</span>'} ${pendingPill(l)} ${T.isSponsored(l) ? '<span class="pill pill-navy">ממומן</span>' : ""} ${l.exclusive ? '<span class="pill pill-info">בלעדי</span>' : ""} ${l.best_price ? '<span class="pill pill-info">מחיר הכי טוב</span>' : ""}</td>
             <td><div class="acts">
               <button class="mini-btn ${l.active ? "on" : ""}" type="button" data-act="toggle" data-k="active" data-id="${esc(l.id)}" title="${l.active ? "הסתרה" : "הצגה"}" aria-label="${l.active ? "הסתרת" : "הצגת"} ${esc(l.name)}">${I(l.active ? "eye" : "eye-off")}</button>
               <button class="mini-btn ${l.featured ? "on" : ""}" type="button" data-act="toggle" data-k="featured" data-id="${esc(l.id)}" title="נבחרי העונה" aria-pressed="${l.featured}" aria-label="נבחרי העונה: ${esc(l.name)}">${I("star")}</button>
@@ -286,7 +275,7 @@
     const t = d.terms;
     const secs = [["location", "לוקיישן", "איפה בדיוק, איך מגיעים, חניה"], ["vibe", "אווירה", "שקט, נוף, סגנון"], ["facilities", "מתקנים", "ג׳קוזי, בריכה, מטבח"], ["area", "מה עושים באזור", "מסלולים, מסעדות, יקבים (עם זמני נסיעה)"]];
     return ph(id === "new" ? "מתחם חדש" : esc(d.name || "עריכת מתחם"), id === "new" ? "ממלאים, שומרים, ומפעילים כשהכרטיס מוכן." : `עודכן ${T.fmtStamp(d.updated_at)}`, id === "new" ? "" : `<a class="btn btn-line" href="${siteURL("stay-" + d.id)}" target="_blank" rel="noopener">${I("external")}צפייה באתר</a>`) + `
-      ${!IS_ADMIN && orig && orig.pending ? `<p class="note note-info" style="margin-bottom:14px">${I("shield")}<span>שינויי תוכן ששלחתם ממתינים לאישור צוות האתר (${T.fmtStamp(orig.pending._at)}). מחירים, יומן, יחידות ומדיניות מתעדכנים מיד.</span></p>` : moderated ? `<p class="note note-info" style="margin-bottom:14px">${I("info")}<span>שינויים בשם, בתיאור, בתמונות, במאפיינים ובתוכן הדף מתפרסמים אחרי אישור צוות האתר. מחירים, יומן, יחידות ומדיניות מתעדכנים מיד.</span></p>` : ""}
+      ${!IS_ADMIN && orig && contentPending(orig) ? `<p class="note note-info" style="margin-bottom:14px">${I("shield")}<span>שינויי תוכן ששלחתם ממתינים לאישור צוות האתר (${T.fmtStamp(orig.pending._at)}). מחירים, יומן, יחידות ומדיניות מתעדכנים מיד.</span></p>` : moderated ? `<p class="note note-info" style="margin-bottom:14px">${I("info")}<span>שינויים בשם, בתיאור, בתמונות, במאפיינים ובתוכן הדף מתפרסמים אחרי אישור צוות האתר. מחירים, יומן, יחידות ומדיניות מתעדכנים מיד.</span></p>` : ""}
       <nav class="ed-jump" aria-label="קפיצה לחלק בטופס">${[["ed-main", "פרטים"], ["ed-photos", "תמונות"], ["ed-content", "תוכן הדף"], ["ed-units", "יחידות ומחירים"], ["ed-deals", "מבצעים והטבות"], ["ed-amen", "מאפיינים"], ["ed-policy", "מדיניות"], ["ed-calendar", "יומן"], ["ed-contact", "מיקום וקשר"]].map(([k, n]) => `<a href="#" data-act="ed-jump" data-to="${k}">${n}</a>`).join("")}</nav>
       <form class="editor" id="editor" data-form="listing" novalidate>
         <div>
@@ -405,7 +394,8 @@
             <div class="toggle-row"><span>בלעדי לאתר<small>תווית ״בלעדי לתמרה״ בכרטיס</small></span><button class="switch" type="button" role="switch" aria-checked="${!!d.exclusive}" data-act="ed-switch" data-k="exclusive" aria-label="בלעדי לאתר"></button></div>
             <div class="toggle-row"><span>מחיר הכי טוב<small>המארח התחייב שאין מחיר זול יותר באתר אחר</small></span><button class="switch" type="button" role="switch" aria-checked="${!!d.best_price}" data-act="ed-switch" data-k="best_price" aria-label="מחיר הכי טוב"></button></div>
             <label class="field" style="margin-top:12px"><span>מפרסם (לקוח)</span><select class="select" name="owner_id"><option value="">ללא</option>${A.advertisers.map((a) => `<option value="${esc(a.id)}" ${d.owner_id === a.id ? "selected" : ""}>${esc(a.business || a.name)}</option>`).join("")}</select></label>
-          </div>` : `<div class="panel"><h2>פרסום</h2><p class="muted" style="font-size:var(--t-s)">${d.active ? "המתחם מוצג באתר." : "המתחם עוד לא מוצג באתר. צוות האתר יפעיל אותו אחרי בדיקה."}</p></div>`}
+          </div>` : `<div class="panel"><h2>פרסום</h2><p class="muted" style="font-size:var(--t-s)">${d.active ? "המתחם מוצג באתר." : orig && orig.pending && orig.pending._publish ? `נשלח לבדיקה ${T.fmtStamp(orig.pending._at)}. נעדכן אתכם במייל כשהמתחם יעלה לאוויר.` : "המתחם עוד לא מוצג באתר. כשהכרטיס מוכן, שולחים לבדיקה וצוות האתר מפעיל אותו."}</p>
+            ${!d.active && orig && !(orig.pending && orig.pending._publish) ? `<button class="btn btn-primary btn-block" type="button" data-act="ed-publish" style="margin-top:10px">${I("send")}שמירה ושליחה לפרסום</button>` : ""}</div>`}
           <div class="panel"><h2>שלמות הכרטיס</h2>${completeness(d)}</div>
           ${d.id && A.stats[d.id] ? `<div class="panel"><h2>30 הימים האחרונים</h2><div class="stat-grid" style="grid-template-columns:1fr 1fr"><div><b>${T.num(A.stats[d.id].v)}</b><span>צפיות</span></div><div><b>${leadsFor(d.id).length}</b><span>פניות</span></div><div><b>${A.stats[d.id].p}</b><span>הצגות טלפון</span></div><div><b>${A.stats[d.id].w}</b><span>וואטסאפ</span></div></div></div>` : ""}
           ${IS_ADMIN && id !== "new" ? `<div class="panel" id="del-zone"><button class="btn btn-danger btn-block" type="button" data-act="ask-del" data-kind="listing" data-id="${esc(d.id)}">${I("trash")}מחיקת המתחם</button></div>` : ""}
@@ -622,9 +612,10 @@
       else saved = await T.store.saveListingAsOwner(clean, A.listings.find((l) => l.id === clean.id));
       delete A.drafts[A.editId];
       await reload();
-      T.toast(!IS_ADMIN && saved.pending ? "נשמר. שינויי התוכן נשלחו לאישור." : wasNew ? "המתחם נוצר" + (saved.active ? "" : ". הפעילו אותו כשהוא מוכן.") : "נשמר");
+      T.toast(!IS_ADMIN && saved.pending && saved.pending._publish && !saved.active ? "נשמר ונשלח לבדיקה. נעדכן אתכם במייל כשהמתחם יעלה לאוויר." : !IS_ADMIN && saved.pending ? "נשמר. שינויי התוכן נשלחו לאישור." : wasNew ? "המתחם נוצר" + (saved.active ? "" : ". הפעילו אותו כשהוא מוכן.") : "נשמר");
       if (wasNew) location.hash = "edit-" + saved.id; else rerenderKeepScroll();
-    } catch (e) { if (e.code === "quota") T.toast(e.message, "err"); else fail("השמירה נכשלה", e); }
+      return saved;
+    } catch (e) { if (e.code === "quota") T.toast(e.message, "err"); else fail("השמירה נכשלה", e); return null; }
   }
 
   /* ================================================================ moderation */
@@ -639,9 +630,10 @@
       return esc(v || "—");
     };
     return ph("אישורי תוכן", A.settings.moderation === false ? "האישור כבוי בהגדרות, ומארחים מפרסמים שינויים ישירות." : "שינויים שמארחים שלחו בשם, בתיאור, בתמונות ובמאפיינים. מחירים ויומן לא דורשים אישור.") + `
-      ${list.length ? list.map((l) => `<div class="panel" data-row="${esc(l.id)}"><h2><span>${esc(l.name)} <span class="muted" style="font-family:var(--f-body);font-size:var(--t-xs)">· ${esc(advName(l.owner_id))} · נשלח ${T.fmtStamp(l.pending._at)}</span></span>
-          <span style="display:flex;gap:6px"><button class="btn btn-primary btn-sm" type="button" data-act="mod-approve" data-id="${esc(l.id)}">${I("check")}אישור ופרסום</button><button class="btn btn-line btn-sm" type="button" data-act="mod-reject" data-id="${esc(l.id)}">דחייה</button></span></h2>
-          <div class="diff">${T.MODERATED_FIELDS.filter(([k]) => l.pending[k] !== undefined).map(([k, label]) => k === "details" ? detailsDiff(l.details || {}, l.pending.details || {}) : `<div class="diff-row"><b>${label}</b><span class="old">${show(k, l[k])}</span><span class="new">${show(k, l.pending[k])}</span></div>`).join("")}</div></div>`).join("")
+      ${list.length ? list.map((l) => { const fields = T.MODERATED_FIELDS.filter(([k]) => l.pending[k] !== undefined); const pub = !!l.pending._publish && !l.active; return `<div class="panel" data-row="${esc(l.id)}"><h2><span>${esc(l.name)} ${pub ? '<span class="pill pill-navy">בקשה לפרסום</span>' : ""} <span class="muted" style="font-family:var(--f-body);font-size:var(--t-xs)">· ${esc(advName(l.owner_id))} · נשלח ${T.fmtStamp(l.pending._at)}</span></span>
+          <span class="btn-row" style="margin:0">${!l.active ? `<button class="btn btn-primary btn-sm" type="button" data-act="mod-approve-live" data-id="${esc(l.id)}">${I("check")}אישור והצגה באתר</button>${fields.length ? `<button class="btn btn-line btn-sm" type="button" data-act="mod-approve" data-id="${esc(l.id)}">אישור בלי להציג</button>` : ""}` : `<button class="btn btn-primary btn-sm" type="button" data-act="mod-approve" data-id="${esc(l.id)}">${I("check")}אישור ופרסום</button>`}<a class="btn btn-line btn-sm" href="#edit-${esc(l.id)}">${I("edit")}לעורך</a><button class="btn btn-line btn-sm" type="button" data-act="mod-reject" data-id="${esc(l.id)}">דחייה</button></span></h2>
+          ${fields.length ? `<div class="diff">${fields.map(([k, label]) => k === "details" ? detailsDiff(l.details || {}, l.pending.details || {}) : `<div class="diff-row"><b>${label}</b><span class="old">${show(k, l[k])}</span><span class="new">${show(k, l.pending[k])}</span></div>`).join("")}</div>` : `<p class="muted" style="font-size:var(--t-s)">אין שינויי תוכן ממתינים: המארח ביקש לפרסם את המתחם כמו שהוא בעורך.</p>`}
+          <label class="field" style="margin-top:10px;max-width:520px"><span>סיבה, אם דוחים (נשלחת למארח במייל)</span><input class="input" data-mod-note="${esc(l.id)}" maxlength="400" placeholder="למשל: צריך תמונות באיכות גבוהה יותר"></label></div>`; }).join("")
       : `<div class="panel"><div class="empty"><h3>אין שינויים שממתינים לאישור</h3><p>כשמארח ישנה תיאור או תמונות, השינוי יופיע כאן.</p></div></div>`}`;
   }
 
@@ -801,7 +793,10 @@
         <label class="field"><span>סטטוס</span><select class="select" name="status">${T.ADV_STATUS.map((s) => `<option value="${s.key}" ${a.status === s.key ? "selected" : ""}>${s.name}</option>`).join("")}</select></label>
         <label class="field"><span>תחילת מנוי</span><input class="input" type="date" name="start_date" value="${esc(a.start_date || today)}"></label>
         <label class="field"><span>סיום מנוי</span><input class="input" type="date" name="end_date" value="${esc(a.end_date || T.iso(T.addDays(T.today(), 365)))}"></label>
-        <label class="field span2"><span>הערות</span><textarea class="textarea" name="notes" rows="2" style="min-height:70px">${esc(a.notes || "")}</textarea></label>
+        <label class="field"><span>ח.פ / ע.מ</span><input class="input" name="tax_id" inputmode="numeric" dir="ltr" style="text-align:right" value="${esc(a.tax_id || "")}" maxlength="12"></label>
+        <label class="field"><span>כתובת לחשבוניות</span><input class="input" name="address" value="${esc(a.address || "")}" maxlength="200"></label>
+        <label class="field span2"><span>הערות (פנימי)</span><textarea class="textarea" name="notes" rows="2" style="min-height:70px">${esc(a.notes || "")}</textarea></label>
+        ${T.isLive && isNew ? `<label class="check span2"><input type="checkbox" name="invite" checked><span>לשלוח ללקוח מייל הזמנה לממשק המארחים (בחירת סיסמה)</span></label>` : ""}
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">${isNew ? "" : `<button class="btn btn-line" type="button" data-act="adv-renew">${I("refresh")}חידוש לשנה</button>`}<button class="btn btn-ghost" type="button" data-act="modal-close">ביטול</button><button class="btn btn-primary" type="submit">שמירה</button></div>
     </form></div>`;
@@ -829,15 +824,18 @@
   /* ================================================================ applications */
   function viewApplications() {
     const list = A.applications;
-    return ph("בקשות הצטרפות", "בעלי מתחמים שמילאו את הטופס בעמוד ״למארחים״. אישור יוצר לקוח בחודש ניסיון ומתחם מוסתר לעריכה.") + `
-      <div class="panel">${list.length ? list.map((a) => `<div class="lead-row" data-row="${esc(a.id)}"><div>
-          <div class="who">${esc(a.business)} <span class="muted" style="font-weight:400">· ${esc(a.name)}</span></div>
+    const auto = A.settings.auto_open_hosts !== false;
+    return ph("בקשות הצטרפות", auto ? "מארחים שנרשמו באתר ואימתו את המייל נפתחים אוטומטית כלקוח בתקופת ניסיון (אפשר לשנות בהגדרות). כאן מופיעות גם פניות של מי שרק השאיר פרטים." : "הרשמות של מארחים מהאתר. אישור פותח לקוח בתקופת ניסיון ומתחם מוסתר להשלמה, ושולח למארח מייל.") + `
+      <div class="panel">${list.length ? list.map((a) => { const adv = (a.advertiser_id && A.advertisers.find((x) => x.id === a.advertiser_id)) || (a.email && A.advertisers.find((x) => x.email && x.email.toLowerCase() === a.email.toLowerCase())); return `<div class="lead-row" data-row="${esc(a.id)}"><div>
+          <div class="who">${esc(a.business)} <span class="muted" style="font-weight:400">· ${esc(a.name)}</span> ${a.verified ? `<span class="pill pill-ok">${I("check")}נרשם ואימת מייל</span>` : `<span class="pill pill-muted">השאיר פרטים</span>`}</div>
           <div class="what">${esc(T.typeOf(a.type).name)} · ${esc(a.settlement)}, ${esc(T.regionOf(a.region).name)} · ${a.units} יחידות · <span dir="ltr">${esc(a.phone)}</span>${a.email ? " · " + esc(a.email) : ""} · ${T.fmtStamp(a.created_at)}</div>
+          ${a.tax_id || a.terms_version ? `<div class="what">${[a.tax_id ? "ח.פ / ע.מ " + esc(a.tax_id) : "", a.terms_version ? "אישר/ה את תנאי הפרסום (" + esc(a.terms_version) + ")" : "", a.marketing ? "מסכים/ה לקבל עדכונים" : ""].filter(Boolean).join(" · ")}</div>` : ""}
           ${a.message ? `<div class="msg">״${esc(a.message)}״</div>` : ""}</div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">${statusPill(a.status)}
-          ${a.status === "new" ? `<button class="btn btn-primary btn-sm" type="button" data-act="app-approve" data-id="${esc(a.id)}">${I("check")}אישור ופתיחת מתחם</button><button class="btn btn-line btn-sm" type="button" data-act="app-reject" data-id="${esc(a.id)}">דחייה</button>` : ""}
+          ${a.status === "new" ? `<button class="btn btn-primary btn-sm" type="button" data-act="app-approve" data-id="${esc(a.id)}">${I("check")}אישור ופתיחת חשבון</button><button class="btn btn-line btn-sm" type="button" data-act="app-reject" data-id="${esc(a.id)}">דחייה</button>` : ""}
+          ${adv ? `<a class="btn btn-line btn-sm" href="#client-${esc(adv.id)}">${I("user")}כרטיס לקוח</a>` : ""}
           <a class="mini-btn" href="${esc(T.waLink(a.phone, `שלום ${a.name}, קיבלנו את הפנייה שלך לפרסום ${a.business} ב${A.settings.site_name}.`))}" target="_blank" rel="noopener" aria-label="וואטסאפ">${I("chat")}</a>
-          <button class="mini-btn" type="button" data-act="ask-del" data-kind="application" data-id="${esc(a.id)}" aria-label="מחיקה">${I("trash")}</button></div></div>`).join("") : `<div class="empty"><h3>אין בקשות הצטרפות</h3></div>`}</div>`;
+          <button class="mini-btn" type="button" data-act="ask-del" data-kind="application" data-id="${esc(a.id)}" aria-label="מחיקה">${I("trash")}</button></div></div>`; }).join("") : `<div class="empty"><h3>אין בקשות הצטרפות</h3><p>מארחים נרשמים בעמוד ״פרסום מתחם״ באתר.</p></div>`}</div>`;
   }
 
   /* ================================================================ magazine */
@@ -906,22 +904,30 @@
   }
 
   /* ================================================================ subscribers */
+  /* מנוי פעיל = אישר במייל ולא הוסר. רק להם שולחים דיוור (חוק התקשורת, סעיף 30א) */
+  const subState = (x) => (x.unsubscribed_at ? "removed" : x.confirmed_at ? "active" : "pending");
+  const activeSubs = () => A.subscribers.filter((x) => subState(x) === "active" && (!A.sf.region || !(x.regions || []).length || x.regions.includes(A.sf.region)));
   function viewSubscribers() {
     const f = A.sf;
-    const list = f.region ? A.subscribers.filter((x) => (x.regions || []).includes(f.region) || !(x.regions || []).length) : A.subscribers;
+    const st = f.status || "active";
+    const byRegion = f.region ? A.subscribers.filter((x) => (x.regions || []).includes(f.region) || !(x.regions || []).length) : A.subscribers;
+    const list = st === "all" ? byRegion : byRegion.filter((x) => subState(x) === st);
     const since = Date.now() - 30 * 864e5;
-    const recent = A.subscribers.filter((x) => new Date(x.created_at).getTime() >= since).length;
+    const n = (k) => A.subscribers.filter((x) => subState(x) === k).length;
+    const recent = A.subscribers.filter((x) => subState(x) === "active" && new Date(x.confirmed_at || x.created_at).getTime() >= since).length;
     const regionNames = (r) => (r || []).length ? r.map((k) => T.regionOf(k).name).join(", ") : "כל הארץ";
-    return ph("מנויי דיוור", "מי שנרשם לדילים ולדקה 90 באתר. מעתיקים את הכתובות לכלי הדיוור (Resend, Mailchimp ועוד). לפי החוק שולחים רק למי שנרשם, ועם קישור הסרה.", `<button class="btn btn-line" type="button" data-act="subs-copy">${I("copy")}העתקת כתובות</button><button class="btn btn-line" type="button" data-act="subs-csv">${I("download")}CSV</button>`) + `
+    const pill = (x) => ({ active: '<span class="pill pill-ok">מאושר</span>', pending: '<span class="pill pill-warn">ממתין לאישור במייל</span>', removed: '<span class="pill pill-muted">הוסר</span>' })[subState(x)];
+    return ph("מנויי דיוור", "מי שנרשם לדילים ולדקה 90 באתר ואישר במייל (הסכמה כפולה). מעתיקים את הכתובות לכלי הדיוור. לפי החוק: שולחים רק למאושרים, כותבים ״פרסומת״ בנושא, ומצרפים קישור הסרה.", `<button class="btn btn-line" type="button" data-act="subs-copy">${I("copy")}העתקת מאושרים</button><button class="btn btn-line" type="button" data-act="subs-csv">${I("download")}CSV</button>`) + `
       <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-        <div class="kpi"><span>${I("mail")}נרשמים</span><b>${A.subscribers.length}</b><small>${recent} ב־30 הימים האחרונים</small></div>
-        <div class="kpi"><span>${I("pin")}עם אזור מועדף</span><b>${A.subscribers.filter((x) => (x.regions || []).length).length}</b><small>השאר רוצים דילים מכל הארץ</small></div>
-        <div class="kpi"><span>${I("users")}בסינון</span><b>${list.length}</b><small>${f.region ? esc(T.regionOf(f.region).name) + " + כל הארץ" : "כל המנויים"}</small></div>
+        <div class="kpi"><span>${I("mail")}מנויים מאושרים</span><b>${n("active")}</b><small>${recent} ב־30 הימים האחרונים</small></div>
+        <div class="kpi"><span>${I("clock")}ממתינים לאישור</span><b>${n("pending")}</b><small>לא אישרו את המייל. נמחקים אחרי 30 יום</small></div>
+        <div class="kpi"><span>${I("x")}הסירו את עצמם</span><b>${n("removed")}</b><small>לא שולחים להם יותר</small></div>
       </div>
-      <div class="panel"><div class="toolbar"><select class="select" id="sf-region" aria-label="אזור" style="width:auto"><option value="">כל האזורים</option>${T.REGIONS.map((r) => `<option value="${r.key}" ${f.region === r.key ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select></div>
-        ${list.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>אימייל</th><th>שם</th><th>אזורים</th><th>נרשם</th><th></th></tr></thead><tbody>${list.map((x) => `<tr data-row="${esc(x.id)}"><td class="ltr">${esc(x.email)}</td><td>${esc(x.name || "") || '<span class="muted">—</span>'}</td><td class="sub">${esc(regionNames(x.regions))}</td><td class="sub" style="white-space:nowrap">${T.fmtStamp(x.created_at)}${x.source ? ` · ${esc(x.source === "site" ? "האתר" : x.source)}` : ""}</td>
-          <td><div class="acts"><button class="mini-btn" type="button" data-act="copy" data-text="${esc(x.email)}" aria-label="העתקת ${esc(x.email)}">${I("copy")}</button><button class="mini-btn" type="button" data-act="ask-del" data-kind="subscriber" data-id="${esc(x.id)}" aria-label="הסרת ${esc(x.email)}">${I("trash")}</button></div></td></tr>`).join("")}</tbody></table></div>`
-        : `<div class="empty"><h3>עוד אין נרשמים</h3><p>טופס ההרשמה מופיע בעמוד הבית, בדילים ובתחתית האתר.</p></div>`}</div>`;
+      <div class="panel"><div class="toolbar"><select class="select" id="sf-region" aria-label="אזור" style="width:auto"><option value="">כל האזורים</option>${T.REGIONS.map((r) => `<option value="${r.key}" ${f.region === r.key ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select>
+        <span class="seg-tabs" role="group" aria-label="סטטוס">${[["active", "מאושרים"], ["pending", "ממתינים"], ["removed", "הוסרו"], ["all", "הכל"]].map(([k, t]) => `<button type="button" data-act="sf-status" data-v="${k}" aria-pressed="${st === k}">${t}</button>`).join("")}</span></div>
+        ${list.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>אימייל</th><th>שם</th><th>אזורים</th><th>נרשם</th><th>סטטוס</th><th></th></tr></thead><tbody>${list.map((x) => `<tr data-row="${esc(x.id)}"><td class="ltr">${esc(x.email)}</td><td>${esc(x.name || "") || '<span class="muted">—</span>'}</td><td class="sub">${esc(regionNames(x.regions))}</td><td class="sub" style="white-space:nowrap">${T.fmtStamp(x.created_at)}${x.source ? ` · ${esc(x.source === "site" ? "האתר" : x.source)}` : ""}</td><td>${pill(x)}</td>
+          <td><div class="acts"><button class="mini-btn" type="button" data-act="copy" data-text="${esc(x.email)}" aria-label="העתקת ${esc(x.email)}">${I("copy")}</button><button class="mini-btn" type="button" data-act="ask-del" data-kind="subscriber" data-id="${esc(x.id)}" aria-label="מחיקת ${esc(x.email)}">${I("trash")}</button></div></td></tr>`).join("")}</tbody></table></div>`
+        : `<div class="empty"><h3>${A.subscribers.length ? "אין מנויים בסינון הזה" : "עוד אין נרשמים"}</h3><p>טופס ההרשמה מופיע בעמוד הבית, בדילים ובתחתית האתר.</p></div>`}</div>`;
   }
 
   /* ================================================================ system check */
@@ -970,6 +976,21 @@
           </div>
           <div>
             <section class="panel"><h2>אישור תוכן</h2><div class="toggle-row" style="border:0"><span>שינויי תוכן של מארחים דורשים אישור<small>שם, תיאור, תמונות, מאפיינים ותוכן הדף</small></span><button class="switch" type="button" role="switch" aria-checked="${s.moderation !== false}" data-act="set-mod" aria-label="אישור תוכן"></button></div></section>
+            <section class="panel"><h2>מארחים חדשים ומנויים</h2>
+              <div class="toggle-row"><span>פתיחת חשבון אוטומטית אחרי אימות המייל<small>המארח נרשם באתר, מאשר את המייל ומקבל מיד חשבון בתקופת ניסיון ומתחם מוסתר להשלמה. כבוי: ההרשמה מחכה לאישור שלכם ב״בקשות הצטרפות״.</small></span><button class="switch" type="button" role="switch" aria-checked="${s.auto_open_hosts !== false}" data-act="set-flag" data-k="auto_open_hosts" aria-label="פתיחה אוטומטית"></button></div>
+              <div class="form-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:12px">
+                <label class="field"><span>ימי ניסיון</span><input class="input num" type="number" min="0" max="365" name="trial_days" value="${esc(s.trial_days)}"></label>
+                <label class="field"><span>ימי חסד אחרי הסיום</span><input class="input num" type="number" min="0" max="60" name="grace_days" value="${esc(s.grace_days)}"></label>
+                <label class="field"><span>תזכורות (ימים לפני)</span><input class="input" dir="ltr" name="reminder_days" value="${esc((s.reminder_days || []).join(", "))}" placeholder="30, 7, 1"></label></div>
+              <p class="hint" style="margin-top:8px">ללקוח נשלח מייל לפני סוף המנוי, ביום הסיום וכשהמתחם מוסתר. אחרי ימי החסד המתחמים שלו מוסתרים מהאתר אוטומטית, וחוזרים מיד כשמאריכים את המנוי.</p></section>
+            <section class="panel"><h2>מיילים אוטומטיים</h2>
+              ${[["guest_confirmation_email", "אישור לאורח על בקשה שנשלחה", "עם פרטי הבקשה, ואיך ממשיכים"], ["auto_review_requests", "בקשת חוות דעת אחרי העזיבה", "לאורחים שההזמנה שלהם סומנה ״נסגרה״ והשאירו מייל"], ["admin_digest", "סיכום יומי למנהל", "פניות, הרשמות, אישורים ומנויים שמסתיימים. נשלח רק כשיש מה לדווח"]].map(([k, n, sub]) => `<div class="toggle-row"><span>${n}<small>${sub}</small></span><button class="switch" type="button" role="switch" aria-checked="${s[k] !== false}" data-act="set-flag" data-k="${k}" aria-label="${n}"></button></div>`).join("")}
+              <div class="form-grid" style="grid-template-columns:minmax(0,220px);margin-top:12px"><label class="field"><span>בקשת חוות דעת: ימים אחרי העזיבה</span><input class="input num" type="number" min="0" max="30" name="review_delay_days" value="${esc(s.review_delay_days)}"></label></div>
+              <div class="btn-row" style="margin-top:12px"><button class="btn btn-line btn-sm" type="button" data-act="mail-test">${I("mail")}שליחת מייל בדיקה אליי</button><button class="btn btn-line btn-sm" type="button" data-act="daily-preview">${I("history")}מה יישלח היום?</button></div>
+              <div id="daily-box">${dailyBox()}</div>
+              <p class="hint" style="margin-top:8px">המשימה היומית רצה אוטומטית כל בוקר (Vercel Cron), וכל מייל נשלח פעם אחת בלבד.</p></section>
+            <section class="panel"><h2>תחזוקת תמונות</h2><p class="muted" style="font-size:var(--t-s)">תמונות שהועלו ולא נשמרו באף מתחם, יחידה, כתבה או באנר (למשל טופס שנסגר בלי שמירה). תמונות מהיומיים האחרונים לא נספרות.</p>
+              <div class="btn-row" style="margin-top:10px"><button class="btn btn-line btn-sm" type="button" data-act="cleanup-dry">${I("search")}בדיקה</button></div><div id="cleanup-box">${cleanupBox()}</div></section>
             <section class="panel"><h2>רכיבים באתר</h2>
               ${[["find_enabled", "שירות ״מצא לי צימר״", "כפתור בתפריט וטופס בקשה אישית"], ["wa_float", "כפתור וואטסאפ צף", "מופיע אם הוזן וואטסאפ ראשי"], ["cookie_banner", "הודעת עוגיות", "פס תחתון עם הסבר על מה שנשמר בדפדפן"]].map(([k, n, sub]) => `<div class="toggle-row"><span>${n}<small>${sub}</small></span><button class="switch" type="button" role="switch" aria-checked="${s[k] !== false}" data-act="set-flag" data-k="${k}" aria-label="${n}"></button></div>`).join("")}</section>
             <section class="panel"><h2>רשתות חברתיות <span class="hint">מופיעות בתחתית האתר</span></h2><div class="form-grid">
@@ -1000,18 +1021,289 @@
     const since = Date.now() - 30 * 864e5;
     const leads30 = A.leads.filter((q) => new Date(q.created_at).getTime() >= since).length;
     return ph(`שלום${advs[0] ? ", " + esc(advs[0].name) : ""}`, "מעדכנים מחירים, תמונות ויומן, ורואים פניות וחוות דעת מאורחים.") + `
-      ${advs.map((a) => `<div class="panel"><h2>המנוי שלי ${advPill(a)}</h2><div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-        <div><b style="font-size:1.8rem">${planName(a.plan)}</b><span>${T.money((A.settings.plan_prices || {})[a.plan])} לחודש · ${esc(T.statusName(T.BILLING_MODELS, a.billing_model || "subscription"))}</span></div>
-        <div><b style="font-size:1.8rem">${T.fmtDate(a.end_date) || "—"}</b><span>בתוקף עד · לחידוש: ${esc(A.settings.phone || A.settings.email || "צוות האתר")}</span></div>
-        <a href="#leads" style="text-decoration:none;color:inherit"><b>${newLeads}</b><span>פניות חדשות</span></a></div></div>`).join("")}
+      ${A.listings.filter((l) => !l.active).map(onboarding).join("")}
+      ${advs.map(subPanel).join("")}
+      ${newLeads ? `<a class="note note-info" href="#leads" style="text-decoration:none;margin:16px 0">${I("inbox")}<span><b>${newLeads === 1 ? "פנייה חדשה אחת" : `${newLeads} פניות חדשות`}</b> מחכות לתשובה. מי שחוזר ראשון, סוגר.</span></a>` : ""}
       <div class="panel"><h2>30 הימים האחרונים</h2><div class="stat-grid"><div><b>${T.num(tot.v)}</b><span>צפיות בדפי המתחמים</span></div><div><b>${tot.p}</b><span>הצגות מספר טלפון</span></div><div><b>${tot.w}</b><span>לחיצות וואטסאפ</span></div><div><b>${leads30}</b><span>בקשות הזמנה</span></div></div></div>
       <div class="panel"><h2>המתחמים שלי</h2>
         ${A.listings.length ? `<div class="table-wrap"><table class="tbl"><tbody>${A.listings.map((l) => { const s = A.stats[l.id] || { v: 0 }; return `<tr><td style="width:90px"><img class="thumb" src="${esc(T.thumbOf(l))}" alt=""></td>
           <td><a class="name" href="#edit-${esc(l.id)}">${esc(l.name)}</a><div class="sub">${esc(l.settlement)} · החל מ־${T.money(T.fromPrice(l))} ללילה</div></td>
-          <td>${l.active ? '<span class="pill pill-ok">מוצג באתר</span>' : '<span class="pill pill-muted">ממתין להפעלה</span>'} ${l.pending ? '<span class="pill pill-warn">שינויים ממתינים לאישור</span>' : ""}</td>
+          <td>${l.active ? '<span class="pill pill-ok">מוצג באתר</span>' : l.pending && l.pending._publish ? '<span class="pill pill-navy">נשלח לבדיקה</span>' : '<span class="pill pill-muted">עוד לא פורסם</span>'} ${contentPending(l) ? '<span class="pill pill-warn">שינויים ממתינים לאישור</span>' : ""}</td>
           <td class="num">${T.num(s.v)} צפיות · ${leadsFor(l.id).length} פניות</td>
           <td><div class="acts"><a class="btn btn-primary btn-sm" href="#edit-${esc(l.id)}">${I("edit")}עריכה</a><a class="mini-btn" href="${siteURL("stay-" + l.id)}" target="_blank" rel="noopener" aria-label="צפייה באתר">${I("external")}</a></div></td></tr>`; }).join("")}</tbody></table></div>`
         : `<div class="empty"><h3>עוד אין מתחמים בחשבון</h3><p>צוות האתר יוסיף את המתחם שלכם, ואז תוכלו לערוך אותו כאן.</p></div>`}</div>`;
+  }
+
+  /* ================================================================ חשבונות: כניסה, סיסמה, אימות דו-שלבי */
+  const PW_RULES = ["לפחות 8 תווים", "לפחות אות אחת", "לפחות ספרה אחת"];
+  const pwRules = (v) => { const bad = T.passwordIssues(v); return PW_RULES.map((r) => { const ok = !!v && !bad.includes(r); return `<li class="${ok ? "ok" : ""}">${I(ok ? "check" : "info")}${r}</li>`; }).join(""); };
+  const pwFields = () => `<label class="field"><span>סיסמה חדשה</span><input class="input" name="pw1" type="password" dir="ltr" autocomplete="new-password" required minlength="8"></label>
+    <label class="field"><span>שוב, לאימות</span><input class="input" name="pw2" type="password" dir="ltr" autocomplete="new-password" required minlength="8"></label>
+    <ul class="todo pw-rules" aria-live="polite">${pwRules("")}</ul>`;
+  const loginNote = () => { const m = A.loginMsg; return m ? `<p class="note note-${m.tone || "info"}" role="status"><span>${esc(m.text)}${m.resend ? ` <button class="link-btn" type="button" data-act="resend-signup" data-email="${esc(m.resend)}">שליחת מייל האימות שוב</button>` : ""}</span></p>` : ""; };
+  const back = (v, t) => `<button class="link-btn auth-back" type="button" data-act="login-mode" data-v="${v}">${I("back")}${t}</button>`;
+
+  /* טופסי הכניסה באתר החי: סיסמה, שכחתי סיסמה, קישור למייל, שליחה חוזרת של מייל האימות */
+  function liveLogin() {
+    const m = A.loginMode;
+    const email = `<label class="field"><span>אימייל</span><input class="input" name="email" type="email" dir="ltr" autocomplete="${m === "login" ? "username" : "email"}" required value="${esc(A.lastEmail || "")}"></label>`;
+    if (m === "forgot") return `<h1>שכחתי סיסמה</h1><p>נשלח אליכם קישור לבחירת סיסמה חדשה. הקישור בתוקף לשעה.</p>
+      <form data-form="forgot" class="auth-form" novalidate>${email}<button class="btn btn-primary btn-lg btn-block" type="submit">${I("send")}שליחת קישור</button></form>${back("login", "חזרה לכניסה")}`;
+    if (m === "resend") return `<h1>אימות האימייל</h1><p>הקישור מהמייל כבר לא בתוקף, או שהמייל לא הגיע. נשלח קישור חדש.</p>
+      <form data-form="resend" class="auth-form" novalidate>${email}<button class="btn btn-primary btn-lg btn-block" type="submit">${I("send")}שליחת מייל אימות</button></form>${back("login", "חזרה לכניסה")}`;
+    if (m === "link") return `<h1>כניסה עם קישור</h1><p>נשלח קישור כניסה לאימייל. פותחים אותו במכשיר הזה ונכנסים בלי סיסמה.</p>
+      <form data-form="owner-login" class="auth-form" novalidate>${email}<button class="btn btn-primary btn-lg btn-block" type="submit">${I("mail")}שליחת קישור כניסה</button></form>${back("login", "כניסה עם סיסמה")}`;
+    return `<h1>${IS_ADMIN ? "כניסה לניהול" : "כניסת מארחים"}</h1>${IS_ADMIN ? "" : "<p>נכנסים עם האימייל והסיסמה של החשבון.</p>"}
+      <form data-form="login" class="auth-form" novalidate>${email}
+        <label class="field"><span>סיסמה</span><input class="input" name="password" type="password" dir="ltr" autocomplete="current-password" required></label>
+        <button class="link-btn auth-forgot" type="button" data-act="login-mode" data-v="forgot">שכחתי סיסמה</button>
+        <button class="btn btn-primary btn-lg btn-block" type="submit">כניסה</button></form>
+      ${IS_ADMIN ? "" : `<div class="auth-or"><span>או</span></div>
+        <button class="btn btn-line btn-block" type="button" data-act="login-mode" data-v="link">${I("mail")}קישור כניסה למייל, בלי סיסמה</button>
+        <p class="auth-foot">עוד אין לכם חשבון? <a href="${siteURL("join")}">הרשמה לפרסום מתחם</a></p>`}`;
+  }
+
+  /* מסכי ביניים אחרי כניסה: בחירת סיסמה, קוד דו-שלבי, הרשמה בבדיקה */
+  function viewGate() {
+    const g = A.gate;
+    let body = "";
+    if (g === "password") body = `<h1>${A.invite ? "ברוכים הבאים! בוחרים סיסמה" : "בחירת סיסמה חדשה"}</h1><p>לחשבון <b dir="ltr">${esc(A.email)}</b></p>
+      <form data-form="set-password" class="auth-form" novalidate>${pwFields()}<button class="btn btn-primary btn-lg btn-block" type="submit">${I("check")}שמירת הסיסמה</button></form>`;
+    else if (g === "mfa") body = `<h1>אימות דו-שלבי</h1>${A.mfaFactor ? `<p>הקלידו את הקוד בן 6 הספרות מאפליקציית האימות בטלפון.</p>
+      <form data-form="mfa" class="auth-form" novalidate><label class="field"><span>קוד אימות</span><input class="input otp" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" dir="ltr" required></label>
+        <button class="btn btn-primary btn-lg btn-block" type="submit">${I("key")}אימות וכניסה</button></form>`
+      : `<p class="note note-warn"><span>לחשבון הזה נדרש אימות דו-שלבי, אבל לא נמצאה אפליקציית אימות מחוברת. מנהל אחר יכול להסיר את הדרישה, או להריץ ב-Supabase → SQL Editor:<br><code dir="ltr">update public.admins set mfa_required = false where email = '${esc(A.email)}';</code></span></p>`}`;
+    else if (g === "pending") {
+      const a = A.app || {};
+      body = `<h1>ההרשמה התקבלה</h1><p>האימייל אומת. צוות האתר עובר על הפרטים${a.business ? ` של <b>${esc(a.business)}</b>` : ""} ופותח לכם חשבון בהקדם. נעדכן אתכם במייל, ואז הכניסה כאן תפתח את ממשק המארחים.</p>
+        ${a.id ? `<ul class="list-plain">${[["שם", a.name], ["טלפון", a.phone], ["יישוב", a.settlement], ["יחידות", a.units], ["נשלחה", T.fmtStamp(a.created_at)]].filter((x) => x[1]).map(([k, v]) => `<li><span class="muted">${k}</span><b>${esc(v)}</b></li>`).join("")}</ul>` : ""}`;
+    } else if (g === "rejected") body = `<h1>ההרשמה לא אושרה</h1><p>כרגע לא נוכל לפרסם את המתחם באתר. לשאלות: ${esc(A.settings.phone || A.settings.email || "צוות האתר")}.</p>`;
+    return `<div class="login"><div class="login-card"><img class="logo" src="${LOGO_S}" alt="${esc(A.settings.site_name)}">${body}${loginNote()}
+      <button class="btn btn-ghost btn-block" type="button" data-act="logout">יציאה מהחשבון${A.email ? " " + esc(A.email) : ""}</button><a class="link-more" style="justify-self:center" href="${siteURL()}">${I("back")} חזרה לאתר</a></div></div>`;
+  }
+
+  function passwordPanel() {
+    return `<form class="panel" data-form="change-password" novalidate><h2><span class="h-ic">${I("key")}שינוי סיסמה</span></h2><div class="form-grid" style="grid-template-columns:minmax(0,1fr)">${pwFields()}</div>
+      <div style="margin-top:12px"><button class="btn btn-primary" type="submit">שמירת סיסמה חדשה</button></div>
+      <p class="hint" style="margin-top:8px">${T.isLive ? "שכחתם את הסיסמה? בדף הכניסה יש ״שכחתי סיסמה״, ומגיע קישור למייל." : "במצב הדגמה אין סיסמאות."}</p></form>`;
+  }
+  const recentReq = (a) => !!a.renewal_requested_at && Date.now() - new Date(a.renewal_requested_at).getTime() < 14 * 864e5;
+  /* מנוי של מארח: עד מתי בתוקף, האם מוצג באתר, וכפתור לבקשת חידוש */
+  function subPanel(a) {
+    const st = T.subState(a, A.settings);
+    const price = (A.settings.plan_prices || {})[a.plan];
+    const near = st.daysLeft != null && st.daysLeft <= 45;
+    const showRenew = !st.visible || st.key === "grace" || near || a.status === "trial";
+    const lastDay = st.hideOn ? T.fmtDate(T.iso(T.addDays(T.parseISO(st.hideOn), -1))) : "";
+    const warn = !st.visible ? `<p class="note note-warn">${I("info")}<span>${st.key === "paused" ? "החשבון מושהה" : "המנוי הסתיים"}, ולכן המתחמים לא מוצגים עכשיו לאורחים. הכל שמור, ובחידוש הם חוזרים לאוויר מיד.</span></p>`
+      : st.key === "grace" ? `<p class="note note-warn">${I("clock")}<span>המנוי הסתיים. המתחמים עדיין מוצגים עד ${lastDay}, ויוסתרו אם המנוי לא יחודש.</span></p>`
+      : st.daysLeft != null && st.daysLeft <= 30 ? `<p class="note note-info">${I("clock")}<span>${a.status === "trial" ? "תקופת הניסיון" : "המנוי"} מסתיים ${st.daysLeft === 0 ? "היום" : `בעוד ${st.daysLeft} ימים`} (${T.fmtDate(a.end_date)}).</span></p>` : "";
+    const contact = A.settings.whatsapp || A.settings.phone;
+    return `<div class="panel"><h2>המנוי שלי <span class="pill pill-${st.tone}">${esc(st.label)}</span></h2>
+      <div class="stat-grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+        <div><b style="font-size:1.6rem">${planName(a.plan)}</b><span>${price ? T.money(price) + " לחודש · " : ""}${esc(T.statusName(T.BILLING_MODELS, a.billing_model || "subscription"))}</span></div>
+        <div><b style="font-size:1.6rem">${T.fmtDate(a.end_date) || "—"}</b><span>${a.status === "trial" ? "סוף תקופת הניסיון" : "בתוקף עד"}</span></div></div>
+      ${warn}
+      ${showRenew ? (recentReq(a) ? `<p class="note note-ok">${I("check")}<span>ביקשתם חידוש ב־${T.fmtStamp(a.renewal_requested_at)}. נחזור אליכם בקרוב.</span></p>`
+        : `<div class="btn-row"><button class="btn btn-primary" type="button" data-act="renew-request">${I("refresh")}בקשת חידוש</button>${contact ? `<a class="btn btn-line" href="${esc(T.waLink(contact, `שלום, כאן ${a.name} מ${a.business}. אשמח לחדש את המנוי.`))}" target="_blank" rel="noopener">${I("chat")}וואטסאפ לצוות</a>` : ""}</div>`) : ""}
+    </div>`;
+  }
+  /* מתחם חדש שעוד לא באוויר: מה חסר, ושליחה לבדיקה */
+  function onboarding(l) {
+    const d = T.withPending(l);
+    const checks = [["שם ויישוב", !!(String(d.name || "").trim() && String(d.settlement || "").trim())], ["לפחות 5 תמונות", (d.photos || []).length >= 5], ["תיאור של כמה שורות", String(d.description || "").trim().length >= 80], ["מחיר ללילה", T.fromPrice(T.normalizeListing(d)) > 0], ["טלפון לאורחים", !!String(d.phone || "").trim()]];
+    const ready = checks.every((x) => x[1]);
+    const sent = !!(l.pending && l.pending._publish);
+    return `<div class="panel onboard"><h2><span class="h-ic">${I("sparkle")}${A.welcome ? "ברוכים הבאים! " : ""}מעלים את ${esc(l.name || "המתחם")} לאוויר</span></h2>
+      <p class="muted" style="font-size:var(--t-s)">ממלאים את הכרטיס ושולחים לבדיקה. צוות האתר עובר עליו ומפעיל, בדרך כלל תוך יום עבודה.</p>
+      <ul class="todo" style="margin:12px 0">${checks.map(([n, ok]) => `<li class="${ok ? "ok" : ""}">${I(ok ? "check" : "info")}${ok ? esc(n) : `<a href="#edit-${esc(l.id)}">${esc(n)}</a>`}</li>`).join("")}</ul>
+      <div class="btn-row"><a class="btn btn-line" href="#edit-${esc(l.id)}">${I("edit")}עריכת המתחם</a>
+        ${sent ? `<span class="pill pill-warn">נשלח לבדיקה ${T.fmtStamp(l.pending._at)}</span>` : `<button class="btn btn-primary" type="button" data-act="publish-request" data-id="${esc(l.id)}" ${ready ? "" : "disabled"}>${I("send")}שליחה לבדיקה ופרסום</button>`}</div>
+      ${ready || sent ? "" : `<p class="hint" style="margin-top:8px">כשכל הסעיפים מסומנים אפשר לשלוח לבדיקה.</p>`}</div>`;
+  }
+  function viewOwnerAccount() {
+    const a = A.advertisers[0];
+    if (!a) return ph("החשבון שלי", "") + `<div class="panel"><p class="muted">לא נמצא כרטיס לקוח לחשבון הזה.</p></div>`;
+    const pr = a.prefs || {};
+    const chk = (k, n, sub) => `<label class="check" style="align-items:flex-start"><input type="checkbox" name="${k}" ${pr[k] !== false ? "checked" : ""}><span>${n}<small class="hint" style="display:block">${sub}</small></span></label>`;
+    return ph("החשבון שלי", "פרטי הלקוח, התראות, סיסמה ומנוי.") + `<div class="cols2"><div>
+      <form class="panel" data-form="profile" novalidate><h2>פרטי הלקוח</h2><div class="form-grid">
+        <label class="field"><span>שם איש הקשר</span><input class="input" name="name" value="${esc(a.name || "")}" required maxlength="120" autocomplete="name"></label>
+        <label class="field"><span>טלפון</span><input class="input" name="phone" type="tel" dir="ltr" style="text-align:right" value="${esc(a.phone || "")}" required autocomplete="tel"></label>
+        <label class="field"><span>שם העסק</span><input class="input" value="${esc(a.business || "")}" disabled></label>
+        <label class="field"><span>אימייל (הכניסה לחשבון)</span><input class="input" dir="ltr" value="${esc(a.email || "")}" disabled></label>
+        <label class="field"><span>ח.פ / ע.מ (לחשבוניות)</span><input class="input" name="tax_id" inputmode="numeric" dir="ltr" style="text-align:right" value="${esc(a.tax_id || "")}" maxlength="12"></label>
+        <label class="field"><span>כתובת לחשבוניות</span><input class="input" name="address" value="${esc(a.address || "")}" maxlength="200"></label></div>
+        <p class="field-label" style="margin:16px 0 8px">התראות במייל</p>
+        <div style="display:grid;gap:10px">${chk("notify_leads", "פנייה חדשה מאורח", "מייל ברגע שאורח שולח בקשה. הפניות מופיעות כאן בכל מקרה.")}${chk("notify_reviews", "חוות דעת חדשה", "מייל כשחוות דעת על המתחם מתפרסמת")}</div>
+        <p class="hint" style="margin-top:10px">לשינוי שם העסק או האימייל פונים לצוות האתר.</p>
+        <div style="margin-top:12px"><button class="btn btn-primary" type="submit">${I("check")}שמירה</button></div></form>
+      ${passwordPanel()}</div>
+      <div>${subPanel(a)}<div class="panel"><h2>אבטחה</h2><p class="muted" style="font-size:var(--t-s)">שכחתם להתנתק במחשב אחר? מנתקים את החשבון בכל המכשירים, ונכנסים מחדש איפה שצריך.</p><button class="btn btn-line" type="button" data-act="logout-all" style="margin-top:10px">${I("logout")}יציאה מכל המכשירים</button></div></div></div>`;
+  }
+  async function loadAccount() {
+    const [factors, st, admins] = await Promise.all([T.store.mfaFactors().catch(() => []), T.store.adminStatus().catch(() => ({})), T.store.listAdmins().catch(() => [])]);
+    A.acct = { factors: factors || [], st: st || {}, admins: admins || [] };
+  }
+  function viewAdminAccount() {
+    if (!A.acct || A.acct === "loading") return ph("החשבון שלי", "") + `<div class="panel"><p class="muted">טוען…</p></div>`;
+    const { factors, st, admins } = A.acct;
+    const f = factors.find((x) => x.status === "verified");
+    const on = !!(f && st.mfa_required);
+    const en = A.enroll;
+    const raw = en && en.totp ? String(en.totp.qr_code || "") : "";
+    const qr = raw.startsWith("data:") ? raw : raw ? "data:image/svg+xml;utf-8," + encodeURIComponent(raw) : "";
+    const me = String(A.email || "").toLowerCase();
+    return ph("החשבון שלי", `מחוברים בתור ${esc(A.email || "")}`) + `<div class="cols2"><div>
+      <div class="panel"><h2><span class="h-ic">${I("shield")}אימות דו-שלבי</span> <span class="pill pill-${on ? "ok" : "muted"}">${on ? "פעיל" : "כבוי"}</span></h2>
+        <p class="muted" style="font-size:var(--t-s)">אחרי הסיסמה מקלידים גם קוד מאפליקציה בטלפון (Google Authenticator, Microsoft Authenticator, 1Password). כך גם אם הסיסמה דולפת, אף אחד לא נכנס לפאנל.</p>
+        ${!T.isLive ? `<p class="hint" style="margin-top:10px">זמין באתר המחובר.</p>` : en ? `<ol class="steps-list" style="margin-top:12px"><li>פותחים את אפליקציית האימות ומוסיפים חשבון.</li><li>סורקים את הקוד:<div class="qr">${qr ? `<img src="${esc(qr)}" alt="קוד QR לאפליקציית האימות" width="180" height="180">` : ""}</div>או מקלידים ידנית: <code dir="ltr" class="secret">${esc(en.totp.secret)}</code></li><li>מקלידים את הקוד שמופיע באפליקציה:</li></ol>
+            <form data-form="mfa-enroll" class="inline-form" novalidate><label class="field"><span>קוד בן 6 ספרות</span><input class="input otp" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" dir="ltr" required></label><button class="btn btn-primary" type="submit">הפעלה</button></form>
+            <button class="link-btn" type="button" data-act="mfa-cancel" style="margin-top:10px">ביטול</button>`
+          : on ? `<button class="btn btn-line" type="button" data-act="mfa-off" style="margin-top:12px">כיבוי האימות הדו-שלבי</button>` : `<button class="btn btn-primary" type="button" data-act="mfa-on" style="margin-top:12px">${I("key")}הפעלת אימות דו-שלבי</button>`}</div>
+      ${passwordPanel()}
+      <div class="panel"><h2>אבטחה</h2><p class="muted" style="font-size:var(--t-s)">מנתק את החשבון בכל הדפדפנים והמכשירים, כולל כאן.</p><button class="btn btn-line" type="button" data-act="logout-all" style="margin-top:10px">${I("logout")}יציאה מכל המכשירים</button></div></div>
+      <div><div class="panel"><h2><span class="h-ic">${I("users")}צוות הניהול</span></h2>
+        <ul class="list-plain">${admins.map((x) => { const mine = String(x.email).toLowerCase() === me; return `<li><span><b dir="ltr">${esc(x.email)}</b>${x.mfa_required ? ` <span class="pill pill-ok">דו-שלבי</span>` : ""}${mine ? ` <span class="muted">(אתם)</span>` : ""}</span>${mine ? "" : `<span style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" type="button" data-act="admin-reset" data-email="${esc(x.email)}">קישור לסיסמה</button><button class="mini-btn" type="button" data-act="admin-del" data-email="${esc(x.email)}" aria-label="הסרת ${esc(x.email)} מהצוות">${I("trash")}</button></span>`}</li>`; }).join("")}</ul>
+        <form data-form="add-admin" class="inline-form" style="margin-top:12px" novalidate><label class="field"><span>אימייל של מנהל חדש</span><input class="input" name="email" type="email" dir="ltr" required></label><button class="btn btn-primary" type="submit">${I("user-plus")}הוספה</button></form>
+        <p class="hint" style="margin-top:8px">המנהל החדש מקבל מייל לבחירת סיסמה, ונכנס בכתובת admin.html.</p></div></div></div>`;
+  }
+
+  /* ================================================================ לקוחות: רשימה וכרטיס לקוח */
+  /* מצב הכניסה של הלקוח לממשק המארחים (מתוך מערכת הכניסה של Supabase) */
+  const acctInfo = (a) => {
+    if (!T.isLive) return { tone: "muted", text: "מצב הדגמה" };
+    if (!a.email) return { tone: "danger", text: "אין אימייל לכניסה" };
+    const u = A.authInfo[String(a.email).toLowerCase()];
+    if (u && u.last_sign_in_at) return { tone: "ok", text: "נכנס " + T.fmtStamp(u.last_sign_in_at) };
+    if (u && u.confirmed_at) return { tone: "info", text: "חשבון מאומת" };
+    if (u || a.invited_at) return { tone: "warn", text: "הוזמן " + T.fmtStamp((u && u.invited_at) || a.invited_at) + ", עוד לא נכנס" };
+    return { tone: "muted", text: "עוד לא הוזמן" };
+  };
+  const renewalAsked = (a) => !!a.renewal_requested_at && Date.now() - new Date(a.renewal_requested_at).getTime() < 30 * 864e5;
+  const ADV_TABS = [
+    ["all", "הכל", () => true],
+    ["live", "מוצגים באתר", (x) => x.st.visible && x.st.key !== "grace"],
+    ["expiring", "מסתיימים ב־30 יום", (x) => x.st.daysLeft != null && x.st.daysLeft >= 0 && x.st.daysLeft <= 30],
+    ["trial", "בניסיון", (x) => x.a.status === "trial"],
+    ["off", "הסתיימו / מוסתרים", (x) => !x.st.visible || x.st.key === "grace"],
+    ["renewal", "ביקשו חידוש", (x) => renewalAsked(x.a)]
+  ];
+  function viewAdvertisers() {
+    const all = A.advertisers.map((a) => ({ a, st: T.subState(a, A.settings) }));
+    const tab = ADV_TABS.find((t) => t[0] === A.af.tab) || ADV_TABS[0];
+    let list = all.filter(tab[2]);
+    if (A.af.q) { const q = A.af.q.toLowerCase(); list = list.filter(({ a }) => [a.business, a.name, a.email, a.phone].join(" ").toLowerCase().includes(q)); }
+    list.sort((x, y) => (x.a.end_date || "9").localeCompare(y.a.end_date || "9"));
+    return ph("לקוחות", "בעלי המתחמים. האימייל של הלקוח הוא הכניסה שלו לממשק המארחים. כשהמנוי מסתיים, המתחמים מוסתרים מהאתר אוטומטית אחרי ימי החסד, וחוזרים מיד בהארכה.", `<button class="btn btn-line" type="button" data-act="adv-csv">${I("download")}CSV</button><button class="btn btn-primary" type="button" data-act="adv-edit" data-id="">${I("plus")}לקוח חדש</button>`) + `
+      <div class="panel"><div class="toolbar"><input class="input" type="search" id="af-q" placeholder="חיפוש לפי שם, אימייל או טלפון" value="${esc(A.af.q)}" aria-label="חיפוש לקוחות">
+        <span class="seg-tabs" role="group" aria-label="סינון לקוחות">${ADV_TABS.map(([k, t, fn]) => `<button type="button" data-act="af-tab" data-v="${k}" aria-pressed="${tab[0] === k}">${t} · ${all.filter(fn).length}</button>`).join("")}</span></div>
+      ${list.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>לקוח</th><th>קשר</th><th>כניסה לממשק</th><th>חבילה</th><th>מנוי</th><th>מתחמים</th><th></th></tr></thead><tbody>
+        ${list.map(({ a, st }) => { const ls = A.listings.filter((l) => l.owner_id === a.id); const ac = acctInfo(a); return `<tr data-row="${esc(a.id)}">
+          <td><a class="name" href="#client-${esc(a.id)}">${esc(a.business || a.name || "—")}</a><div class="sub">${esc(a.name)}${a.source === "signup" ? " · נרשם באתר" : ""}</div></td>
+          <td><div class="ltr">${esc(a.phone) || '<span class="muted">—</span>'}</div><div class="sub ltr">${esc(a.email) || "—"}</div></td>
+          <td><span class="pill pill-${ac.tone}">${esc(ac.text)}</span></td>
+          <td>${planName(a.plan)}<div class="sub">${esc(T.statusName(T.BILLING_MODELS, a.billing_model || "subscription"))}${a.billing_model && a.billing_model !== "subscription" ? ` · ${T.money(a.lead_price || A.settings.lead_price_default)} לפנייה` : ""}</div></td>
+          <td><span class="pill pill-${st.tone}">${esc(st.label)}</span>${renewalAsked(a) ? `<div class="sub" style="margin-top:4px">${I("refresh")} ביקש חידוש ${T.fmtStamp(a.renewal_requested_at)}</div>` : ""}</td>
+          <td>${ls.length ? ls.map((l) => `<a href="#edit-${esc(l.id)}">${esc(l.name)}</a>${l.active ? "" : ' <span class="muted">(מוסתר)</span>'}`).join("<br>") : '<span class="muted">—</span>'}</td>
+          <td><div class="acts"><a class="mini-btn" href="#client-${esc(a.id)}" title="כרטיס לקוח" aria-label="כרטיס הלקוח ${esc(a.business || a.name)}">${I("user")}</a>${a.phone ? `<a class="mini-btn" href="${esc(T.waLink(a.phone, ""))}" target="_blank" rel="noopener" aria-label="וואטסאפ">${I("chat")}</a>` : ""}
+            <button class="mini-btn" type="button" data-act="adv-edit" data-id="${esc(a.id)}" aria-label="עריכת ${esc(a.business || a.name)}">${I("edit")}</button>
+            <button class="mini-btn" type="button" data-act="ask-del" data-kind="advertiser" data-id="${esc(a.id)}" aria-label="מחיקת ${esc(a.business || a.name)}">${I("trash")}</button></div></td></tr>`; }).join("")}
+      </tbody></table></div>` : `<div class="empty"><h3>${A.advertisers.length ? "אין לקוחות בסינון הזה" : "עוד אין לקוחות"}</h3><p>מוסיפים לקוח ידנית, מאשרים בקשת הצטרפות, או שמארחים נרשמים בעצמם בעמוד ״פרסום מתחם״.</p></div>`}</div>`;
+  }
+  const PAY_METHODS = [["transfer", "העברה בנקאית"], ["card", "כרטיס אשראי"], ["bit", "ביט / פייבוקס"], ["cash", "מזומן"], ["check", "צ׳ק"], ["other", "אחר"]];
+  const addMonths = (iso, m) => { const d = T.parseISO(iso); const t = new Date(d.getFullYear(), d.getMonth() + m, 1); const last = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate(); return T.iso(new Date(t.getFullYear(), t.getMonth(), Math.min(d.getDate(), last))); };
+  function viewClient(id) {
+    const a = A.advertisers.find((x) => x.id === id);
+    if (!a) return ph("הלקוח לא נמצא", "") + `<a class="btn btn-line" href="#advertisers">לכל הלקוחות</a>`;
+    const st = T.subState(a, A.settings);
+    const ls = A.listings.filter((l) => l.owner_id === a.id);
+    const ids = new Set(ls.map((l) => l.id));
+    const leads = A.leads.filter((q) => ids.has(q.listing_id));
+    const since = Date.now() - 30 * 864e5;
+    const pays = (a.payments || []).map((p, i) => Object.assign({ i }, p)).sort((x, y) => (y.month || "").localeCompare(x.month || "") || String(y.paid_at || "").localeCompare(String(x.paid_at || "")));
+    const year = String(T.today().getFullYear());
+    const paidYear = pays.filter((p) => String(p.month || "").startsWith(year)).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const ac = acctInfo(a);
+    const months = Array.from({ length: 15 }, (_, i) => T.monthKey(new Date(T.today().getFullYear(), T.today().getMonth() + 2 - i, 1)));
+    const kv = (k, v) => (v ? `<li><span class="muted">${k}</span><b>${v}</b></li>` : "");
+    const au = A.clientAudit && A.clientAudit.id === id ? A.clientAudit.rows : null;
+    const lastDay = st.hideOn ? T.fmtDate(T.iso(T.addDays(T.parseISO(st.hideOn), -1))) : "";
+    const due = billingFor(a, T.monthKey(T.today()));
+    const mName = (m) => T.fmtMonth(T.parseISO(m + "-01"));
+    return ph(esc(a.business || a.name), `${esc(a.name)}${a.created_at ? " · לקוח מ־" + T.fmtDate(String(a.created_at).slice(0, 10)) : ""}${a.source === "signup" ? " · נרשם בעצמו באתר" : ""}`, `<a class="btn btn-ghost" href="#advertisers">${I("back")}לכל הלקוחות</a><button class="btn btn-line" type="button" data-act="adv-edit" data-id="${esc(a.id)}">${I("edit")}עריכה</button>${a.phone ? `<a class="btn btn-line" href="${esc(T.waLink(a.phone, `שלום ${a.name}, `))}" target="_blank" rel="noopener">${I("chat")}וואטסאפ</a>` : ""}`) + `
+      <div class="kpis">
+        <div class="kpi ${st.tone === "danger" || st.tone === "warn" ? "attn" : ""}"><span>${I("clock")}מנוי</span><b style="font-size:1.35rem;line-height:1.3">${esc(st.label)}</b><small>${planName(a.plan)} · ${esc(T.statusName(T.BILLING_MODELS, a.billing_model || "subscription"))}</small></div>
+        <div class="kpi"><span>${I("home")}מתחמים</span><b>${ls.length}</b><small>${st.visible ? `${ls.filter((l) => l.active).length} מוצגים באתר` : "מוסתרים: המנוי לא בתוקף"}</small></div>
+        <div class="kpi"><span>${I("inbox")}פניות ב־30 יום</span><b>${leads.filter((q) => new Date(q.created_at).getTime() >= since).length}</b><small>${leads.length} בסך הכל</small></div>
+        <div class="kpi"><span>${I("receipt")}שולם ב־${year}</span><b>${T.money(paidYear)}</b><small>${pays.length} תשלומים רשומים</small></div>
+      </div>
+      <div class="cols2"><div>
+        <div class="panel"><h2>מנוי ותצוגה באתר</h2><ul class="list-plain">${kv("התחלה", T.fmtDate(a.start_date))}${kv("סיום", T.fmtDate(a.end_date) || "ללא תאריך")}${kv("סטטוס", esc(T.statusName(T.ADV_STATUS, a.status)))}${kv("מוצג באתר", st.visible ? (lastDay ? "כן, עד " + lastDay : "כן") : "לא")}${kv("ביקש חידוש", a.renewal_requested_at ? T.fmtStamp(a.renewal_requested_at) : "")}</ul>
+          <div class="btn-row"><button class="btn btn-primary btn-sm" type="button" data-act="sub-extend" data-id="${esc(a.id)}" data-m="1">${I("plus")}חודש</button><button class="btn btn-primary btn-sm" type="button" data-act="sub-extend" data-id="${esc(a.id)}" data-m="12">${I("plus")}שנה</button>
+            ${a.status === "paused" || a.status === "ended" ? `<button class="btn btn-line btn-sm" type="button" data-act="sub-status" data-id="${esc(a.id)}" data-v="active">החזרה לפעילות</button>` : `<button class="btn btn-line btn-sm" type="button" data-act="sub-status" data-id="${esc(a.id)}" data-v="paused">השהיה</button><button class="btn btn-ghost btn-sm" type="button" data-act="sub-status" data-id="${esc(a.id)}" data-v="ended">סיום התקשרות</button>`}</div>
+          <p class="hint" style="margin-top:8px">הארכה נספרת מתאריך הסיום (או מהיום, אם הוא כבר עבר), מסמנת את הלקוח כפעיל ומחזירה מתחמים מוסתרים לאתר מיד.</p></div>
+        <div class="panel"><h2>תשלומים</h2>
+          ${pays.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>חודש</th><th>סכום</th><th>אמצעי</th><th>נרשם</th><th>הערה</th><th></th></tr></thead><tbody>${pays.map((p) => `<tr><td>${esc(mName(p.month) || p.month || "")}</td><td class="num"><b>${T.money(p.amount)}</b></td><td class="sub">${esc((PAY_METHODS.find((m) => m[0] === p.method) || ["", ""])[1])}</td><td class="sub">${p.paid_at ? T.fmtDate(String(p.paid_at).slice(0, 10)) : ""}</td><td class="sub">${esc(p.note || "")}</td><td><button class="mini-btn" type="button" data-act="pay-del" data-id="${esc(a.id)}" data-i="${p.i}" aria-label="מחיקת התשלום">${I("trash")}</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="muted" style="font-size:var(--t-s)">עוד לא נרשמו תשלומים.</p>`}
+          <form data-form="payment" data-id="${esc(a.id)}" class="pay-form" novalidate>
+            <label class="field"><span>חודש</span><select class="select" name="month">${months.map((m) => `<option value="${m}" ${m === T.monthKey(T.today()) ? "selected" : ""}>${esc(mName(m))}</option>`).join("")}</select></label>
+            <label class="field"><span>₪ סכום</span><input class="input num" name="amount" type="number" min="1" inputmode="numeric" required value="${esc(due.total || "")}"></label>
+            <label class="field"><span>אמצעי</span><select class="select" name="method">${PAY_METHODS.map(([k, n]) => `<option value="${k}">${n}</option>`).join("")}</select></label>
+            <label class="field"><span>הערה / מס׳ קבלה</span><input class="input" name="note" maxlength="80"></label>
+            <button class="btn btn-line" type="submit">${I("plus")}רישום תשלום</button></form></div>
+        <div class="panel"><h2>מתחמים</h2>${ls.length ? `<ul class="list-plain">${ls.map((l) => `<li><span><a class="name" href="#edit-${esc(l.id)}">${esc(l.name)}</a> <span class="muted">· ${esc(l.settlement || "")}</span></span><span>${l.active ? (st.visible ? '<span class="pill pill-ok">מוצג</span>' : '<span class="pill pill-danger">מוסתר (מנוי)</span>') : '<span class="pill pill-muted">מוסתר</span>'} ${pendingPill(l)}</span></li>`).join("")}</ul>` : `<p class="muted">אין מתחמים משויכים. משייכים מתחם בעורך המתחם (״מפרסם״).</p>`}</div>
+        <div class="panel"><h2>פניות אחרונות</h2>${leads.length ? leads.slice(0, 5).map(leadRow).join("") : `<p class="muted">עוד לא הגיעו פניות.</p>`}</div>
+      </div><div>
+        <div class="panel"><h2>פרטי הלקוח</h2><ul class="list-plain">${kv("איש קשר", esc(a.name))}${kv("טלפון", a.phone ? `<a href="tel:${esc(a.phone)}" dir="ltr">${esc(a.phone)}</a>` : "")}${kv("אימייל", a.email ? `<span dir="ltr">${esc(a.email)}</span>` : '<span class="muted">חסר</span>')}${kv("ח.פ / ע.מ", esc(a.tax_id || ""))}${kv("כתובת", esc(a.address || ""))}${kv("מקור", a.source === "signup" ? "הרשמה עצמית באתר" : "נוסף בפאנל")}${kv("תנאי שימוש", a.terms_version ? `אושרו${a.terms_at ? " ב־" + T.fmtDate(String(a.terms_at).slice(0, 10)) : ""} (גרסה ${esc(a.terms_version)})` : "")}${kv("התראות", (a.prefs || {}).notify_leads === false ? "ביקש לא לקבל מייל על פניות" : "")}</ul>${a.notes ? `<p class="msg" style="margin-top:10px">״${esc(a.notes)}״</p>` : ""}</div>
+        <div class="panel"><h2><span class="h-ic">${I("key")}כניסה לממשק המארחים</span></h2><p><span class="pill pill-${ac.tone}">${esc(ac.text)}</span></p>
+          ${T.isLive && a.email ? `<div class="btn-col"><button class="btn btn-line btn-block" type="button" data-act="client-invite" data-id="${esc(a.id)}">${I("mail")}${ac.tone === "muted" ? "שליחת הזמנה במייל" : "שליחה חוזרת: הזמנה / קישור לסיסמה"}</button>
+            <button class="btn btn-ghost btn-block" type="button" data-act="client-link" data-id="${esc(a.id)}">${I("link")}קישור כניסה לשליחה בוואטסאפ</button></div>
+            ${A.linkFor && A.linkFor.id === a.id ? `<div class="link-box"><span class="copy-field"><input class="input" readonly value="${esc(A.linkFor.link)}" aria-label="קישור כניסה"><button class="mini-btn" type="button" data-act="copy" data-text="${esc(A.linkFor.link)}" aria-label="העתקה">${I("copy")}</button></span>${a.phone ? `<a class="btn btn-primary btn-sm" href="${esc(T.waLink(a.phone, `שלום ${a.name}, זה הקישור האישי לכניסה לממשק המארחים של ${A.settings.site_name} (בכניסה בוחרים סיסמה): ${A.linkFor.link}`))}" target="_blank" rel="noopener">${I("chat")}שליחה בוואטסאפ</a>` : ""}<p class="hint">הקישור אישי, חד-פעמי ובתוקף לזמן קצר. שולחים אותו רק ללקוח.</p></div>` : ""}
+            <p class="hint" style="margin-top:8px">ההזמנה שולחת ללקוח מייל לבחירת סיסמה. אם המייל לא מגיע, הקישור לוואטסאפ עושה את אותו הדבר.</p>` : T.isLive ? `<p class="hint">כדי שהלקוח ייכנס, מוסיפים לו אימייל (״עריכה״).</p>` : `<p class="hint">במצב הדגמה נכנסים לממשק המארחים בבחירת הלקוח מהרשימה.</p>`}</div>
+        <div class="panel"><h2><span class="h-ic">${I("history")}יומן פעולות</span></h2>${au === null ? `<p class="muted">טוען…</p>` : au.length ? `<ul class="audit">${au.slice(0, 30).map(auditLine).join("")}</ul>` : `<p class="muted">אין פעולות רשומות${T.isLive ? "" : " (היומן פעיל באתר המחובר)"}.</p>`}</div>
+      </div></div>`;
+  }
+
+  /* ================================================================ יומן פעולות */
+  const ENTITY_NAMES = { advertisers: "לקוח", listings: "מתחם", applications: "בקשת הצטרפות", leads: "פנייה", settings: "הגדרות האתר", admins: "צוות ניהול", places: "מקום באזור", articles: "כתבה" };
+  const ACTION_NAMES = { insert: "נוצר", update: "עודכן", delete: "נמחק" };
+  const FIELD_NAMES = { name: "שם", business: "שם העסק", phone: "טלפון", email: "אימייל", plan: "חבילה", status: "סטטוס", end_date: "סיום מנוי", start_date: "תחילת מנוי", payments: "תשלומים", notes: "הערות", active: "הצגה באתר", featured: "נבחרי העונה", pending: "שינויים ממתינים", photos: "תמונות", description: "תיאור", tagline: "משפט פתיחה", price_weekday: "מחיר", price_weekend: "מחיר", price_holiday: "מחיר", blocked_dates: "יומן", rooms: "יחידות", amenities: "מאפיינים", audience: "מתאים ל", data: "הגדרות", owner_id: "שיוך ללקוח", sponsored_until: "מיקום ממומן", details: "תוכן הדף", terms: "מדיניות", invited_at: "הזמנה לממשק", renewal_requested_at: "בקשת חידוש", prefs: "התראות", tax_id: "ח.פ", address: "כתובת", admin_note: "הערה פנימית", review_token: "קישור לחוות דעת", mfa_required: "אימות דו-שלבי", advertiser_id: "שיוך ללקוח", seasons: "עונות", extras: "תוספות", deal_label: "דיל", deal_text: "דיל", lastminute_pct: "דקה 90", min_nights: "מינימום לילות", ical_url: "סנכרון יומן", settlement: "יישוב", region: "אזור", type: "סוג", lat: "מיקום", lng: "מיקום", video_url: "סרטון", billing_model: "מודל תשלום", lead_price: "מחיר לפנייה", whatsapp: "וואטסאפ", exclusive: "בלעדי", best_price: "מחיר הכי טוב", guests_max: "קיבולת", guests_base: "קיבולת", units: "יחידות", title: "כותרת", body: "תוכן", published: "פרסום", cover: "תמונה", photo: "תמונה", blurb: "תיאור" };
+  const entityLabel = (r) => {
+    const id = r.entity_id;
+    const f = (arr, k) => { const x = (arr || []).find((y) => y.id === id); return x ? x[k] || x.name || "" : ""; };
+    return { listings: () => f(A.listings, "name"), advertisers: () => f(A.advertisers, "business"), applications: () => f(A.applications, "business"), leads: () => f(A.leads, "name"), places: () => f(A.places, "name"), articles: () => f(A.articles, "title"), admins: () => id }[r.entity]?.() || "";
+  };
+  function auditLine(r) {
+    const fields = [...new Set((r.changes || []).map((k) => FIELD_NAMES[k] || k))];
+    const nm = entityLabel(r);
+    return `<li><span class="when">${T.fmtStamp(r.at)}</span><span class="what"><b>${esc(ENTITY_NAMES[r.entity] || r.entity)}${nm ? " · " + esc(nm) : ""}</b> ${esc(ACTION_NAMES[r.action] || r.action)}${fields.length ? `: <span class="muted">${esc(fields.slice(0, 6).join(", "))}${fields.length > 6 ? "…" : ""}</span>` : ""}</span><span class="who" dir="ltr">${esc(r.actor || "")}</span></li>`;
+  }
+  function viewActivity() {
+    const rows = A.audit;
+    if (!rows) return ph("יומן פעולות", "") + `<div class="panel"><p class="muted">טוען…</p></div>`;
+    const list = A.actF ? rows.filter((r) => r.entity === A.actF) : rows;
+    return ph("יומן פעולות", "מי שינה מה ומתי: לקוחות, מתחמים, פניות, בקשות, הגדרות וצוות הניהול. נשמר לשנה.", `<select class="select" id="act-f" aria-label="סינון לפי סוג" style="width:auto"><option value="">הכל</option>${Object.entries(ENTITY_NAMES).map(([k, n]) => `<option value="${k}" ${A.actF === k ? "selected" : ""}>${n}</option>`).join("")}</select><button class="btn btn-line" type="button" data-act="act-reload">${I("refresh")}רענון</button>`) + `
+      <div class="panel">${list.length ? `<ul class="audit">${list.map(auditLine).join("")}</ul>` : `<div class="empty"><h3>אין פעולות רשומות</h3><p>${T.isLive ? "פעולות חדשות יופיעו כאן." : "היומן פעיל באתר המחובר."}</p></div>`}</div>`;
+  }
+
+  /* ================================================================ הגדרות: משימה יומית ותחזוקה */
+  const DAILY_KINDS = { reminder: "תזכורת חידוש", ended: "המנוי הסתיים", hidden: "המתחם הוסתר", review: "בקשת חוות דעת", digest: "סיכום יומי" };
+  function dailyBox() {
+    const r = A.daily;
+    if (!r) return "";
+    if (r.error) return `<p class="note note-warn">${I("info")}<span>${esc(r.error)}</span></p>`;
+    const items = r.items || [];
+    return `${r.note ? `<p class="note note-warn">${I("info")}<span>${esc(r.note)}</span></p>` : ""}<p class="hint" style="margin-top:8px">${r.dry ? `היום (${T.fmtDate(r.today)}) ${r.planned ? `ייצאו ${r.planned} מיילים:` : "אין מיילים לשליחה."}` : `נשלחו ${r.sent} מיילים${r.errors && r.errors.length ? `, ${r.errors.length} נכשלו` : ""}.`}</p>
+      ${items.length ? `<ul class="list-plain">${items.map((x) => `<li><span><b>${esc(DAILY_KINDS[x.kind] || x.kind)}</b> · <span dir="ltr">${esc(x.to)}</span><br><span class="muted" style="font-size:var(--t-xs)">${esc(x.subject)}</span></span>${x.already ? '<span class="pill pill-muted">כבר נשלח</span>' : ""}</li>`).join("")}</ul>` : ""}
+      ${(r.errors || []).map((x) => `<p class="note note-warn"><span>${esc(x.to)}: ${esc(x.error)}</span></p>`).join("")}
+      ${r.dry && r.planned ? `<button class="btn btn-primary btn-sm" type="button" data-act="daily-run" style="margin-top:8px">${I("send")}שליחה עכשיו</button>` : ""}`;
+  }
+  function cleanupBox() {
+    const r = A.cleanup;
+    if (!r) return "";
+    if (r.error) return `<p class="note note-warn">${I("info")}<span>${esc(r.error)}</span></p>`;
+    return r.dry ? `<p class="hint" style="margin-top:8px">${r.total} תמונות באחסון, מתוכן ${r.orphans} לא בשימוש (${r.mb}MB).</p>${r.orphans ? `<button class="btn btn-danger btn-sm" type="button" data-act="cleanup-run" style="margin-top:8px">${I("trash")}מחיקת ${r.orphans} תמונות</button>` : ""}`
+      : `<p class="note note-ok" style="margin-top:8px">${I("check")}<span>נמחקו ${r.removed} תמונות (${r.mb}MB).</span></p>`;
   }
 
   /* ================================================================ router */
@@ -1020,8 +1312,19 @@
     A.maps.forEach((m) => { try { m.remove(); } catch (e) {} });
     A.maps = [];
     if (!A.ready) { app.innerHTML = `<div class="login"><p class="muted">טוען…</p></div>`; return; }
-    if (!A.authed) { app.innerHTML = viewLogin(); return; }
+    if (!A.authed) { app.innerHTML = A.gate ? viewGate() : viewLogin(); return; }
     const h = location.hash.slice(1) || (IS_ADMIN ? "dashboard" : "my");
+    const entering = A.route !== h;
+    A.route = h;
+    /* נתונים שנטענים רק כשנכנסים למסך */
+    if (IS_ADMIN && h === "activity" && (entering || A.audit === undefined)) { A.audit = null; T.store.listAudit({ limit: 300 }).then((r) => { A.audit = r || []; }).catch(() => { A.audit = []; }).then(() => { if (location.hash.slice(1) === "activity") rerenderKeepScroll(); }); }
+    if (IS_ADMIN && h.startsWith("client-") && entering) {
+      const cid = h.slice(7);
+      A.clientAudit = null; A.linkFor = null;
+      const lids = A.listings.filter((l) => l.owner_id === cid).map((l) => l.id);
+      T.store.listAudit({ ids: [cid].concat(lids), limit: 80 }).then((rows) => { A.clientAudit = { id: cid, rows: rows || [] }; }).catch(() => { A.clientAudit = { id: cid, rows: [] }; }).then(() => { if (location.hash.slice(1) === h) rerenderKeepScroll(); });
+    }
+    if (IS_ADMIN && h === "account" && (entering || !A.acct) && A.acct !== "loading") { A.acct = "loading"; loadAccount().then(() => { if (location.hash.slice(1) === "account") rerenderKeepScroll(); }); }
     if (A.editId && h !== "edit-" + A.editId && !(A.editId === "new" && h === "new")) {
       const dr = A.drafts[A.editId];
       if (dr && dr._dirty) T.toast("השינויים במתחם נשמרו כטיוטה. אפשר לחזור ולשמור.");
@@ -1030,14 +1333,16 @@
     if (h !== "articles") A.editArticle = null;
     let html;
     if (IS_ADMIN) {
-      const routes = { dashboard: viewDashboard, listings: viewListings, leads: viewLeads, moderation: viewModeration, reviews: viewReviews, advertisers: viewAdvertisers, billing: viewBilling, applications: viewApplications, articles: viewArticles, places: viewPlaces, subscribers: viewSubscribers, "site-settings": viewSettings, system: viewSystem };
+      const routes = { dashboard: viewDashboard, listings: viewListings, leads: viewLeads, moderation: viewModeration, reviews: viewReviews, advertisers: viewAdvertisers, billing: viewBilling, applications: viewApplications, articles: viewArticles, places: viewPlaces, subscribers: viewSubscribers, activity: viewActivity, account: viewAdminAccount, "site-settings": viewSettings, system: viewSystem };
       if (h === "new") html = viewEditor("new");
       else if (h.startsWith("edit-")) html = viewEditor(h.slice(5));
+      else if (h.startsWith("client-")) html = viewClient(h.slice(7));
       else html = (routes[h] || viewDashboard)();
     } else {
       if (h.startsWith("edit-") && A.listings.some((l) => l.id === h.slice(5))) html = viewEditor(h.slice(5));
       else if (h === "leads") html = viewLeads();
       else if (h === "reviews") html = viewReviews();
+      else if (h === "account") html = viewOwnerAccount();
       else html = viewMy();
     }
     app.innerHTML = shell(html);
@@ -1057,6 +1362,7 @@
     const errs = [];
     res.forEach((r, i) => { if (r.status === "fulfilled") A[keys[i]] = r.value; else errs.push(r.reason); });
     T.SETTINGS = A.settings;
+    if (IS_ADMIN && T.isLive && A.advertisers.length) A.authInfo = await T.store.authInfo(A.advertisers.map((a) => a.email)).catch(() => ({}));
     const denied = errs.find(isDenied), other = errs.find((e) => !isDenied(e) && !e.missing);
     if (denied) await fail("טעינת הנתונים נכשלה", denied);
     else if (other) T.toast("חלק מהנתונים לא נטענו: " + other.message, "err");
@@ -1068,13 +1374,27 @@
     return `<div class="note note-warn schema-banner" role="alert">${I("info")}<span><b>מסד הנתונים לא מעודכן לגרסה הזו של האתר.</b> ${IS_ADMIN ? `כדי לתקן: ב-Supabase פותחים <b>SQL Editor</b>, מדביקים את כל הקובץ <b>supabase/schema.sql</b> מהמאגר בגיטהאב ולוחצים <b>Run</b>. זה בטוח ולא מוחק נתונים. אחר כך מרעננים את הדף.` : "צוות האתר צריך לעדכן את מסד הנתונים. בינתיים חלק מהאפשרויות לא יישמרו."} <span class="hint">(חסר: ${esc(list)})</span>${IS_ADMIN ? ` <a href="#system">לבדיקת מערכת</a>` : ""}</span></div>`;
   }
   async function checkAuth() {
+    A.gate = "";
     if (!T.isLive) return IS_ADMIN ? T.store.isAdmin() : (await T.store.myAdvertisers()).length > 0;
     const user = await T.store.getUser();
     if (!user) return false;
     A.email = user.email || "";
     /* לא מנתקים אוטומטית: הכניסה משותפת לכל הלשוניות של האתר, וניתוק כאן היה מנתק גם לשוניות אחרות */
     A.signedInAs = "";
+    /* הגיעו מקישור "שכחתי סיסמה" או מהזמנה: קודם בוחרים סיסמה */
+    if (A.needPassword) { A.gate = "password"; return false; }
     if (IS_ADMIN) {
+      /* אימות דו-שלבי: מנהל שהפעיל אותו מקבל הרשאות רק אחרי הקוד מהאפליקציה */
+      const st = await T.store.adminStatus().catch(() => ({ admin: false }));
+      if (st && st.admin) {
+        const lvl = await T.store.mfaLevel().catch(() => ({ currentLevel: "aal1", nextLevel: "aal1" }));
+        if (lvl.currentLevel !== "aal2" && (st.mfa_required || lvl.nextLevel === "aal2")) {
+          const fs = await T.store.mfaFactors().catch(() => []);
+          A.mfaFactor = (fs || []).find((f) => f.status === "verified") || null;
+          A.gate = "mfa";
+          return false;
+        }
+      }
       if (await T.store.isAdmin()) return true;
       A.signedInAs = user.email || "";
       A.loginMsg = { tone: "warn", text: `החשבון ${user.email} מחובר, אבל לא מוגדר כמנהל. אם זו טעות: ב-Supabase → SQL Editor מוסיפים את האימייל לטבלת admins (שלב 2.3 במדריך). אפשר גם להיכנס כאן עם חשבון מנהל אחר.` };
@@ -1087,8 +1407,16 @@
       A.loginMsg = { tone: "info", text: `אתם מחוברים כמנהל (${user.email}). כדי לראות את ממשק המארחים כמו מארח, הוסיפו בפאנל הניהול לקוח עם האימייל הזה ושייכו אליו מתחם, ואז רעננו את הדף.` };
       return false;
     }
+    /* מארח שנרשם באתר ואימת את המייל: פותחים לו חשבון (או מראים שההרשמה בבדיקה) */
+    const c = await T.store.claimHostSignup().catch(() => ({ status: "none" }));
+    if (c.status === "opened" || c.status === "client") {
+      if (c.status === "opened") { A.welcome = true; T.store.mail("welcome").catch(() => {}); }
+      if ((await T.store.myAdvertisers()).length) return true;
+    }
+    if (c.status === "pending") { A.app = await T.store.myApplication().catch(() => null); A.gate = "pending"; T.store.mail("welcome").catch(() => {}); return false; }
+    if (c.status === "rejected") { A.gate = "rejected"; return false; }
     A.signedInAs = user.email || "";
-    A.loginMsg = { tone: "warn", text: `לא מצאנו לקוח עם האימייל ${user.email}. פנו לצוות האתר כדי שיעדכנו את האימייל אצלם, או היכנסו עם אימייל אחר.` };
+    A.loginMsg = { tone: "warn", text: `לא מצאנו לקוח עם האימייל ${user.email}. מארחים חדשים נרשמים בעמוד ״פרסום מתחם״ באתר. אם כבר מפרסמים אצלנו, פנו לצוות כדי שיעדכנו את האימייל, או היכנסו עם אימייל אחר.` };
     return false;
   }
 
@@ -1110,6 +1438,9 @@
     T.PLANS.forEach((p) => (A.settings.plan_prices[p.key] = Number(fd.get("price_" + p.key)) || 0));
     A.settings.lead_price_default = Number(fd.get("lead_price_default")) || 0;
     A.settings.sponsored_price = Number(fd.get("sponsored_price")) || 0;
+    const int = (k, min, max, d) => { const v = fd.get(k); if (v === null) return; const n = Math.round(Number(v)); A.settings[k] = String(v).trim() === "" || !Number.isFinite(n) ? d : Math.min(max, Math.max(min, n)); };
+    int("trial_days", 0, 365, 30); int("grace_days", 0, 60, 3); int("review_delay_days", 0, 30, 1);
+    if (fd.get("reminder_days") !== null) { const r = [...new Set(String(fd.get("reminder_days")).split(/[\s,]+/).map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n <= 120))].sort((a, b) => b - a); A.settings.reminder_days = r.length ? r.slice(0, 6) : [30, 7, 1]; }
   }
   document.addEventListener("click", async (e) => {
     const el = e.target.closest("[data-act]");
@@ -1121,15 +1452,61 @@
     else if (act === "demo-owner") { await T.store.signInOwnerDemo($("#demo-owner").value); A.authed = true; await reload(); location.hash = "my"; render(); }
     else if (act === "google") { try { await T.store.signInGoogle(); } catch (ex) { A.loginMsg = { tone: "warn", text: "הכניסה עם Google לא הוגדרה עדיין: " + ex.message }; render(); } }
     else if (act === "deny-close") $("#deny").remove();
-    else if (act === "logout") { ["#modal", "#deny"].forEach((x) => { const m = $(x); if (m) m.remove(); }); A.signedInAs = ""; A.adminHere = false; await T.store.signOut(); A.authed = false; A.loginMsg = null; if (!IS_ADMIN && !T.isLive) A.advertisers = await T.store.listAdvertisers(); render(); }
+    /* כניסה וחשבון */
+    else if (act === "login-mode") { const em = $('.login-card input[name="email"]'); if (em && em.value.trim()) A.lastEmail = em.value.trim(); A.loginMode = el.dataset.v; A.loginMsg = null; render(); const i = $(".login-card input"); if (i) i.focus(); }
+    else if (act === "resend-signup") { try { await T.store.resendSignup(el.dataset.email); A.loginMsg = { tone: "ok", text: `שלחנו שוב את מייל האימות ל־${el.dataset.email}. בדקו גם בספאם.` }; } catch (ex) { A.loginMsg = { tone: "warn", text: T.authError(ex) }; } render(); }
+    else if (act === "logout-all") { try { await T.store.signOut(true); } catch (ex) {} A.authed = false; A.gate = ""; A.acct = null; A.loginMsg = { tone: "ok", text: "החשבון נותק בכל המכשירים." }; render(); }
+    else if (act === "renew-request") { el.disabled = true; try { await T.store.requestRenewal(); await reload(); rerenderKeepScroll(); T.toast("הבקשה נשלחה. נחזור אליכם בקרוב."); } catch (ex) { el.disabled = false; fail("השליחה נכשלה", ex); } }
+    else if (act === "publish-request") {
+      const l = A.listings.find((x) => x.id === id);
+      if (!l) return;
+      el.disabled = true;
+      try { await T.store.saveListingAsOwner(Object.assign(T.clone(T.withPending(l)), { _publish: true }), l); T.store.mail("publish_request", id).catch(() => {}); await reload(); rerenderKeepScroll(); T.toast("נשלח לבדיקה. נעדכן אתכם במייל כשהמתחם יעלה לאוויר."); }
+      catch (ex) { el.disabled = false; fail("השליחה נכשלה", ex); }
+    }
+    else if (act === "mfa-on") { try { A.enroll = await T.store.mfaEnroll(); rerenderKeepScroll(); const i = $('[data-form="mfa-enroll"] input'); if (i) i.focus(); } catch (ex) { T.toast(T.authError(ex), "err"); } }
+    else if (act === "mfa-cancel") { const en = A.enroll; A.enroll = null; if (en) T.store.mfaUnenroll(en.id).catch(() => {}); rerenderKeepScroll(); }
+    else if (act === "mfa-off") {
+      if (el.dataset.sure !== "1") { el.dataset.sure = "1"; el.textContent = "לחיצה נוספת תכבה את האימות"; return; }
+      try { const f = ((A.acct && A.acct.factors) || []).find((x) => x.status === "verified"); await T.store.adminSetMfa(false); if (f) await T.store.mfaUnenroll(f.id); A.acct = null; render(); T.toast("האימות הדו-שלבי כובה"); }
+      catch (ex) { T.toast(T.authError(ex), "err"); }
+    }
+    else if (act === "admin-del") {
+      if (el.dataset.sure !== "1") { el.dataset.sure = "1"; el.classList.add("on"); T.toast(`לחיצה נוספת תסיר את ${el.dataset.email} מצוות הניהול`); return; }
+      try { await T.store.removeAdmin(el.dataset.email); A.acct = null; render(); T.toast("הוסר מצוות הניהול"); } catch (ex) { fail("ההסרה נכשלה", ex); }
+    }
+    else if (act === "admin-reset") { el.disabled = true; try { await T.store.account("reset", { email: el.dataset.email, target: "admin" }); T.toast("נשלח מייל לבחירת סיסמה ל־" + el.dataset.email); } catch (ex) { T.toast(ex.message, "err"); } el.disabled = false; }
+    /* כרטיס לקוח */
+    else if (act === "af-tab") { A.af.tab = el.dataset.v; rerenderKeepScroll(); }
+    else if (act === "adv-csv") downloadCSV(`clients-${T.iso(T.today())}.csv`, ["עסק", "איש קשר", "טלפון", "אימייל", "ח.פ", "כתובת", "חבילה", "סטטוס", "התחלה", "סיום", "מנוי", "מתחמים", "מקור"], A.advertisers.map((a) => [a.business, a.name, a.phone, a.email, a.tax_id || "", a.address || "", planName(a.plan), T.statusName(T.ADV_STATUS, a.status), a.start_date, a.end_date, T.subState(a, A.settings).label, A.listings.filter((l) => l.owner_id === a.id).map((l) => l.name).join(" / "), a.source === "signup" ? "הרשמה באתר" : "פאנל"]));
+    else if (act === "sub-extend") {
+      const a = A.advertisers.find((x) => x.id === id);
+      const m = Number(el.dataset.m) || 1;
+      const today = T.iso(T.today());
+      const from = a.end_date && a.end_date > today ? a.end_date : today;
+      const end = addMonths(from, m);
+      save(() => T.store.saveAdvertiser({ id, end_date: end, status: "active", renewal_requested_at: null }), `המנוי הוארך עד ${T.fmtDate(end)}`);
+    }
+    else if (act === "sub-status") save(() => T.store.saveAdvertiser({ id, status: el.dataset.v }), el.dataset.v === "paused" ? "החשבון הושהה. המתחמים מוסתרים מהאתר עד החזרה לפעילות." : el.dataset.v === "ended" ? "ההתקשרות הסתיימה. המתחמים מוסתרים מהאתר." : "החשבון פעיל");
+    else if (act === "pay-del") { const a = A.advertisers.find((x) => x.id === id); const i = Number(el.dataset.i); save(() => T.store.saveAdvertiser({ id, payments: (a.payments || []).filter((p, k) => k !== i) }), "התשלום נמחק"); }
+    else if (act === "client-invite") { el.disabled = true; try { const r = await T.store.account("invite", { id }); await reload(); rerenderKeepScroll(); T.toast(r.sent === "reset" ? "ללקוח כבר יש חשבון: נשלח אליו מייל לבחירת סיסמה" : "נשלחה הזמנה ל־" + r.email); } catch (ex) { el.disabled = false; T.toast(ex.message, "err"); } }
+    else if (act === "client-link") { el.disabled = true; try { const r = await T.store.account("link", { id }); A.linkFor = { id, link: r.link }; rerenderKeepScroll(); } catch (ex) { el.disabled = false; T.toast(ex.message, "err"); } }
+    else if (act === "act-reload") { A.audit = undefined; rerenderKeepScroll(); }
+    /* מיילים, משימה יומית ותחזוקה */
+    else if (act === "mail-test") { el.disabled = true; try { const r = await T.store.mail("test"); T.toast(r && r.demo ? "במצב הדגמה לא נשלחים מיילים" : r && r.skipped ? "המייל לא נשלח: " + r.skipped : "נשלח מייל בדיקה ל־" + A.email); } catch (ex) { T.toast(ex.message, "err"); } el.disabled = false; }
+    else if (act === "daily-preview" || act === "daily-run") { el.disabled = true; try { A.daily = await T.store.runDaily(act === "daily-preview"); } catch (ex) { A.daily = { error: ex.message }; } const b = $("#daily-box"); if (b) b.innerHTML = dailyBox(); el.disabled = false; }
+    else if (act === "cleanup-dry" || act === "cleanup-run") { el.disabled = true; try { A.cleanup = await T.store.cleanupPhotos(act === "cleanup-dry"); A.cleanup.dry = act === "cleanup-dry"; } catch (ex) { A.cleanup = { error: ex.message }; } const b = $("#cleanup-box"); if (b) b.innerHTML = cleanupBox(); el.disabled = false; }
+    else if (act === "review-mail") { el.disabled = true; try { const r = await T.store.mail("review_request", id); T.toast(r && r.skipped === "already sent" ? "כבר נשלח היום לאורח הזה" : r && r.demo ? "במצב הדגמה לא נשלחים מיילים" : "הבקשה נשלחה במייל"); } catch (ex) { el.disabled = false; T.toast(ex.message, "err"); } }
+    else if (act === "logout") { ["#modal", "#deny"].forEach((x) => { const m = $(x); if (m) m.remove(); }); A.signedInAs = ""; A.adminHere = false; A.gate = ""; A.needPassword = false; A.acct = null; A.enroll = null; A.loginMode = "login"; await T.store.signOut(); A.authed = false; A.loginMsg = null; if (!IS_ADMIN && !T.isLive) A.advertisers = await T.store.listAdvertisers(); render(); }
     else if (act === "lf-status") { A.lf.status = el.dataset.v; rerenderKeepScroll(); }
     else if (act === "qf-status") { A.qf.status = el.dataset.v; rerenderKeepScroll(); }
     else if (act === "rf") { A.rf = el.dataset.v; rerenderKeepScroll(); }
     else if (act === "pf-kind") { A.pf.kind = el.dataset.v; rerenderKeepScroll(); }
     else if (act === "sys-run") { A.sysBusy = true; rerenderKeepScroll(); try { A.sys = await T.store.schemaCheck(); } catch (ex) { A.sys = [{ group: "db", label: "הבדיקה נכשלה", ok: false, detail: ex.message }]; } A.sysBusy = false; rerenderKeepScroll(); }
     else if (act === "leads-csv") downloadCSV(`leads-${T.iso(T.today())}.csv`, ["התקבלה", "סוג", "סטטוס", "שם", "טלפון", "אימייל", "מתחם", "יחידה", "הגעה", "עזיבה", "מבוגרים", "ילדים", "הערכה", "פרטים", "הודעה"], A.leads.map((q) => [q.created_at, T.statusName(T.LEAD_SOURCES, q.source || "form"), T.statusName(T.LEAD_STATUS, q.status), q.name, q.phone, q.email, q.listing_name, q.unit_name, q.check_in, q.check_out, q.guests, q.children, q.est_total, unesc(leadDetails(q).join(" | ")), q.message]));
-    else if (act === "subs-copy") T.copy(A.subscribers.filter((x) => !A.sf.region || !(x.regions || []).length || x.regions.includes(A.sf.region)).map((x) => x.email).join(", "));
-    else if (act === "subs-csv") downloadCSV(`subscribers-${T.iso(T.today())}.csv`, ["email", "name", "regions", "created_at"], A.subscribers.map((x) => [x.email, x.name, (x.regions || []).map((k) => T.regionOf(k).name).join(" / "), x.created_at]));
+    else if (act === "subs-copy") { const l = activeSubs(); if (!l.length) T.toast("אין מנויים מאושרים להעתקה"); else T.copy(l.map((x) => x.email).join(", ")); }
+    else if (act === "subs-csv") downloadCSV(`subscribers-${T.iso(T.today())}.csv`, ["email", "name", "regions", "confirmed_at", "unsubscribe_link"], activeSubs().map((x) => [x.email, x.name, (x.regions || []).map((k) => T.regionOf(k).name).join(" / "), x.confirmed_at || x.created_at, x.token ? siteAbs("unsubscribe-" + x.token) : ""]));
+    else if (act === "sf-status") { A.sf.status = el.dataset.v; rerenderKeepScroll(); }
     else if (act === "place-edit") { const pl = id ? A.places.find((x) => x.id === id) : { kind: "restaurant", region: A.pf.region || "golan", active: true }; document.body.insertAdjacentHTML("beforeend", placeModal(pl)); $("#modal input:not([type=hidden])").focus(); }
     else if (act === "place-toggle") { const pl = A.places.find((x) => x.id === id); save(() => T.store.savePlace(Object.assign({}, pl, { active: pl.active === false })), pl.active === false ? "המקום מוצג" : "המקום הוסתר"); }
     else if (act === "set-flag") { const k = el.dataset.k; A.settings[k] = A.settings[k] === false; el.setAttribute("aria-checked", A.settings[k] !== false); }
@@ -1225,11 +1602,24 @@
       bindEditor();
       markDirty();
       if (act === "ph-move") { const b = $(`#photos [data-act="ph-move"][data-i="${i + Number(el.dataset.d)}"][data-d="${el.dataset.d}"]`); if (b) b.focus(); }
+    } else if (act === "ed-publish") {
+      readEditor();
+      const d = A.drafts[A.editId];
+      if (!d) return;
+      const miss = [];
+      if ((d.photos || []).length < 5) miss.push("לפחות 5 תמונות");
+      if (String(d.description || "").trim().length < 80) miss.push("תיאור של כמה שורות");
+      if (!String(d.phone || "").trim()) miss.push("טלפון לאורחים");
+      if (miss.length) { T.toast("לפני השליחה חסר: " + miss.join(", "), "err"); return; }
+      d._publish = true;
+      el.disabled = true;
+      const saved = await saveEditor();
+      if (saved) T.store.mail("publish_request", saved.id).catch(() => {}); else { delete d._publish; el.disabled = false; }
     } else if (act === "ed-discard") { delete A.drafts[A.editId]; rerenderKeepScroll(); T.toast("השינויים בוטלו"); }
     /* moderation & reviews */
-    else if (act === "mod-approve") save(() => T.store.approvePending(id), "השינויים פורסמו באתר");
-    else if (act === "mod-reject") save(() => T.store.rejectPending(id), "השינויים נדחו");
-    else if (act === "rev-set") save(() => T.store.updateReview(id, { status: el.dataset.v }), el.dataset.v === "approved" ? "חוות הדעת פורסמה" : "חוות הדעת נדחתה");
+    else if (act === "mod-approve" || act === "mod-approve-live") { const live = act === "mod-approve-live"; save(async () => { await T.store.approvePending(id, { activate: live }); T.store.mail("moderation", id, { decision: "approved", live }).catch(() => {}); }, live ? "המתחם אושר ומוצג באתר. המארח קיבל מייל." : "השינויים פורסמו באתר"); }
+    else if (act === "mod-reject") { const n = $(`[data-mod-note="${CSS.escape(id)}"]`); const note = n ? n.value.trim() : ""; save(async () => { await T.store.rejectPending(id); T.store.mail("moderation", id, { decision: "rejected", note }).catch(() => {}); }, "השינויים נדחו. המארח קיבל מייל."); }
+    else if (act === "rev-set") save(async () => { await T.store.updateReview(id, { status: el.dataset.v }); if (el.dataset.v === "approved") T.store.mail("review_published", id).catch(() => {}); }, el.dataset.v === "approved" ? "חוות הדעת פורסמה" : "חוות הדעת נדחתה");
     else if (act === "reply") { const v = $(`[data-reply="${CSS.escape(id)}"]`).value.trim(); save(() => T.store.updateReview(id, { reply: v }), "התגובה נשמרה"); }
     else if (act === "ask-review") {
       const q = A.leads.find((x) => x.id === id);
@@ -1240,7 +1630,8 @@
           <div class="modal-head"><h2 id="m-title">בקשת חוות דעת</h2><button class="icon-btn" type="button" data-act="modal-close" aria-label="סגירה">${I("x")}</button></div>
           <p class="muted" style="font-weight:300">קישור אישי ל${esc(q.name)}. הוא עובד פעם אחת, ורק להזמנה הזאת.</p>
           <span class="copy-field"><input class="input" readonly value="${esc(link)}" aria-label="קישור לחוות דעת"><button class="mini-btn" type="button" data-act="copy" data-text="${esc(link)}" aria-label="העתקה">${I("copy")}</button></span>
-          <a class="btn btn-primary" href="${esc(T.waLink(q.phone, msg))}" target="_blank" rel="noopener">${I("chat")}שליחה לאורח בוואטסאפ</a></div></div>`);
+          <div class="btn-row"><a class="btn btn-primary" href="${esc(T.waLink(q.phone, msg))}" target="_blank" rel="noopener">${I("chat")}שליחה בוואטסאפ</a>${q.email && T.isLive ? `<button class="btn btn-line" type="button" data-act="review-mail" data-id="${esc(q.id)}">${I("mail")}שליחה במייל</button>` : ""}</div>
+          ${A.settings.auto_review_requests !== false && q.email ? `<p class="hint">אם לא תשלחו, האתר ישלח לאורח בקשה במייל אוטומטית ${Number(A.settings.review_delay_days) === 0 ? "ביום העזיבה" : "יום אחרי העזיבה"}.</p>` : ""}</div></div>`);
       } catch (ex) { fail("יצירת הקישור נכשלה", ex); }
     }
     /* advertisers & billing */
@@ -1266,14 +1657,21 @@
     else if (act === "app-approve") {
       const ap = A.applications.find((x) => x.id === id);
       try {
-        const adv = await T.store.saveAdvertiser({ name: ap.name, business: ap.business, phone: ap.phone, email: ap.email, plan: "basic", status: "trial", billing_model: "subscription", lead_price: 0, payments: [], start_date: T.iso(T.today()), end_date: T.iso(T.addDays(T.today(), 30)), notes: "נפתח מבקשת הצטרפות" });
+        const em = String(ap.email || "").trim().toLowerCase();
+        const trial = A.settings.trial_days === 0 ? 0 : Number(A.settings.trial_days) || 30;
+        const exist = em && A.advertisers.find((x) => String(x.email || "").toLowerCase() === em);
+        const adv = exist || await T.store.saveAdvertiser({ name: ap.name, business: ap.business, phone: ap.phone, email: em, plan: "basic", status: "trial", billing_model: "subscription", lead_price: 0, payments: [], start_date: T.iso(T.today()), end_date: T.iso(T.addDays(T.today(), trial)), notes: "נפתח מבקשת הצטרפות", tax_id: ap.tax_id || "", source: ap.verified ? "signup" : "admin", terms_version: ap.terms_version || "", terms_at: ap.terms_at || null });
         const l = await T.store.saveListing(Object.assign(blankListing(), { name: ap.business, type: ap.type || "zimmer", region: ap.region, settlement: ap.settlement, units: ap.units || 1, phone: ap.phone, whatsapp: ap.phone, email: ap.email, owner_id: adv.id, active: false, price_weekday: 0, description: ap.message || "", lat: T.regionOf(ap.region).lat, lng: T.regionOf(ap.region).lng }));
-        await T.store.updateApplication(id, { status: "approved" });
+        await T.store.updateApplication(id, { status: "approved", advertiser_id: adv.id });
+        /* מי שרק השאיר פרטים (בלי חשבון) מקבל גם הזמנה לבחירת סיסמה */
+        let invited = false;
+        if (T.isLive && em && !ap.verified) invited = !!(await T.store.account("invite", { id: adv.id }).catch(() => null));
+        T.store.mail("approved", adv.id, { invited }).catch(() => {});
         await reload();
-        T.toast("נוצרו לקוח ומתחם מוסתר. השלימו פרטים ושמרו.");
+        T.toast(em ? "נפתחו לקוח ומתחם מוסתר, והמארח קיבל מייל. השלימו פרטים ושמרו." : "נפתחו לקוח ומתחם מוסתר. אין למארח אימייל, אז עדכנו אותו בטלפון.");
         location.hash = "edit-" + l.id;
       } catch (ex) { fail("האישור נכשל", ex); }
-    } else if (act === "app-reject") save(() => T.store.updateApplication(id, { status: "rejected" }));
+    } else if (act === "app-reject") save(async () => { await T.store.updateApplication(id, { status: "rejected" }); T.store.mail("rejected", id).catch(() => {}); }, "הבקשה נדחתה. נשלח מייל מנומס למבקש.");
     /* articles */
     else if (act === "art-new") { A.editArticle = { title: "", excerpt: "", body: "", cover: "", published: false }; rerenderKeepScroll(); }
     else if (act === "art-edit") { e.preventDefault(); A.editArticle = T.clone(A.articles.find((a) => a.id === id)); render(); window.scrollTo(0, 0); }
@@ -1301,13 +1699,16 @@
   });
   document.addEventListener("input", (e) => {
     const t = e.target;
-    if (t.closest("#editor")) { readEditor(); markDirty(); }
+    if (t.name === "pw1") { const ul = t.form && t.form.querySelector(".pw-rules"); if (ul) ul.innerHTML = pwRules(t.value); }
+    else if (t.closest("#editor")) { readEditor(); markDirty(); }
+    else if (t.id === "af-q") { A.af.q = t.value.trim(); debouncedAdv(); }
     else if (t.id === "lf-q") { A.lf.q = t.value.trim(); debouncedList(); }
     else if (t.id === "qf-q") { A.qf.q = t.value.trim(); debouncedLeads(); }
   });
   const refocus = (sel) => { const i = $(sel); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } };
   const debouncedList = T.debounce(() => { rerenderKeepScroll(); refocus("#lf-q"); }, 250);
   const debouncedLeads = T.debounce(() => { rerenderKeepScroll(); refocus("#qf-q"); }, 250);
+  const debouncedAdv = T.debounce(() => { rerenderKeepScroll(); refocus("#af-q"); }, 250);
   document.addEventListener("change", async (e) => {
     const t = e.target;
     if (t.id === "lf-region") { A.lf.region = t.value; rerenderKeepScroll(); }
@@ -1315,6 +1716,7 @@
     else if (t.id === "qf-source") { A.qf.source = t.value; rerenderKeepScroll(); }
     else if (t.id === "pf-region") { A.pf.region = t.value; rerenderKeepScroll(); }
     else if (t.id === "sf-region") { A.sf.region = t.value; rerenderKeepScroll(); }
+    else if (t.id === "act-f") { A.actF = t.value; rerenderKeepScroll(); }
     else if (t.id === "place-photo" && t.files[0]) {
       const f = t.closest("form");
       try { T.toast("מעלה תמונה…"); f.photo.value = await T.store.uploadPhoto(t.files[0]); const img = document.createElement("img"); img.src = T.img(f.photo.value, 300); img.alt = ""; img.style.cssText = "width:120px;aspect-ratio:4/3;object-fit:cover;border-radius:10px"; const old = t.closest("div").querySelector("img"); if (old) old.replaceWith(img); else t.closest("div").prepend(img); T.toast("התמונה עלתה. לחצו שמירה."); }
@@ -1350,21 +1752,99 @@
     if (!kind) return;
     e.preventDefault();
     const fd = new FormData(form);
+    const email = String(fd.get("email") || "").trim().toLowerCase();
+    const busy = (on) => { const b = form.querySelector('[type="submit"]'); if (b) b.disabled = on; };
+    const code6 = () => String(fd.get("code") || "").replace(/\D/g, "");
+    if (["login", "forgot", "resend", "owner-login"].includes(kind)) {
+      A.lastEmail = email;
+      if (!T.validEmail(email)) { A.loginMsg = { tone: "warn", text: "כתובת האימייל לא נראית תקינה." }; render(); return; }
+      busy(true);
+    }
     if (kind === "login") {
-      try { await T.store.signInAdmin(fd.get("email").trim(), fd.get("password")); A.authed = await checkAuth(); if (A.authed) await reload(); render(); }
-      catch (ex) { A.loginMsg = { tone: "warn", text: "הכניסה נכשלה: " + ex.message }; render(); }
-    } else if (kind === "owner-login") {
-      try { await T.store.signInOwnerLink(fd.get("email").trim()); A.loginMsg = { tone: "ok", text: "שלחנו קישור כניסה ל־" + fd.get("email").trim() + ". פתחו אותו מהמכשיר הזה." }; }
-      catch (ex) { A.loginMsg = { tone: "warn", text: "השליחה נכשלה: " + ex.message }; }
+      if (!fd.get("password")) { busy(false); A.loginMsg = { tone: "warn", text: "חסרה סיסמה." }; render(); return; }
+      try { await T.store.signInPassword(email, fd.get("password")); A.loginMsg = null; A.authed = await checkAuth(); if (A.authed) await reload(); render(); }
+      catch (ex) { A.loginMsg = { tone: "warn", text: T.authError(ex), resend: /not confirmed|not_confirmed/i.test(String(ex.message) + " " + String(ex.code || "")) ? email : "" }; render(); }
+    } else if (kind === "forgot") {
+      try { await T.store.sendPasswordReset(email); A.loginMode = "login"; A.loginMsg = { tone: "ok", text: `אם יש חשבון עם ${email}, שלחנו אליו קישור לבחירת סיסמה חדשה. הקישור בתוקף לשעה. לא הגיע תוך כמה דקות? בדקו בספאם.` }; }
+      catch (ex) { A.loginMsg = { tone: "warn", text: T.authError(ex) }; }
       render();
+    } else if (kind === "resend") {
+      try { await T.store.resendSignup(email); A.loginMode = "login"; A.loginMsg = { tone: "ok", text: `שלחנו מייל אימות חדש ל־${email}. לוחצים על הקישור שבו, וממשיכים מכאן.` }; }
+      catch (ex) { A.loginMsg = { tone: "warn", text: T.authError(ex) }; }
+      render();
+    } else if (kind === "owner-login") {
+      try { await T.store.signInOwnerLink(email); A.loginMsg = { tone: "ok", text: `שלחנו קישור כניסה ל־${email}. פתחו אותו במכשיר הזה.` }; }
+      catch (ex) { A.loginMsg = { tone: "warn", text: T.authError(ex) }; }
+      render();
+    } else if (kind === "set-password" || kind === "change-password") {
+      const p1 = String(fd.get("pw1") || ""), p2 = String(fd.get("pw2") || "");
+      const bad = T.passwordIssues(p1);
+      if (bad.length) { T.toast("הסיסמה צריכה " + bad.join(", "), "err"); return; }
+      if (p1 !== p2) { T.toast("שתי הסיסמאות לא זהות", "err"); return; }
+      busy(true);
+      try {
+        await T.store.updatePassword(p1);
+        form.reset();
+        if (kind === "set-password") { A.needPassword = false; A.invite = false; A.gate = ""; A.loginMsg = null; A.authed = await checkAuth(); if (A.authed) await reload(); render(); T.toast("הסיסמה נשמרה. מעכשיו נכנסים איתה."); }
+        else { busy(false); const ul = form.querySelector(".pw-rules"); if (ul) ul.innerHTML = pwRules(""); T.toast(T.isLive ? "הסיסמה עודכנה" : "במצב הדגמה אין סיסמאות"); }
+      } catch (ex) { busy(false); T.toast(T.authError(ex), "err"); }
+    } else if (kind === "mfa") {
+      const code = code6();
+      if (code.length !== 6) { T.toast("הקוד הוא 6 ספרות", "err"); return; }
+      busy(true);
+      try { await T.store.mfaVerify(A.mfaFactor.id, code); A.gate = ""; A.loginMsg = null; A.authed = await checkAuth(); if (A.authed) await reload(); render(); }
+      catch (ex) { A.loginMsg = { tone: "warn", text: T.authError(ex) }; render(); }
+    } else if (kind === "mfa-enroll") {
+      const code = code6();
+      if (code.length !== 6) { T.toast("הקוד הוא 6 ספרות", "err"); return; }
+      busy(true);
+      try { await T.store.mfaVerify(A.enroll.id, code); await T.store.adminSetMfa(true); A.enroll = null; A.acct = null; render(); T.toast("האימות הדו-שלבי הופעל. מעכשיו בכל כניסה תתבקשו קוד מהאפליקציה."); }
+      catch (ex) { busy(false); T.toast(T.authError(ex), "err"); }
+    } else if (kind === "profile") {
+      const pr = { name: String(fd.get("name") || "").trim(), phone: String(fd.get("phone") || "").trim(), address: String(fd.get("address") || "").trim(), tax_id: String(fd.get("tax_id") || "").replace(/\D/g, ""), prefs: { notify_leads: !!fd.get("notify_leads"), notify_reviews: !!fd.get("notify_reviews") } };
+      if (!pr.name) { T.toast("חסר שם איש קשר", "err"); return; }
+      if (!T.validPhone(pr.phone)) { T.toast("מספר הטלפון לא נראה תקין", "err"); return; }
+      if (pr.tax_id && !/^\d{8,9}$/.test(pr.tax_id)) { T.toast("ח.פ / ע.מ הוא 9 ספרות", "err"); return; }
+      busy(true);
+      try { await T.store.updateMyProfile(pr); await reload(); rerenderKeepScroll(); T.toast("הפרטים נשמרו"); } catch (ex) { busy(false); fail("השמירה נכשלה", ex); }
+    } else if (kind === "add-admin") {
+      if (!T.validEmail(email)) { T.toast("כתובת האימייל לא נראית תקינה", "err"); return; }
+      busy(true);
+      try {
+        await T.store.addAdmin(email);
+        let msg = "נוסף לצוות הניהול";
+        try { const r = await T.store.account("invite_admin", { email }); msg += r.sent === "reset" ? ". נשלח אליו מייל לבחירת סיסמה." : ". נשלחה אליו הזמנה במייל."; } catch (e2) { msg += ". המייל לא נשלח (" + e2.message + "): המנהל ייכנס עם ״שכחתי סיסמה״."; }
+        A.acct = null; render(); T.toast(msg);
+      } catch (ex) { busy(false); fail("ההוספה נכשלה", ex); }
+    } else if (kind === "payment") {
+      const a = A.advertisers.find((x) => x.id === form.dataset.id);
+      const amount = Math.round(Number(fd.get("amount")));
+      if (!a || !(amount > 0)) { T.toast("חסר סכום", "err"); return; }
+      const payments = (a.payments || []).concat({ month: fd.get("month"), amount, method: fd.get("method") || "", note: String(fd.get("note") || "").trim().slice(0, 80), paid_at: new Date().toISOString() });
+      busy(true);
+      try { await T.store.saveAdvertiser({ id: a.id, payments }); await reload(); rerenderKeepScroll(); T.toast("התשלום נרשם"); } catch (ex) { busy(false); fail("השמירה נכשלה", ex); }
     } else if (kind === "listing") saveEditor();
     else if (kind === "advertiser") {
       const a = Object.fromEntries(fd.entries());
+      const invite = !!a.invite;
+      delete a.invite;
       if (!a.business.trim() || !a.name.trim()) { T.toast("חסר שם עסק או איש קשר", "err"); return; }
+      a.email = String(a.email || "").trim().toLowerCase();
+      a.tax_id = String(a.tax_id || "").replace(/\D/g, "");
+      if (a.email && !T.validEmail(a.email)) { T.toast("כתובת האימייל לא נראית תקינה", "err"); return; }
+      if (a.phone && !T.validPhone(a.phone)) { T.toast("מספר הטלפון לא נראה תקין", "err"); return; }
+      if (a.end_date && a.start_date && a.end_date < a.start_date) { T.toast("תאריך הסיום לפני תאריך ההתחלה", "err"); return; }
+      if (a.email && A.advertisers.some((x) => x.id !== a.id && String(x.email || "").toLowerCase() === a.email)) { T.toast("כבר יש לקוח עם האימייל הזה. האימייל הוא הכניסה לממשק, ולכן הוא ייחודי.", "err"); return; }
       a.lead_price = Number(a.lead_price) || 0;
-      if (!a.id) { delete a.id; a.payments = []; }
-      try { await T.store.saveAdvertiser(a); $("#modal").remove(); await reload(); rerenderKeepScroll(); T.toast("נשמר"); }
-      catch (ex) { fail("השמירה נכשלה", ex); }
+      if (!a.id) { delete a.id; a.payments = []; a.source = "admin"; }
+      busy(true);
+      try {
+        const saved = await T.store.saveAdvertiser(a);
+        $("#modal").remove();
+        let msg = "נשמר";
+        if (invite && saved && saved.email && T.isLive) { try { await T.store.account("invite", { id: saved.id }); msg = "הלקוח נוסף ונשלחה אליו הזמנה ל־" + saved.email; } catch (e2) { msg = "הלקוח נשמר, אבל ההזמנה לא נשלחה: " + e2.message; } }
+        await reload(); rerenderKeepScroll(); T.toast(msg);
+      } catch (ex) { busy(false); if (/23505|duplicate key/i.test(String(ex.code) + ex.message)) T.toast("כבר יש לקוח עם האימייל הזה", "err"); else fail("השמירה נכשלה", ex); }
     } else if (kind === "place") {
       const pl = Object.fromEntries(fd.entries());
       if (!String(pl.name || "").trim()) { T.toast("חסר שם למקום", "err"); return; }
@@ -1404,6 +1884,17 @@
   window.addEventListener("beforeunload", (e) => { if (Object.values(A.drafts).some((d) => d._dirty)) { e.preventDefault(); e.returnValue = ""; } });
 
   async function boot() {
+    /* קישורים מהמייל: איפוס סיסמה או הזמנה → בחירת סיסמה; קישור שפג תוקפו → הסבר ברור ומה עושים */
+    if (T.isLive) {
+      A.needPassword = T.authLinkType === "recovery" || T.authLinkType === "invite";
+      A.invite = T.authLinkType === "invite";
+      const qs = new URLSearchParams(location.search);
+      if (T.authLinkError) {
+        A.loginMsg = { tone: "warn", text: T.authError({ message: T.authLinkError }) };
+        A.loginMode = qs.get("reset") ? "forgot" : qs.get("welcome") ? "resend" : "login";
+        try { history.replaceState(null, "", location.pathname); } catch (e) {}
+      } else if (qs.get("reset") || qs.get("welcome")) { try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) {} }
+    }
     render();
     try { A.settings = await T.store.getSettings(); T.SETTINGS = A.settings; } catch (e) {}
     if (!IS_ADMIN && !T.isLive) A.advertisers = await T.store.listAdvertisers();
@@ -1412,10 +1903,25 @@
     A.ready = true;
     render();
     T.store.onChange(async () => { if (!A.authed || A.editId || A.editArticle) return; await reload(); if (!$("#modal")) rerenderKeepScroll(); });
+    /* סנכרון: כשחוזרים ללשונית, וכל 3 דקות כשהיא פתוחה, טוענים מחדש פניות, לקוחות ובקשות שנוספו בינתיים
+       (לא באמצע עריכה, ולא כשחלון פתוח או כשמקלידים) */
+    let lastSync = Date.now();
+    const sync = async (force) => {
+      if (!A.authed || document.hidden || A.editId || A.editArticle || $("#modal") || $("#deny")) return;
+      if (!force && Date.now() - lastSync < 25e3) return;
+      const a = document.activeElement;
+      if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.closest("form")) return;
+      lastSync = Date.now();
+      try { await reload(); rerenderKeepScroll(); } catch (e) {}
+    };
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) sync(false); });
+    setInterval(() => sync(true), 180e3);
     if (T.isLive && T.store.client) T.store.client.auth.onAuthStateChange(async (ev, session) => {
-      if (ev === "SIGNED_IN" && !A.authed) { A.authed = await checkAuth(); if (A.authed) await reload(); render(); }
+      if (ev === "PASSWORD_RECOVERY") { A.needPassword = true; A.authed = false; A.gate = "password"; A.email = (session && session.user && session.user.email) || A.email; render(); return; }
+      if (ev === "SIGNED_IN" && !A.authed && A.gate !== "mfa") { A.authed = await checkAuth(); if (A.authed) await reload(); render(); }
       /* יציאה בלשונית אחרת, או התחברות של משתמש אחר באותו דפדפן: לא ממשיכים לעבוד בשם החשבון הקודם */
       else if (ev === "SIGNED_OUT" && A.authed) { A.authed = false; A.loginMsg = { tone: "info", text: "החשבון התנתק. היכנסו שוב כדי להמשיך." }; render(); }
+      else if (ev === "SIGNED_OUT" && A.gate) { A.gate = ""; A.needPassword = false; render(); }
       else if (A.authed && session && session.user && A.email && session.user.email !== A.email) { A.authed = await checkAuth(); if (A.authed) await reload(); else if (!A.loginMsg) A.loginMsg = { tone: "warn", text: "בדפדפן הזה התחבר עכשיו חשבון אחר. היכנסו שוב." }; render(); }
     });
   }

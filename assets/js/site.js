@@ -283,7 +283,7 @@
       <div><h4>סוגי אירוח</h4><ul>${T.TYPES.map((t) => `<li><a href="#type-${t.key}">${esc(t.plural)}</a></li>`).join("")}<li><a href="#deals">דילים ודקה 90</a></li><li><a href="#weekend">פנויים לסופ״ש הקרוב</a></li></ul></div>
       <div><h4>מידע</h4><ul>
         <li><a href="#about">אודות</a></li><li><a href="#contact">צרו קשר</a></li><li><a href="#find">מצא לי צימר</a></li><li><a href="#places">אטרקציות ומסעדות</a></li><li><a href="#magazine">מגזין</a></li><li><a href="#top">המומלצים ביותר</a></li>
-        <li><a href="#join">פרסום מתחם באתר</a></li><li><a href="owner.html">כניסת מארחים</a></li><li><a href="#accessibility">הצהרת נגישות</a></li><li><a href="#terms">תנאי שימוש, פרטיות ועוגיות</a></li></ul></div>
+        <li><a href="#join">פרסום מתחם באתר</a></li><li><a href="owner.html">כניסת מארחים</a></li><li><a href="#terms-hosts">תנאי פרסום למארחים</a></li><li><a href="#accessibility">הצהרת נגישות</a></li><li><a href="#terms">תנאי שימוש, פרטיות ועוגיות</a></li></ul></div>
       <div class="legal"><span>© ${new Date().getFullYear()} ${esc(s.site_name)} – ${esc(s.site_tagline)}</span><a href="admin.html">ניהול האתר</a></div></div>`;
   }
   function floating() {
@@ -318,7 +318,7 @@
   }
   function newsletterBand() {
     return `<section class="wrap page"><div class="news-band"><div><span class="eyebrow">דילים למייל</span><h2>דקה 90 ומבצעים, לפני כולם</h2><p>פעם בשבוע: מתחמים שהתפנו לסופ״ש הקרוב והנחות שמארחים פותחים רק לנרשמים.</p></div>
-      <form class="news-form" data-form="subscribe" novalidate><label class="field"><span>אימייל</span><input class="input" name="email" type="email" dir="ltr" autocomplete="email" required placeholder="name@example.com"></label><label class="field"><span>אזור מועדף (לא חובה)</span><select class="select" name="region">${placeOptions("", "כל הארץ")}</select></label><button class="btn btn-primary btn-lg" type="submit">${I("send")}הרשמה</button><p class="hint">אפשר להסיר את עצמכם בכל רגע. לפרטים: <a href="#terms">פרטיות</a>.</p></form></div></section>`;
+      <form class="news-form" data-form="subscribe" novalidate>${HP}<label class="field"><span>אימייל</span><input class="input" name="email" type="email" dir="ltr" autocomplete="email" required placeholder="name@example.com"></label><label class="field"><span>אזור מועדף (לא חובה)</span><select class="select" name="region">${placeOptions("", "כל הארץ")}</select></label><button class="btn btn-primary btn-lg" type="submit">${I("send")}הרשמה</button><p class="hint">בהרשמה אתם מאשרים לקבל מאיתנו דיוור שיווקי במייל. נשלח מייל לאישור, ואפשר להסיר את עצמכם בכל רגע. <a href="#terms">פרטיות</a></p></form></div></section>`;
   }
   function viewHome() {
     const L = S.listings;
@@ -763,7 +763,7 @@
       <label class="field"><span>אימייל (לא חובה, לאישור בכתב ולאזור האישי)</span><input class="input" name="email" type="email" autocomplete="email" dir="ltr" style="text-align:right" value="${esc(g.email || "")}"></label>
       <label class="field"><span>הערות למארחים</span><textarea class="textarea" name="message" rows="2" style="min-height:70px" placeholder="יום הולדת, מיטת תינוק, שעת הגעה…"></textarea></label>
       <label class="check"><input type="checkbox" name="remember" ${S.guest ? "checked" : ""}><span>לזכור את הפרטים שלי בדפדפן הזה, כדי שלא אצטרך למלא שוב</span></label>
-      <label class="check"><input type="checkbox" name="consent" required><span>אני מאשר/ת להעביר את הפרטים למארחי ${esc(l.name)} לצורך חזרה אליי (<a href="#terms">פרטיות</a>)</span></label>
+      ${HP}<label class="check"><input type="checkbox" name="consent" required><span>אני מאשר/ת להעביר את הפרטים למארחי ${esc(l.name)} לצורך חזרה אליי (<a href="#terms">פרטיות</a>)</span></label>
       <p class="err" id="book-err" role="alert"></p>
       <button class="btn btn-primary btn-lg btn-block" type="submit">שליחת בקשת הזמנה</button>
       <a class="btn btn-line btn-block" href="${esc(T.waLink(contactWA(l), waText(l, { check_in: st.ci, check_out: st.co, guests: st.rooms.reduce((s2, r) => s2 + r.guests, 0), children: st.rooms.reduce((s2, r) => s2 + r.children, 0), unit_name: units.length > 1 ? st.rooms.map((r) => T.unitOf(l, r.unitId).name).join(", ") : "" })))}" target="_blank" rel="noopener" data-track="w">${I("chat")}שאלה למארחים בוואטסאפ</a>
@@ -1029,6 +1029,9 @@
     S.bigMap = mountMap($("#big-map"), [l], { places: S.places.filter((p) => p.lat != null && T.distKm(c, p) <= 30), zoom: 12 });
   }
 
+  /* מלכודת לרובוטים: שדה שאנשים לא רואים ולא ממלאים */
+  const HP = `<div class="hp" aria-hidden="true"><label>אתר אינטרנט<input name="website" tabindex="-1" autocomplete="off"></label></div>`;
+
   /* ---------------------------------------------------------------- join */
   function viewJoin() {
     const p = S.settings.plan_prices || {};
@@ -1036,7 +1039,7 @@
       <div class="join-hero">
         <div class="join-copy"><span class="eyebrow">למארחים</span><h1>פרסמו את המתחם שלכם ב${esc(S.settings.site_name)}</h1>
           <p>כרטיס מתחם עם גלריה, יחידות, יומן זמינות ומחירים לאמצע שבוע, סופ״ש וחגים. אורחים שולחים בקשה עם תאריכים ומספר אורחים, והיא מגיעה אליכם ישירות לוואטסאפ ולמייל. אנחנו לא לוקחים עמלה על הזמנות.</p>
-          <div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn btn-primary btn-lg" href="#join-form">השארת פרטים</a><a class="btn btn-line btn-lg" href="owner.html">כבר מפרסמים? כניסה</a></div></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn btn-primary btn-lg" href="#join-form">פתיחת חשבון מארח</a><a class="btn btn-line btn-lg" href="owner.html">כבר מפרסמים? כניסה</a></div></div>
         <div class="pic"><img src="assets/img/photos/join.jpg" alt=""></div>
       </div>
       <section class="section" aria-labelledby="h-plans">${head("חבילות", `<span id="h-plans">חבילות פרסום</span>`, "מחיר חודשי לכל מתחם, לפני מע״מ. אפשר להתחיל בחודש ניסיון, או לשלם רק על פניות.")}
@@ -1045,22 +1048,44 @@
       <section class="section" id="join-form" aria-labelledby="h-jf"><div class="form-card" id="join-card">${joinForm()}</div></section>
     </div>`;
   }
+  /* הרשמה עצמית של מארח: חשבון עם סיסמה, אימות מייל, ואז פתיחת לקוח וממשק מארחים.
+     מי שמעדיף שיחזרו אליו – משאיר פרטים בלבד (בקשת הצטרפות רגילה) */
   function joinForm() {
-    return `<div><span class="eyebrow">הצטרפות</span><h2 id="h-jf" style="font-size:2.2rem;margin-top:8px">השאירו פרטים ונחזור אליכם</h2><p class="muted" style="margin-top:6px;font-weight:300">נעבור יחד על המתחם, נבנה את הכרטיס ונפתח לכם גישה לממשק המארחים.</p></div>
+    const acc = S.joinMode !== "call";
+    const trial = Number(S.settings.trial_days) || 0;
+    const auto = S.settings.auto_open_hosts !== false;
+    return `<div><span class="eyebrow">הצטרפות</span><h2 id="h-jf" style="font-size:2.2rem;margin-top:8px">${acc ? "פותחים חשבון מארח" : "השאירו פרטים ונחזור אליכם"}</h2>
+        <p class="muted" style="margin-top:6px;font-weight:300">${acc ? `ממלאים פרטים, מאשרים את האימייל, ונכנסים לממשק המארחים כדי להעלות תמונות, מחירים ויומן.${auto && trial ? ` ${trial} ימי ניסיון בלי התחייבות.` : auto ? "" : " צוות האתר יאשר את החשבון בהקדם."}` : "נעבור יחד על המתחם, נבנה את הכרטיס ונפתח לכם גישה לממשק המארחים."}</p></div>
+      <div class="seg-tabs join-mode" role="group" aria-label="איך להצטרף"><button type="button" data-act="join-mode" data-v="account" aria-pressed="${acc}">פתיחת חשבון עכשיו</button><button type="button" data-act="join-mode" data-v="call" aria-pressed="${!acc}">מעדיפים שנחזור אליכם</button></div>
       <form class="form-grid" data-form="join" novalidate>
-        <label class="field"><span>שם מלא</span><input class="input" name="name" autocomplete="name" required></label>
-        <label class="field"><span>טלפון</span><input class="input" name="phone" type="tel" dir="ltr" style="text-align:right" autocomplete="tel" required></label>
-        <label class="field"><span>אימייל</span><input class="input" name="email" type="email" dir="ltr" style="text-align:right" autocomplete="email"></label>
-        <label class="field"><span>שם המתחם</span><input class="input" name="business" required></label>
-        <label class="field"><span>יישוב</span><input class="input" name="settlement" required></label>
+        <label class="field"><span>שם מלא</span><input class="input" name="name" autocomplete="name" required maxlength="80"></label>
+        <label class="field"><span>טלפון נייד</span><input class="input" name="phone" type="tel" dir="ltr" style="text-align:right" autocomplete="tel" required></label>
+        <label class="field"><span>אימייל${acc ? " (הכניסה לחשבון)" : " (לא חובה)"}</span><input class="input" name="email" type="email" dir="ltr" style="text-align:right" autocomplete="email" ${acc ? "required" : ""}></label>
+        <label class="field"><span>שם המתחם</span><input class="input" name="business" required maxlength="80"></label>
+        <label class="field"><span>יישוב</span><input class="input" name="settlement" required maxlength="40"></label>
         <label class="field"><span>אזור</span><select class="select" name="region">${T.REGIONS.map((r) => `<option value="${r.key}">${esc(r.name)}</option>`).join("")}</select></label>
         <label class="field"><span>סוג אירוח</span><select class="select" name="type">${T.TYPES.map((t) => `<option value="${t.key}">${esc(t.name)}</option>`).join("")}</select></label>
-        <label class="field"><span>מספר יחידות</span><input class="input" name="units" type="number" min="1" value="1" inputmode="numeric"></label>
-        <label class="field span2"><span>ספרו לנו בקצרה על המקום</span><textarea class="textarea" name="message"></textarea></label>
-        <label class="check span2"><input type="checkbox" name="consent" required><span>אני מאשר/ת שתחזרו אליי בטלפון או בוואטסאפ בנוגע לפרסום</span></label>
+        <label class="field"><span>מספר יחידות</span><input class="input" name="units" type="number" min="1" max="500" value="1" inputmode="numeric"></label>
+        ${acc ? `<label class="field"><span>ח.פ / ע.מ (לחשבוניות, לא חובה עכשיו)</span><input class="input" name="tax_id" inputmode="numeric" dir="ltr" style="text-align:right" maxlength="12"></label><span></span>
+        <label class="field"><span>סיסמה</span><input class="input" name="password" type="password" dir="ltr" autocomplete="new-password" required minlength="8"></label>
+        <label class="field"><span>שוב, לאימות</span><input class="input" name="password2" type="password" dir="ltr" autocomplete="new-password" required minlength="8"></label>
+        <ul class="todo pw-rules span2" id="join-pw" aria-live="polite">${pwRulesHTML("")}</ul>` : ""}
+        <label class="field span2"><span>ספרו לנו בקצרה על המקום (לא חובה)</span><textarea class="textarea" name="message" maxlength="2000"></textarea></label>
+        ${HP}
+        ${acc ? `<label class="check span2"><input type="checkbox" name="consent" required><span>קראתי ואני מסכים/ה ל<a href="#terms-hosts" target="_blank" rel="noopener">תנאי הפרסום למארחים</a> ול<a href="#terms" target="_blank" rel="noopener">מדיניות הפרטיות</a></span></label>`
+          : `<label class="check span2"><input type="checkbox" name="consent" required><span>אני מאשר/ת שתחזרו אליי בטלפון או בוואטסאפ בנוגע לפרסום (<a href="#terms">פרטיות</a>)</span></label>`}
+        <label class="check span2"><input type="checkbox" name="marketing"><span>אשמח לקבל במייל טיפים ומבצעים למארחים (פרסומת; אפשר להסיר בכל רגע)</span></label>
         <p class="err span2" id="join-err" role="alert"></p>
-        <div class="span2"><button class="btn btn-primary btn-lg" type="submit">שליחת פרטים</button></div>
+        <div class="span2"><button class="btn btn-primary btn-lg" type="submit">${acc ? `${I("check")}פתיחת חשבון` : "שליחת פרטים"}</button>${acc ? ` <a class="link-more" href="owner.html" style="margin-inline-start:12px">כבר יש לכם חשבון? כניסה</a>` : ""}</div>
       </form>`;
+  }
+  const PW_RULES = ["לפחות 8 תווים", "לפחות אות אחת", "לפחות ספרה אחת"];
+  const pwRulesHTML = (v) => { const bad = T.passwordIssues(v); return PW_RULES.map((r) => { const ok = !!v && !bad.includes(r); return `<li class="${ok ? "ok" : ""}">${I(ok ? "check" : "info")}${r}</li>`; }).join(""); };
+  function joinSent(email, existing) {
+    if (existing) return `<div class="book-ok"><span class="badge-ok">${I("user")}</span><h3 style="font-family:var(--f-display);font-weight:400;font-size:2rem">כבר יש חשבון עם האימייל הזה</h3><p class="muted">נכנסים לממשק המארחים עם הסיסמה. שכחתם אותה? בדף הכניסה לוחצים ״שכחתי סיסמה״ ומקבלים קישור למייל.</p><a class="btn btn-primary" href="owner.html">לכניסת מארחים</a></div>`;
+    return `<div class="book-ok"><span class="badge-ok">${I("mail")}</span><h3 style="font-family:var(--f-display);font-weight:400;font-size:2rem">נשאר רק לאשר את האימייל</h3>
+      <p class="muted">שלחנו ל־<b dir="ltr">${esc(email)}</b> קישור לאישור. לוחצים עליו, ומגיעים ישר לממשק המארחים כדי להשלים את כרטיס המתחם.</p>
+      <p class="hint">לא הגיע תוך כמה דקות? בדקו בספאם או בקידומי מכירות, או <button class="link-btn" type="button" data-act="join-resend" data-email="${esc(email)}">שלחו לי שוב</button>.</p></div>`;
   }
 
   /* ---------------------------------------------------------------- מצא לי צימר */
@@ -1091,7 +1116,7 @@
           <label class="field"><span>שם מלא</span><input class="input" name="name" autocomplete="name" value="${esc(g.name || "")}" required></label>
           <label class="field"><span>טלפון נייד</span><input class="input" name="phone" type="tel" dir="ltr" style="text-align:right" autocomplete="tel" value="${esc(g.phone || "")}" required></label>
           <label class="field span2"><span>אימייל (לא חובה)</span><input class="input" name="email" type="email" dir="ltr" style="text-align:right" autocomplete="email" value="${esc(g.email || "")}"></label>
-          <label class="check span2"><input type="checkbox" name="consent" required><span>אני מאשר/ת שתחזרו אליי בטלפון או בוואטסאפ עם הצעות (<a href="#terms">פרטיות</a>)</span></label>
+          ${HP}<label class="check span2"><input type="checkbox" name="consent" required><span>אני מאשר/ת שתחזרו אליי בטלפון או בוואטסאפ עם הצעות (<a href="#terms">פרטיות</a>)</span></label>
           <p class="err span2" id="find-err" role="alert"></p>
           <div class="span2"><button class="btn btn-primary btn-lg" type="submit">${I("send")}שליחה</button></div>
         </div>
@@ -1126,7 +1151,7 @@
     else if (tab === "viewed") body = viewed.length ? `<div class="toolbar-site"><button class="btn btn-ghost btn-sm" type="button" data-act="clear-viewed">${I("trash")}ניקוי הרשימה</button></div>${grid(viewed)}` : emptyState("עוד לא צפיתם במתחמים", "מתחמים שתפתחו יופיעו כאן, כדי שיהיה קל לחזור אליהם.", `<a class="btn btn-primary" href="#search">לחיפוש</a>`);
     else if (tab === "searches") body = S.searches.length ? `<div class="toolbar-site"><button class="btn btn-ghost btn-sm" type="button" data-act="clear-searches">${I("trash")}ניקוי</button></div><ul class="search-list">${S.searches.map((s, i) => `<li><span><b>${esc(s.label)}</b><small>${esc(s.dates || "בלי תאריכים")} · ${T.fmtStamp(s.at)}</small></span><button class="btn btn-line btn-sm" type="button" data-act="redo-search" data-i="${i}">${I("search")}חיפוש שוב</button></li>`).join("")}</ul>` : emptyState("אין חיפושים אחרונים", "חיפושים עם אזור, תאריכים או מאפיינים נשמרים כאן.", `<a class="btn btn-primary" href="#search">לחיפוש</a>`);
     else if (tab === "leads") body = meLeadsHTML();
-    else body = `<div class="form-card" style="max-width:640px"><h2 style="font-size:2rem">דילים ודקה 90 למייל</h2><p class="muted">נשלח מתחמים שהתפנו לסופ״ש הקרוב, והנחות שמארחים פותחים לנרשמים.</p><form class="news-form" data-form="subscribe" novalidate><label class="field"><span>אימייל</span><input class="input" name="email" type="email" dir="ltr" required value="${esc((S.guest || {}).email || "")}"></label><label class="field"><span>אזור מועדף</span><select class="select" name="region">${placeOptions("", "כל הארץ")}</select></label><button class="btn btn-primary" type="submit">${I("send")}הרשמה</button></form></div>`;
+    else body = `<div class="form-card" style="max-width:640px"><h2 style="font-size:2rem">דילים ודקה 90 למייל</h2><p class="muted">נשלח מתחמים שהתפנו לסופ״ש הקרוב, והנחות שמארחים פותחים לנרשמים.</p><form class="news-form" data-form="subscribe" novalidate>${HP}<label class="field"><span>אימייל</span><input class="input" name="email" type="email" dir="ltr" required value="${esc((S.guest || {}).email || "")}"></label><label class="field"><span>אזור מועדף</span><select class="select" name="region">${placeOptions("", "כל הארץ")}</select></label><button class="btn btn-primary" type="submit">${I("send")}הרשמה</button></form></div>`;
     return `<div class="view wrap page"><div class="page-head"><span class="eyebrow">${I("user")} האזור האישי</span><h1>${tab === "saved" ? "המועדפים שלי" : (tabs.find((x) => x[0] === tab) || tabs[0])[1]}</h1><p>${T.isLive ? "הרשימות נשמרות בדפדפן הזה. כדי לראות את הפניות שלכם מכל מכשיר, התחברו עם האימייל." : "במצב הדגמה הכל נשמר בדפדפן הזה בלבד."}</p></div>
       <nav class="seg-tabs me-tabs" aria-label="האזור האישי">${tabs.map(([k, t, n]) => `<a href="#me-${k}" aria-pressed="${tab === k}" role="button">${t}${n ? ` · ${n}` : ""}</a>`).join("")}</nav>
       <div style="margin-top:22px">${body}</div></div>`;
@@ -1165,7 +1190,7 @@
         <label class="field"><span>טלפון</span><input class="input" name="phone" type="tel" dir="ltr" style="text-align:right" autocomplete="tel" required value="${esc((S.guest || {}).phone || "")}"></label>
         <label class="field span2"><span>אימייל (לא חובה)</span><input class="input" name="email" type="email" dir="ltr" style="text-align:right" autocomplete="email"></label>
         <label class="field span2"><span>הודעה</span><textarea class="textarea" name="message" required></textarea></label>
-        <label class="check span2"><input type="checkbox" name="consent" required><span>אני מאשר/ת שתחזרו אליי (<a href="#terms">פרטיות</a>)</span></label>
+        ${HP}<label class="check span2"><input type="checkbox" name="consent" required><span>אני מאשר/ת שתחזרו אליי (<a href="#terms">פרטיות</a>)</span></label>
         <p class="err span2" id="ct-err" role="alert"></p><div class="span2"><button class="btn btn-primary btn-lg" type="submit">${I("send")}שליחה</button></div></div></form></div></div>`;
   }
 
@@ -1208,6 +1233,17 @@
   }
 
   /* ---------------------------------------------------------------- text pages */
+  /* אישור הרשמה לדיוור (הסכמה כפולה) והסרה בלחיצה אחת, מהקישורים שבמייל */
+  async function viewSubLink(hash) {
+    const confirm = hash.startsWith("sub-confirm-");
+    const token = hash.slice(12);
+    let ok = false;
+    try { ok = /^[a-f0-9]{16,64}$/i.test(token) && (confirm ? await T.store.confirmSubscriber(token) : await T.store.unsubscribe(token)); } catch (e) { ok = false; }
+    const body = !ok ? `<h1 style="font-size:2.2rem">הקישור לא תקין</h1><p class="muted">ייתכן שהוא הועתק חלקית. אפשר להירשם שוב בתחתית האתר, או לכתוב לנו.</p><a class="btn btn-line" href="#contact">צרו קשר</a>`
+      : confirm ? `<span class="badge-ok">${I("check")}</span><h1 style="font-size:2.2rem">נרשמתם לדילים!</h1><p class="muted">מעכשיו תקבלו מאיתנו דילים, דקה 90 ומתחמים שהתפנו לסופ״ש. בכל מייל יש קישור להסרה.</p><a class="btn btn-primary" href="#deals">לדילים של השבוע</a>`
+      : `<span class="badge-ok">${I("check")}</span><h1 style="font-size:2.2rem">הוסרתם מרשימת הדיוור</h1><p class="muted">לא נשלח לכם יותר מיילים שיווקיים. התחרטתם? אפשר להירשם שוב בתחתית האתר.</p><a class="btn btn-line" href="#">לדף הבית</a>`;
+    return `<div class="view wrap page"><div class="form-card book-ok" style="max-width:620px;margin:30px auto">${body}</div></div>`;
+  }
   function viewText(kind) {
     const s = S.settings;
     const contact = [s.phone && `טלפון: <span dir="ltr">${esc(s.phone)}</span>`, s.email && `אימייל: ${esc(s.email)}`].filter(Boolean).join(" · ") || "פרטי הקשר יעודכנו בקרוב.";
@@ -1229,9 +1265,26 @@
       terms: `<span class="eyebrow">מידע משפטי</span><h1>תנאי שימוש, פרטיות ועוגיות</h1>
         <h2>השירות</h2><p>${esc(s.site_name)} מציג מתחמי אירוח שמפרסמים בעליהם. המידע על כל מתחם (תיאור, מחירים, זמינות, מדיניות ביטול ותמונות) נמסר על ידי המארחים. ההזמנה, התשלום ותנאי הביטול נקבעים ישירות בין האורחים למארחים, ובהתאם לחוק הגנת הצרכן.</p>
         <h2>מחירים, הטבות וזמינות</h2><p>המחירים באתר מתעדכנים על ידי המארחים ועשויים להשתנות, והמחיר המוצג במחשבון הוא הערכה. הטבות (מילואים, חיילים, סטודנטים, גיל הזהב ומפונים) וקופונים כפופים לאישור המארחים ולהצגת אישור מתאים. המחיר הסופי והזמינות מאושרים רק מול המארחים.</p>
-        <h2>פרטיות</h2><p>כששולחים בקשת הזמנה, בקשת ״מצא לי צימר״, חוות דעת, דיווח או טופס הצטרפות, אנחנו שומרים את השם, הטלפון, האימייל (אם נמסר) ופרטי הבקשה, ומעבירים אותם למארחי המתחם שבחרתם כדי שיחזרו אליכם. נרשמים לדילים במייל יכולים לבקש הסרה בכל רגע. איננו מוכרים מידע לצד שלישי.</p>
+        <h2>פרטיות</h2><p>${esc(s.site_name)} אחראי על המידע שנאסף באתר. כששולחים בקשת הזמנה, בקשת ״מצא לי צימר״, חוות דעת, דיווח, הרשמה לדיוור או הרשמת מארח, אנחנו שומרים את מה שמילאתם בטופס: שם, טלפון, אימייל (אם נמסר) ופרטי הבקשה.</p>
+        <ul><li><b>למה:</b> כדי להעביר את הבקשה למארחי המתחם שבחרתם ושיחזרו אליכם, לשלוח לכם אישור ועדכונים על הבקשה, ולמנוע ספאם והונאות.</li>
+          <li><b>מי מקבל:</b> המארחים של המתחם שפניתם אליו, צוות האתר, וספקי שירות שמפעילים את האתר בשבילנו (אחסון ומסד נתונים, שליחת מיילים, תמונות). חלקם שומרים מידע בשרתים מחוץ לישראל. איננו מוכרים מידע לאף אחד.</li>
+          <li><b>כמה זמן:</b> פניות וחוות דעת נשמרים כל עוד הם נחוצים לשירות ולטיפול בבירורים. הרשמה לדיוור שלא אושרה במייל נמחקת אחרי 30 יום, ויומן הפעולות נשמר שנה.</li>
+          <li><b>דיוור:</b> נשלח רק למי שנרשם ואישר את הכתובת במייל. כל מייל שיווקי מסומן ״פרסומת״ ויש בו קישור להסרה בלחיצה אחת.</li>
+          <li><b>אבטחה:</b> החיבור לאתר מוצפן, הגישה למידע מוגבלת לפי הרשאות, וצוות הניהול נכנס עם סיסמה ואפשרות לאימות דו-שלבי.</li>
+          <li><b>הזכויות שלכם:</b> לעיין במידע עליכם, לתקן אותו או לבקש למחוק אותו, לפי חוק הגנת הפרטיות. אין חובה חוקית למסור את הפרטים, אבל בלי שם וטלפון לא נוכל להעביר בקשה למארחים.</li></ul>
         <h2>עוגיות ואחסון בדפדפן</h2><p>האתר שומר בדפדפן שלכם בלבד את המועדפים, המקומות שצפיתם בהם, החיפושים האחרונים והגדרות הנגישות, וגם את הפרטים שביקשתם שנזכור בטופס. אנחנו סופרים צפיות ולחיצות על כל מתחם בלי לזהות אתכם, כדי להציג למארחים דוח. אפשר למחוק את כל אלה דרך הגדרות הדפדפן.</p>
-        <p>לבקשת עיון או מחיקה של פרטים: ${contact}</p>`
+        <p>לבקשת עיון, תיקון או מחיקה של פרטים: ${contact}</p>
+        <p class="muted">מארחים: <a href="#terms-hosts">תנאי הפרסום למארחים</a>.</p>`,
+      "terms-hosts": `<span class="eyebrow">למארחים</span><h1>תנאי פרסום למארחים</h1>
+        <p class="muted">גרסה ${esc(T.HOST_TERMS_VERSION)}. התנאים חלים על מי שפותח חשבון מארח ב${esc(s.site_name)} ומפרסם בו מתחם.</p>
+        <h2>החשבון</h2><p>החשבון אישי ונפתח עם אימייל וסיסמה. האחריות לשמור על הסיסמה היא עליכם, ואם יש חשד שמישהו אחר נכנס לחשבון, מחליפים סיסמה ומודיעים לנו. הפרטים שמסרתם (שם, טלפון, שם העסק ומספר עוסק) צריכים להיות נכונים ומעודכנים.</p>
+        <h2>התוכן במתחם</h2><p>אתם אחראים לכך שהתיאור, המחירים, היומן, מדיניות הביטול והמאפיינים מדויקים, ושיש לכם זכות להשתמש בתמונות שאתם מעלים. אנחנו רשאים לבדוק כל שינוי לפני פרסום, לבקש תיקונים, ולהסיר תוכן מטעה, פוגעני או מפר זכויות.</p>
+        <h2>פניות מאורחים</h2><p>בקשות הזמנה מגיעות אליכם במייל ובממשק המארחים. ההזמנה, התשלום והביטול נסגרים ישירות ביניכם לבין האורחים ולפי חוק הגנת הצרכן. את פרטי האורחים מותר להשתמש בהם רק כדי לטפל בבקשה שלהם, ולא לשלוח להם דיוור בלי הסכמה.</p>
+        <h2>מנוי ותשלום</h2><p>הפרסום הוא לפי החבילה שבחרתם (מנוי חודשי, תשלום לפי פנייה או שילוב). מארחים חדשים מקבלים תקופת ניסיון כשהיא מוצעת. לפני סוף המנוי נשלחת תזכורת במייל. אם המנוי לא חודש, המתחם ממשיך להופיע כמה ימים (ימי חסד) ואז מוסתר מהאתר. הנתונים, התמונות והפניות נשמרים, ובחידוש המתחם חוזר לאוויר מיד.</p>
+        <h2>סיום ההתקשרות</h2><p>אפשר להפסיק לפרסם בכל עת בהודעה לצוות האתר. לבקשתכם נמחק את המתחם ואת פרטי החשבון, חוץ ממידע שחובה לשמור לפי דין (למשל לצורכי חשבונאות).</p>
+        <h2>אחריות</h2><p>האתר מספק פלטפורמת פרסום ואינו צד להזמנה. איננו מתחייבים למספר פניות מסוים, ואחראים רק לנזק שנגרם ברשלנות שלנו, עד גובה התשלום ששילמתם בשלושת החודשים האחרונים.</p>
+        <h2>שינויים</h2><p>אם התנאים ישתנו, נעדכן במייל ובממשק המארחים לפחות 14 יום מראש. המשך פרסום אחרי המועד הזה הוא הסכמה לתנאים החדשים.</p>
+        <p>שאלות: ${contact}</p>`
     };
     return `<div class="view wrap page"><article class="textpage">${pages[kind]}</article></div>`;
   }
@@ -1305,7 +1358,8 @@
     else if (hash === "magazine") { html = viewMagazine(); title = "מגזין | " + S.settings.site_name; }
     else if (hash.startsWith("article-")) { html = viewArticle(hash.slice(8)); const a = S.articles.find((x) => x.id === hash.slice(8)); if (a) title = a.title + " | " + S.settings.site_name; }
     else if (hash.startsWith("review-")) html = await viewReview(hash.slice(7));
-    else if (["about", "accessibility", "terms"].includes(hash)) html = viewText(hash);
+    else if (hash.startsWith("sub-confirm-") || hash.startsWith("unsubscribe-")) { html = await viewSubLink(hash); title = "דיוור | " + S.settings.site_name; }
+    else if (["about", "accessibility", "terms", "terms-hosts"].includes(hash)) { html = viewText(hash); if (hash === "terms-hosts") title = "תנאי פרסום למארחים | " + S.settings.site_name; }
     else if (hash === "main") return;
     else html = viewHome();
     $("#chrome").innerHTML = header();
@@ -1442,6 +1496,12 @@
     else if (act === "clear-searches") { S.searches = []; T.storage.set("tamara.searches", []); render(); }
     else if (act === "clear-viewed") { S.viewedList = []; T.storage.set("tamara.viewed", []); render(); }
     else if (act === "find-again") { S.findSent = null; render(); }
+    else if (act === "join-mode") { S.joinMode = el.dataset.v; const c = $("#join-card"); if (c) c.innerHTML = joinForm(); }
+    else if (act === "join-resend") {
+      if (S.resendAt && Date.now() - S.resendAt < 60e3) { T.toast("אפשר לשלוח שוב בעוד דקה"); return; }
+      S.resendAt = Date.now();
+      try { await T.store.resendSignup(el.dataset.email); T.toast("שלחנו שוב. בדקו גם בספאם."); } catch (ex) { T.toast(T.authError(ex), "err"); }
+    }
     else if (act === "guest-google") { try { await T.store.signInGuestGoogle(); } catch (ex) { T.toast("הכניסה עם Google לא זמינה: " + ex.message, "err"); } }
     else if (act === "guest-logout") { await T.store.signOut(); S.me = { leads: null, user: null }; render(); }
     else if (act === "a11y-open") {
@@ -1484,6 +1544,7 @@
   document.addEventListener("input", (e) => {
     if (e.target.closest("#filters") || (e.target.form && e.target.form.id === "filters")) onFilterInput();
     if (e.target.closest("#book")) (e.target.name === "coupon" ? debouncedBook : onBookInput)(e);
+    if (e.target.name === "password" && e.target.form && e.target.form.dataset.form === "join") { const ul = $("#join-pw"); if (ul) ul.innerHTML = pwRulesHTML(e.target.value); }
   });
   document.addEventListener("change", (e) => {
     if (e.target.form && e.target.form.id === "filters") onFilterInput();
@@ -1495,6 +1556,8 @@
     if (!kind) return;
     e.preventDefault();
     const fd = new FormData(form);
+    /* רובוט מילא את השדה הנסתר: עונים כאילו נשלח, ולא שומרים כלום */
+    if (fd.get("website")) { form.reset(); T.toast("נשלח. תודה!"); return; }
     const phoneOk = (p) => /^0?5\d{8}$|^0\d{8}$|^972\d{8,9}$/.test(String(p).replace(/[\s-]/g, ""));
     const emailOk = (m) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(m).trim());
     const bad = (errId, msg, name) => { $(errId).textContent = msg; const f = name && form.elements[name]; if (f) { f.setAttribute("aria-invalid", "true"); f.focus(); } };
@@ -1568,21 +1631,45 @@
     } else if (kind === "subscribe") {
       const email = (fd.get("email") || "").trim();
       if (!emailOk(email)) { const i = form.elements.email; i.setAttribute("aria-invalid", "true"); i.focus(); T.toast("כתובת האימייל לא נראית תקינה", "err"); return; }
-      try { const r = await T.store.addSubscriber({ email, regions: fd.get("region") ? [fd.get("region")] : [], source: location.hash.slice(1) || "home" }); form.reset(); T.toast(r && r.duplicate ? "האימייל הזה כבר רשום. תודה!" : "נרשמתם! הדילים הבאים יגיעו למייל."); }
+      try { const r = await T.store.addSubscriber({ email, regions: fd.get("region") ? [fd.get("region")] : [], source: location.hash.slice(1) || "home" }); form.reset(); T.toast(r && r.duplicate ? "האימייל הזה כבר רשום. תודה!" : r && r.pending ? "כמעט סיימנו: שלחנו לכם מייל, ולחיצה על הקישור שבו מאשרת את ההרשמה." : "נרשמתם! הדילים הבאים יגיעו למייל.", r && r.pending ? "info" : undefined); }
       catch (ex) { T.toast(/^ההרשמה/.test(ex.message) ? ex.message : "ההרשמה לא הצליחה: " + ex.message, "err"); }
     } else if (kind === "guest-login") {
       const email = (fd.get("email") || "").trim();
       if (!emailOk(email)) { T.toast("כתובת האימייל לא נראית תקינה", "err"); return; }
       try { await T.store.signInGuest(email); T.toast("שלחנו קישור כניסה ל־" + email); } catch (ex) { T.toast("השליחה נכשלה: " + ex.message, "err"); }
     } else if (kind === "join") {
+      const acc = S.joinMode !== "call";
+      const email = String(fd.get("email") || "").trim().toLowerCase();
+      const units = Math.round(Number(fd.get("units")) || 0);
+      const taxId = String(fd.get("tax_id") || "").replace(/\D/g, "");
       if (!fd.get("name").trim()) return bad("#join-err", "כתבו שם מלא", "name");
       if (!phoneOk(fd.get("phone"))) return bad("#join-err", "מספר הטלפון לא נראה תקין", "phone");
+      if ((acc || email) && !emailOk(email)) return bad("#join-err", acc ? "צריך אימייל תקין: הוא הכניסה לחשבון" : "כתובת האימייל לא נראית תקינה", "email");
       if (!fd.get("business").trim()) return bad("#join-err", "מה שם המתחם?", "business");
       if (!fd.get("settlement").trim()) return bad("#join-err", "באיזה יישוב המתחם?", "settlement");
-      if (!fd.get("consent")) return bad("#join-err", "צריך לאשר שנחזור אליכם", "consent");
-      const app = { name: fd.get("name").trim(), phone: fd.get("phone").trim(), email: (fd.get("email") || "").trim(), business: fd.get("business").trim(), settlement: fd.get("settlement").trim(), region: fd.get("region"), type: fd.get("type"), units: Number(fd.get("units")) || 1, message: (fd.get("message") || "").trim() };
-      try { await T.store.addApplication(app); $("#join-card").innerHTML = `<div class="book-ok"><span class="badge-ok">${I("check")}</span><h3 style="font-family:var(--f-display);font-weight:400;font-size:2rem">תודה, ${esc(app.name)}!</h3><p class="muted">קיבלנו את הפרטים של ${esc(app.business)}. נחזור אליכם בימים הקרובים לטלפון ${esc(app.phone)}.</p><a class="btn btn-line" href="#">לדף הבית</a></div>`; }
-      catch (ex) { bad("#join-err", "השליחה לא הצליחה (" + ex.message + "). נסו שוב בעוד רגע."); }
+      if (units < 1 || units > 500) return bad("#join-err", "כמה יחידות אירוח יש במתחם?", "units");
+      if (acc && taxId && !/^\d{8,9}$/.test(taxId)) return bad("#join-err", "ח.פ / ע.מ הוא 9 ספרות (אפשר גם להשאיר ריק)", "tax_id");
+      if (acc) {
+        const pw = String(fd.get("password") || "");
+        const issues = T.passwordIssues(pw);
+        if (issues.length) return bad("#join-err", "הסיסמה צריכה " + issues.join(", "), "password");
+        if (pw !== String(fd.get("password2") || "")) return bad("#join-err", "שתי הסיסמאות לא זהות", "password2");
+      }
+      if (!fd.get("consent")) return bad("#join-err", acc ? "צריך לאשר את תנאי הפרסום ואת מדיניות הפרטיות" : "צריך לאשר שנחזור אליכם", "consent");
+      const app = { name: fd.get("name").trim(), phone: fd.get("phone").trim(), email, business: fd.get("business").trim(), settlement: fd.get("settlement").trim(), region: fd.get("region"), type: fd.get("type"), units, message: (fd.get("message") || "").trim(), tax_id: taxId, marketing: !!fd.get("marketing") };
+      const btn = form.querySelector('[type="submit"]');
+      btn.disabled = true;
+      try {
+        if (acc) {
+          const r = await T.store.signUpHost(Object.assign({ password: String(fd.get("password")) }, app));
+          if (r && r.session) { location.href = "owner.html?welcome=1"; return; }
+          $("#join-card").innerHTML = r && r.demo ? `<div class="book-ok"><span class="badge-ok">${I("check")}</span><h3 style="font-family:var(--f-display);font-weight:400;font-size:2rem">נרשמתם (מצב הדגמה)</h3><p class="muted">באתר החי יישלח עכשיו מייל לאישור הכתובת, ואחריו החשבון נפתח. כאן ההרשמה נשמרה כבקשת הצטרפות בפאנל הניהול.</p><a class="btn btn-line" href="#">לדף הבית</a></div>` : joinSent(email, r && r.existing);
+          $("#join-card").scrollIntoView({ behavior: "smooth", block: "center" });
+        } else {
+          await T.store.addApplication(app);
+          $("#join-card").innerHTML = `<div class="book-ok"><span class="badge-ok">${I("check")}</span><h3 style="font-family:var(--f-display);font-weight:400;font-size:2rem">תודה, ${esc(app.name)}!</h3><p class="muted">קיבלנו את הפרטים של ${esc(app.business)}. נחזור אליכם בימים הקרובים לטלפון ${esc(app.phone)}.</p><a class="btn btn-line" href="#">לדף הבית</a></div>`;
+        }
+      } catch (ex) { btn.disabled = false; bad("#join-err", (acc ? T.authError(ex) : "השליחה לא הצליחה (" + ex.message + ").") + " אם זה חוזר, כתבו לנו בוואטסאפ."); }
     } else if (kind === "review") {
       const text = (fd.get("text") || "").trim();
       if (text.length < 10) return bad("#rev-err", "כתבו לפחות משפט אחד", "text");

@@ -279,6 +279,16 @@
     wa_float: true,
     cookie_banner: true,
     find_enabled: true,
+    /* מארחים חדשים: פתיחה אוטומטית אחרי אימות המייל, ימי ניסיון, ימי חסד אחרי סוף המנוי */
+    auto_open_hosts: true,
+    trial_days: 30,
+    grace_days: 3,
+    reminder_days: [30, 7, 1],
+    /* מיילים אוטומטיים */
+    guest_confirmation_email: true,
+    auto_review_requests: true,
+    review_delay_days: 1,
+    admin_digest: true,
     /* אוספים בעמוד הבית: { id, title, sub, ids: [...] } */
     collections: []
   };
@@ -809,6 +819,8 @@
   T.img = (url, w) => {
     const u = String(url || "");
     if (u.includes("res.cloudinary.com") && u.includes("/upload/") && !/\/upload\/[^/]*w_\d+/.test(u)) return u.replace("/upload/", `/upload/f_auto,q_auto,w_${w || 1600}/`);
+    /* תמונות ב-Supabase Storage נשמרות בשני גדלים: p2-xxx.jpg (2000px) ו-p2-xxx-sm.jpg (800px) לכרטיסים ולרשימות */
+    if (w && w <= 900 && /\/storage\/v1\/object\/public\/photos\/.*\/p2-[a-z0-9]+\.jpg$/i.test(u)) return u.replace(/\.jpg$/i, "-sm.jpg");
     return u;
   };
   /* תמונות המתחם, כל אחת עם קטגוריה (מהעורך), ואחריהן תמונות היחידות */
@@ -856,6 +868,54 @@
     return out.concat((d.faq || []).filter((x) => x.q && x.a));
   };
 
+  /* --------------------------------------------------------- לקוחות, מנויים, אימות */
+  T.validPhone = (p) => /^0?5\d{8}$|^0\d{8}$|^972\d{8,9}$/.test(String(p || "").replace(/[\s()+-]/g, ""));
+  T.validEmail = (m) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(m || "").trim());
+  /* סיסמה: לפחות 8 תווים, עם אותיות ומספרים (כמו שמומלץ להגדיר ב-Supabase) */
+  T.passwordIssues = (pw) => {
+    const s = String(pw || ""), out = [];
+    if (s.length < 8) out.push("לפחות 8 תווים");
+    if (!/[A-Za-z\u0590-\u05FF]/.test(s)) out.push("לפחות אות אחת");
+    if (!/\d/.test(s)) out.push("לפחות ספרה אחת");
+    return out;
+  };
+  /* תרגום הודעות שגיאה של מערכת הכניסה לעברית */
+  T.authError = (e) => {
+    const m = String((e && (e.message || e.error_description || e.msg)) || e || ""), c = String((e && e.code) || "");
+    if (/invalid login credentials|invalid_credentials/i.test(m + c)) return "האימייל או הסיסמה לא נכונים.";
+    if (/email not confirmed|email_not_confirmed/i.test(m + c)) return "צריך קודם לאשר את האימייל. חפשו אצלכם מייל מאיתנו (גם בספאם), או שלחו אותו שוב.";
+    if (/rate limit|too many|over_email_send_rate|over_request_rate|429/i.test(m + c)) return "יותר מדי ניסיונות. חכו כמה דקות ונסו שוב.";
+    if (/weak_password|password should|at least/i.test(m + c)) return "הסיסמה חלשה מדי. צריך לפחות 8 תווים, עם אותיות ומספרים.";
+    if (/same_password|different from the old/i.test(m + c)) return "הסיסמה החדשה זהה לישנה.";
+    if (/already registered|user_already_exists|email_exists/i.test(m + c)) return "כבר יש חשבון עם האימייל הזה. היכנסו או שחזרו סיסמה.";
+    if (/otp_expired|invalid or has expired|expired/i.test(m + c)) return "הקישור כבר לא בתוקף. בקשו קישור חדש.";
+    if (/mfa_verification_failed|invalid totp/i.test(m + c)) return "הקוד לא נכון. נסו את הקוד הנוכחי מהאפליקציה.";
+    if (/captcha/i.test(m + c)) return "בדיקת האבטחה נכשלה. רעננו את הדף ונסו שוב.";
+    if (/failed to fetch|network/i.test(m)) return "אין חיבור לשרת. בדקו את האינטרנט ונסו שוב.";
+    return m || "משהו השתבש. נסו שוב.";
+  };
+  /* מצב המנוי של לקוח: פעיל / ניסיון / מסתיים בקרוב / ימי חסד / הסתיים / מושהה */
+  T.subState = (a, settings) => {
+    const g = ((settings || T.SETTINGS) || {}).grace_days;
+    const grace = g === 0 || g === "0" ? 0 : Math.max(0, Number(g) || 3);
+    const today = T.iso(T.today());
+    if (!a) return { key: "none", label: "—", tone: "muted", visible: true };
+    if (a.status === "paused") return { key: "paused", label: "מושהה", tone: "muted", visible: false };
+    if (a.status === "ended") return { key: "ended", label: "הסתיים", tone: "danger", visible: false };
+    if (!a.end_date) return { key: a.status === "trial" ? "trial" : "active", label: a.status === "trial" ? "ניסיון" : "פעיל", tone: "ok", visible: true, daysLeft: null };
+    const days = T.daysUntil(a.end_date);
+    const hideOn = T.iso(T.addDays(T.parseISO(a.end_date), grace + 1));
+    if (days < 0) {
+      const inGrace = today < hideOn;
+      return { key: inGrace ? "grace" : "expired", label: inGrace ? `הסתיים, מוצג עד ${T.fmtDate(T.iso(T.addDays(T.parseISO(hideOn), -1)))}` : "הסתיים · מוסתר מהאתר", tone: inGrace ? "warn" : "danger", visible: inGrace, daysLeft: days, hideOn };
+    }
+    const trial = a.status === "trial";
+    if (days <= 30) return { key: trial ? "trial" : "expiring", label: `${trial ? "ניסיון · " : ""}${days === 0 ? "מסתיים היום" : `עוד ${days} ימים`}`, tone: "warn", visible: true, daysLeft: days, hideOn };
+    return { key: trial ? "trial" : "active", label: `${trial ? "ניסיון · " : ""}עד ${T.fmtDate(a.end_date)}`, tone: "ok", visible: true, daysLeft: days, hideOn };
+  };
+  /* גרסת תנאי השימוש למפרסמים (נשמרת עם כל הרשמה) */
+  T.HOST_TERMS_VERSION = "2026-10";
+
   T.normalizeListing = (l) => {
     const n = (v) => (v === "" || v == null ? 0 : Number(v));
     return Object.assign({}, l, {
@@ -867,7 +927,7 @@
       ical_blocked: l.ical_blocked || [], rooms: l.rooms || [], extras: l.extras || [], seasons: l.seasons || [],
       sponsored_until: l.sponsored_until || null, video_url: l.video_url || "", pending: l.pending || null,
       details: l.details && typeof l.details === "object" ? l.details : {}, terms: l.terms && typeof l.terms === "object" ? l.terms : {},
-      exclusive: !!l.exclusive, best_price: !!l.best_price
+      exclusive: !!l.exclusive, best_price: !!l.best_price, owner_id: l.owner_id || null
     });
   };
 })();

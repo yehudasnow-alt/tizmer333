@@ -46,6 +46,14 @@ export async function db(path, { method = "GET", body, prefer } = {}) {
 
 export const rpc = (fn, args) => db(`rpc/${fn}`, { method: "POST", body: args });
 
+/* Supabase Storage עם מפתח השרת (רשימת קבצים ומחיקה) */
+export async function storageApi(path, { method = "POST", body } = {}) {
+  const r = await fetch(`${SB()}/storage/v1/${path}`, { method, headers: { ...keyHeaders(SERVICE()), "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const text = await r.text();
+  if (!r.ok) throw new Error(`storage ${r.status}: ${text.slice(0, 200)}`);
+  return text ? JSON.parse(text) : null;
+}
+
 /* זיהוי המשתמש מה-Bearer token של Supabase Auth */
 export async function getUser(req) {
   const h = req.headers.authorization || "";
@@ -54,7 +62,36 @@ export async function getUser(req) {
   const r = await fetch(`${SB()}/auth/v1/user`, { headers: { apikey: SERVICE(), Authorization: `Bearer ${token}` } });
   if (!r.ok) return null;
   const u = await r.json();
-  return u && u.email ? u : null;
+  if (!u || !u.email) return null;
+  /* רמת האימות של החיבור (aal2 = עבר קוד דו-שלבי) מתוך ה-token שכבר אומת למעלה */
+  try { u._aal = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()).aal || "aal1"; } catch (e) { u._aal = "aal1"; }
+  return u;
+}
+
+/* מנהל, כולל דרישת אימות דו-שלבי אם הופעלה לו */
+export async function requireAdmin(req, res) {
+  const user = await getUser(req);
+  if (!user) { send(res, 401, { error: "צריך להתחבר" }); return null; }
+  const rows = await db(`admins?select=email,mfa_required&email=ilike.${exactI(user.email)}`).catch(() => []);
+  const a = rows[0];
+  if (!a) { send(res, 403, { error: "החשבון לא מוגדר כמנהל" }); return null; }
+  if (a.mfa_required && user._aal !== "aal2") { send(res, 403, { error: "נדרש קוד אימות דו-שלבי" }); return null; }
+  return user;
+}
+
+/* קריאה ל-Supabase Auth עם מפתח השרת (הזמנות, קישורי איפוס סיסמה) */
+export async function authApi(path, { method = "POST", body, query = {} } = {}) {
+  const q = new URLSearchParams(query).toString();
+  const key = SERVICE();
+  const r = await fetch(`${SB()}/auth/v1/${path}${q ? "?" + q : ""}`, {
+    method,
+    headers: { ...keyHeaders(key), "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+  const text = await r.text();
+  let j = {}; try { j = text ? JSON.parse(text) : {}; } catch (e) { j = { msg: text }; }
+  if (!r.ok) { const e = new Error(j.msg || j.message || j.error_description || "auth " + r.status); e.code = j.code || j.error_code || ""; e.status = r.status; throw e; }
+  return j;
 }
 
 /* השוואת מייל בלי תלות באותיות גדולות/קטנות, בלי תווים כלליים */
