@@ -124,7 +124,8 @@
         <button class="btn btn-primary btn-lg btn-block" type="submit">שליחת קישור כניסה</button></form>
         <button class="btn btn-line btn-block" type="button" data-act="google">כניסה עם חשבון Google</button>`;
     }
-    return `<div class="login"><div class="login-card"><img class="logo" src="${LOGO_S}" alt="${esc(A.settings.site_name)}">${body}${msg ? `<p class="note note-${msg.tone || "info"}" role="status">${esc(msg.text)}</p>` : ""}<a class="link-more" style="justify-self:center" href="${siteURL()}">${I("back")} חזרה לאתר</a></div></div>`;
+    if (!IS_ADMIN && A.adminHere) body = `<h1>ממשק מארחים</h1>`;
+    return `<div class="login"><div class="login-card"><img class="logo" src="${LOGO_S}" alt="${esc(A.settings.site_name)}">${body}${msg ? `<p class="note note-${msg.tone || "info"}" role="status">${esc(msg.text)}</p>` : ""}${!IS_ADMIN && A.adminHere ? `<a class="btn btn-primary btn-block" href="admin.html#advertisers">${I("briefcase")}לפאנל הניהול · לקוחות</a>` : ""}<a class="link-more" style="justify-self:center" href="${siteURL()}">${I("back")} חזרה לאתר</a></div></div>`;
   }
 
   /* ================================================================ dashboard */
@@ -1055,6 +1056,12 @@
       return false;
     }
     if ((await T.store.myAdvertisers()).length) return true;
+    /* מנהל שנכנס לממשק המארחים: לא מנתקים אותו (זה היה מנתק גם את פאנל הניהול באותו דפדפן) */
+    if (await T.store.isAdmin()) {
+      A.adminHere = true;
+      A.loginMsg = { tone: "info", text: `אתם מחוברים כמנהל (${user.email}). כדי לראות את ממשק המארחים כמו מארח, הוסיפו בפאנל הניהול לקוח עם האימייל הזה ושייכו אליו מתחם, ואז רעננו את הדף.` };
+      return false;
+    }
     A.loginMsg = { tone: "warn", text: "לא מצאנו לקוח עם האימייל הזה. פנו לצוות האתר כדי שיעדכנו את האימייל אצלם." };
     await T.store.signOut();
     return false;
@@ -1359,6 +1366,14 @@
   });
   document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; if ($("#deny")) $("#deny").remove(); else if ($("#modal")) $("#modal").remove(); });
   window.addEventListener("hashchange", () => { render(); window.scrollTo(0, 0); });
+  /* חזרה בכפתור "אחורה" משחזרת את הדף מהזיכרון: בודקים מחדש שהחשבון עדיין מחובר */
+  window.addEventListener("pageshow", async (e) => {
+    if (!e.persisted || !T.isLive || !A.ready) return;
+    const was = A.authed;
+    try { A.authed = await checkAuth(); } catch (ex) { A.authed = false; }
+    if (A.authed) await reload(); else if (was && !A.loginMsg) A.loginMsg = { tone: "info", text: "החשבון התנתק. היכנסו שוב כדי להמשיך." };
+    render();
+  });
   window.addEventListener("beforeunload", (e) => { if (Object.values(A.drafts).some((d) => d._dirty)) { e.preventDefault(); e.returnValue = ""; } });
 
   async function boot() {
