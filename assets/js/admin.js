@@ -1275,7 +1275,7 @@
   }
 
   /* ================================================================ הסכם פרסום: אישור הגרסה הנוכחית לפני העבודה בממשק */
-  const needsTerms = () => !IS_ADMIN && A.authed && A.advertisers[0] && A.advertisers[0].terms_version !== T.HOST_TERMS_VERSION;
+  const needsTerms = () => !IS_ADMIN && A.authed && !A.termsSkip && A.advertisers[0] && A.advertisers[0].terms_version !== T.HOST_TERMS_VERSION;
   function viewTermsGate() {
     const a = A.advertisers[0];
     const again = !!a.terms_version;
@@ -1975,7 +1975,7 @@
     else if (act === "accept-terms") {
       if (!$("#terms-ok") || !$("#terms-ok").checked) { T.toast("כדי להמשיך מסמנים שקראתם ומסכימים להסכם", "err"); $("#terms-ok") && $("#terms-ok").focus(); return; }
       el.disabled = true;
-      try { await T.store.acceptHostTerms(); await reload(); render(); T.toast("תודה! ההסכם אושר."); } catch (ex) { el.disabled = false; fail("האישור נכשל", ex); }
+      try { const r = await T.store.acceptHostTerms(); if (r === "missing") A.termsSkip = true; await reload(); render(); T.toast("תודה! ההסכם אושר."); } catch (ex) { el.disabled = false; fail("האישור נכשל", ex); }
     }
     else if (act === "bd-nav") {
       const dd = Number(el.dataset.d);

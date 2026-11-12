@@ -378,7 +378,8 @@
         return T.normalizeListing(await save("listings", T.ownerSplit(T.normalizeListing(draft), original, s), COLS.listings));
       },
       async ownerAddListing(f) { const r = await sb.rpc("owner_add_listing", { p_name: f.name || "", p_settlement: f.settlement || "", p_region: f.region || "", p_type: f.type || "" }); const id = ok(r); emit(); return id; },
-      async acceptHostTerms() { ok(await sb.rpc("accept_host_terms", { p_version: T.HOST_TERMS_VERSION })); emit(); return true; },
+      /* מסד שעוד לא עודכן לגרסה 5: לא נועלים את המארח בחוץ, רק מסמנים מה חסר */
+      async acceptHostTerms() { const r = await sb.rpc("accept_host_terms", { p_version: T.HOST_TERMS_VERSION }); if (r.error && isMissing(r.error, r.status)) { noteMissing(r.error); return "missing"; } ok(r); emit(); return true; },
       async listCalls(o) {
         let q = sb.from("calls").select("*").order("started_at", { ascending: false }).limit((o && o.limit) || 500);
         if (o && o.since) q = q.gte("started_at", o.since);
