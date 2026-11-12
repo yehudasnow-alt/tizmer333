@@ -1130,3 +1130,86 @@ a.note { color: var(--navy); }
 .textpage ul li b { color: var(--ink); }
 .panel > h2 .h-ic { display: inline-flex; align-items: center; gap: 8px; }
 .join-mode { display: inline-flex; width: auto; max-width: 100%; }
+
+/* ---------------------------------------------------------------- v5: רעש, יומן מרוכז, שיחות, ₪ אוטומטי, הסכמים */
+/* ₪ בתוך שדות מחיר: המספר נשאר נקי, הסימן מופיע לבד */
+.field:has(> input[data-cur]) { position: relative; }
+.field:has(> input[data-cur])::after { content: "₪"; position: absolute; inset-inline-end: 13px; bottom: 0; height: 46px; display: flex; align-items: center; color: var(--muted); font-size: .95rem; pointer-events: none; }
+.row-edit .field:has(> input[data-cur])::after { height: 40px; }
+.input[data-cur] { padding-inline-end: 30px; -moz-appearance: textfield; appearance: textfield; }
+.input[data-cur]::-webkit-inner-spin-button, .input[data-cur]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* רעש וסביבה: דף המתחם */
+.noise-box { border-radius: var(--r-l); padding: 16px 18px; background: var(--sky-50); border: 1px solid var(--sky-100); display: grid; gap: 8px; max-width: 680px; }
+.noise-box > b { display: inline-flex; align-items: center; gap: 8px; font-size: 1.05rem; color: var(--navy); font-weight: 500; }
+.noise-box > b .ic { width: 20px; height: 20px; }
+.noise-box ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.noise-box li { display: flex; gap: 8px; align-items: flex-start; color: var(--ink-2); font-size: var(--t-s); }
+.noise-box li .ic { width: 16px; height: 16px; flex: none; margin-top: 3px; color: var(--blue); }
+.noise-box p { margin: 0; color: var(--ink-2); font-size: var(--t-s); font-weight: 300; }
+.noise-box small { font-size: var(--t-xs); }
+.noise-box.noise-party { background: #F3EEFB; border-color: #E2D8F5; }
+.noise-box.noise-party > b, .noise-box.noise-party li .ic { color: #5B3A9A; }
+.noise-box.noise-quiet { background: var(--ok-soft); border-color: transparent; }
+.noise-box.noise-quiet > b, .noise-box.noise-quiet li .ic { color: var(--ok); }
+.noise-box.noise-noisy { background: var(--warn-soft); border-color: transparent; }
+.noise-box.noise-noisy > b, .noise-box.noise-noisy li .ic { color: var(--warn); }
+.badge.b-party { background: #F3EEFB; color: #5B3A9A; border-color: #E2D8F5; }
+.badge.b-quiet { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+
+/* רעש וסביבה: עורך */
+.radio-row { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.radio-row legend { margin-bottom: 8px; padding: 0; }
+.radio-row label { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1.5px solid var(--line); border-radius: 999px; font-size: var(--t-s); cursor: pointer; background: var(--white); }
+.radio-row label:has(input:checked) { border-color: var(--navy); background: var(--sky-50); color: var(--navy); font-weight: 500; }
+.radio-row input { accent-color: var(--navy); margin: 0; }
+.radio-row[disabled] label, fieldset[disabled] label { opacity: .6; cursor: default; }
+.party-check { padding: 12px 14px; border-radius: var(--r-m); background: #F7F4FC; }
+
+/* יומן מרוכז */
+.toolbar .bd-nav { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.board-wrap { overflow: auto; border: 1px solid var(--line); border-radius: var(--r-m); margin: 12px 0; max-height: 70vh; overscroll-behavior: contain; }
+.board { border-collapse: separate; border-spacing: 0; font-size: var(--t-xs); min-width: 100%; }
+.board th, .board td { padding: 0; text-align: center; border-bottom: 1px solid var(--line); }
+.board thead th { position: sticky; top: 0; z-index: 2; background: var(--white); font-weight: 400; color: var(--muted); padding: 6px 2px 4px; min-width: 30px; vertical-align: bottom; }
+.board thead th b { display: block; font-size: var(--t-s); color: var(--ink); font-weight: 500; }
+.board thead th.wknd, .board thead th.wknd b { color: var(--blue); }
+.board thead th.hol b { text-decoration: underline 2px var(--blue); text-underline-offset: 3px; }
+.board thead th.m1 { border-inline-start: 2px solid var(--line-2); }
+.board .bd-month { display: block; width: 0; overflow: visible; white-space: nowrap; font-size: 10px; color: var(--navy); font-weight: 500; text-align: start; padding-inline-start: 2px; }
+.board .bd-dow { display: block; font-size: 10px; }
+.board .bd-name { position: sticky; inset-inline-start: 0; z-index: 1; background: var(--white); text-align: start; padding: 6px 10px; min-width: 150px; max-width: 200px; font-weight: 400; border-inline-end: 1px solid var(--line); }
+.board thead .bd-name { z-index: 3; }
+.board .bd-name a { color: var(--ink); font-weight: 500; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board .bd-name a:hover { color: var(--blue); text-decoration: underline; }
+.board .bd-unit { display: block; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.board tr.bd-first > * { border-top: 1px solid var(--line-2); }
+.board .bd-free td { font-size: 10px; color: var(--ok); background: var(--ok-soft); padding: 4px 0; font-variant-numeric: tabular-nums; }
+.board .bd-free td.full { color: var(--danger); background: #FBE9E7; }
+.board .bd-free th { background: var(--ok-soft); font-size: 11px; color: var(--ok); }
+.bd-cell { width: 100%; min-width: 30px; height: 34px; border: 0; background: var(--white); cursor: pointer; display: block; border-inline-start: 1px solid var(--line); }
+.bd-cell.wknd { background: var(--sky-50); }
+.bd-cell:hover:not([disabled]) { background: var(--sky-100); }
+.bd-cell.blocked { background: repeating-linear-gradient(-45deg, #E9EDF0 0 4px, #C9D2D8 4px 6px); }
+.bd-cell.synced { background: repeating-linear-gradient(-45deg, #EEF7FD 0 4px, var(--sky) 4px 6px); cursor: not-allowed; }
+.bd-cell[disabled]:not(.synced) { background: #F6F7F8; cursor: default; }
+.bd-cell:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.cal-legend .l-wknd { background: var(--sky-50); border: 1px solid var(--line-2); }
+.board .bd-name .pill { font-size: 10px; padding: 1px 7px; margin-top: 2px; }
+@media (max-width: 700px) { .board .bd-name { min-width: 104px; max-width: 120px; padding: 6px 8px; } .board-wrap { max-height: 64vh; } }
+
+/* אישורים: פרטי לקוח */
+.prof-mod + .prof-mod { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; }
+
+/* הסכם פרסום: מסך אישור */
+.terms-card { width: min(520px, 100%); }
+.terms-card .logo { height: 110px; }
+.terms-card .terms-sum li { align-items: flex-start; text-align: start; font-size: var(--t-s); }
+.terms-card .terms-sum li .ic { color: var(--ok); margin-top: 3px; }
+.terms-card .link-more { justify-self: center; }
+
+/* עמודי תנאים: תוכן עניינים */
+.toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.toc a { font-size: var(--t-xs); text-decoration: none; padding: 5px 11px; border-radius: 999px; border: 1.5px solid var(--sky); color: var(--navy); background: var(--white); }
+.toc a:hover { background: var(--navy); color: #fff; border-color: var(--navy); }
+.textpage h2[id] { scroll-margin-top: 90px; }

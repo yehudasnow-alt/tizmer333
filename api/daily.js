@@ -46,6 +46,7 @@ export default async function handler(req, res) {
       const d = days(a.end_date);
       const trial = a.status === "trial";
       const what = trial ? "תקופת הניסיון" : "המנוי";
+      const ends = trial ? "מסתיימת" : "מסתיים";
       const hideDay = isoAdd(String(a.end_date).slice(0, 10), grace + 1);
       if (d === -(grace + 1)) hiddenToday.push(a);
       if (!a.email) continue;
@@ -55,8 +56,8 @@ export default async function handler(req, res) {
         if (t === undefined) continue;
         const when = d === 0 ? "היום" : d === 1 ? "מחר" : `בעוד ${d} ימים`;
         plan.push({ kind: "reminder", key: `sub-remind:${a.id}:${a.end_date}:${t}`, to: a.email, replyTo: adminTo || undefined,
-          subject: `${what} של ${a.business || a.name} ב${site} מסתיים ${when}`,
-          html: L({ title: `${what} מסתיים ${when}`, preheader: `בתוקף עד ${fmtDate(a.end_date)}`,
+          subject: `${what} של ${a.business || a.name} ב${site} ${ends} ${when}`,
+          html: L({ title: `${what} ${ends} ${when}`, preheader: `בתוקף עד ${fmtDate(a.end_date)}`,
             body: p(`${hi}${what} של <b>${esc(a.business || a.name)}</b> ב${esc(site)} בתוקף עד <b>${fmtDate(a.end_date)}</b>.`)
               + p("כדי שהמתחם ימשיך להופיע באתר ולקבל פניות בלי הפסקה, מבקשים חידוש בלחיצה אחת בממשק המארחים, ואנחנו חוזרים אליכם.")
               + (grace ? p(`<span style="color:#5b6b75;font-size:13px">אם המנוי לא יחודש, המתחם ימשיך להופיע עוד ${grace} ימים אחרי הסיום ואז יוסתר עד החידוש. שום נתון לא נמחק.</span>`) : ""),
@@ -91,18 +92,23 @@ export default async function handler(req, res) {
     let digest = null;
     if (s.admin_digest !== false && adminTo) {
       const since = new Date(Date.now() - 864e5).toISOString();
-      const [newLeads, apps, pendL, pendR, renewals] = await Promise.all([
+      const [newLeads, apps, pendL, pendR, renewals, pendA, calls] = await Promise.all([
         db(`leads?select=id,source&created_at=gte.${enc(since)}&limit=2000`),
         db("applications?select=id,business,name,verified&status=eq.new&limit=200"),
         db("listings?select=id,name&pending=not.is.null&limit=200"),
         db("reviews?select=id&status=eq.pending&limit=500"),
-        db(`advertisers?select=id,business,name&renewal_requested_at=gte.${enc(since)}&limit=200`)
+        db(`advertisers?select=id,business,name&renewal_requested_at=gte.${enc(since)}&limit=200`),
+        db("advertisers?select=id,business,name&pending=not.is.null&limit=200").catch(() => []),
+        db(`calls?select=id,status&started_at=gte.${enc(since)}&limit=5000`).catch(() => [])
       ]);
+      const missedCalls = calls.filter((c) => c.status !== "answered").length;
       const expiring = advs.filter((a) => { const d = days(a.end_date); return d >= 0 && d <= 7; });
       const lines = [
         row("פניות ב־24 שעות", newLeads.length ? String(newLeads.length) : ""),
         row("בקשות הצטרפות", apps.length ? apps.map((x) => esc(x.business || x.name) + (x.verified ? " ✓" : "")).join(", ") : ""),
-        row("עדכוני תוכן לאישור", pendL.length ? pendL.map((x) => esc(x.name)).join(", ") : ""),
+        row("עדכוני מתחמים לאישור", pendL.length ? pendL.map((x) => esc(x.name)).join(", ") : ""),
+        row("עדכוני פרטי לקוח", pendA.length ? pendA.map((x) => esc(x.business || x.name)).join(", ") : ""),
+        row("שיחות ב־24 שעות", calls.length ? `${calls.length}${missedCalls ? ` (${missedCalls} לא נענו)` : ""}` : ""),
         row("חוות דעת לאישור", pendR.length ? String(pendR.length) : ""),
         row("ביקשו חידוש", renewals.length ? renewals.map((x) => esc(x.business || x.name)).join(", ") : ""),
         row("מסתיימים השבוע", expiring.length ? expiring.map((a) => `${esc(a.business || a.name)} (${fmtDate(a.end_date)})`).join(", ") : ""),

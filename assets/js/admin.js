@@ -18,7 +18,8 @@
     pf: { region: "", kind: "" }, sf: { region: "" },
     drafts: {}, editId: null, calStart: null, calUnit: "",
     lf: { q: "", status: "all", region: "" }, qf: { status: "all", listing: "", q: "", source: "" }, rf: "pending",
-    billMonth: T.monthKey(T.today()), exportText: "", pendingImport: null, editArticle: null, maps: []
+    billMonth: T.monthKey(T.today()), exportText: "", pendingImport: null, editArticle: null, maps: [],
+    calls: [], cf: { status: "all", listing: "" }, board: { start: null, client: "" }, boardEdits: {}
   };
   const siteURL = (h) => "index.html" + (h ? "#" + h : "");
   const siteAbs = (h) => new URL(siteURL(h), location.href).href;
@@ -30,6 +31,11 @@
   const pendingListings = () => A.listings.filter((l) => l.pending);
   /* שינויי תוכן שממתינים (לא רק בקשת פרסום של מתחם חדש) */
   const contentPending = (l) => !!l.pending && T.MODERATED_FIELDS.some(([k]) => l.pending[k] !== undefined);
+  /* לקוחות ששינו פרטים בכרטיס והשינוי ממתין לאישור */
+  const pendingProfiles = () => A.advertisers.filter((a) => a.pending && typeof a.pending === "object" && Object.keys(a.pending).some((k) => !k.startsWith("_")));
+  /* קבוצות שינויים שדורשות אישור לפי ההגדרות */
+  const modGroupsOn = () => T.MOD_GROUPS.filter((g) => T.modOn(A.settings, g.key));
+  const boardDirty = () => Object.keys(A.boardEdits).length > 0;
   const pendingPill = (l) => (contentPending(l) ? '<span class="pill pill-warn">ממתין לאישור</span>' : l.pending && l.pending._publish && !l.active ? '<span class="pill pill-navy">ביקש פרסום</span>' : "");
   const statusPill = (k) => {
     const tone = { new: "info", in_progress: "warn", closed: "ok", lost: "muted", approved: "ok", rejected: "muted", pending: "warn" }[k] || "muted";
@@ -81,9 +87,9 @@
     const cur = location.hash.slice(1) || (IS_ADMIN ? "dashboard" : "my");
     const newLeads = A.leads.filter((q) => q.status === "new").length;
     const items = IS_ADMIN
-      ? [["dashboard", "chart", "סקירה"], ["listings", "home", "מתחמים", A.listings.length], ["leads", "inbox", "פניות", newLeads], ["moderation", "shield", "אישורי תוכן", pendingListings().length], ["reviews", "star", "חוות דעת", pendingReviews().length],
+      ? [["dashboard", "chart", "סקירה"], ["listings", "home", "מתחמים", A.listings.length], ["calendar", "calendar", "יומן"], ["leads", "inbox", "פניות", newLeads], ["calls", "phone", "שיחות", missedNew()], ["moderation", "shield", "אישורים", pendingListings().length + pendingProfiles().length], ["reviews", "star", "חוות דעת", pendingReviews().length],
         ["advertisers", "briefcase", "לקוחות", A.advertisers.filter(renewalAsked).length], ["billing", "receipt", "חיובים"], ["applications", "user-plus", "בקשות הצטרפות", A.applications.filter((a) => a.status === "new").length], ["places", "map", "מה עושים באזור"], ["articles", "book", "מגזין"], ["subscribers", "mail", "מנויי דיוור"], ["activity", "history", "יומן פעולות"], ["site-settings", "sliders", "הגדרות"], ["system", "shield", "בדיקת מערכת", T.isLive && T.schemaIssues && T.schemaIssues.size ? "!" : 0]]
-      : [["my", "home", "המתחמים שלי"], ["leads", "inbox", "פניות", newLeads], ["reviews", "star", "חוות דעת"], ["account", "user", "החשבון שלי"]];
+      : [["my", "home", "המתחמים שלי"], ["calendar", "calendar", "יומן"], ["leads", "inbox", "פניות", newLeads]].concat(A.calls.length || A.listings.some((l) => l.tracking_phone) ? [["calls", "phone", "שיחות", missedNew()]] : [], [["reviews", "star", "חוות דעת"], ["account", "user", "החשבון שלי", A.advertisers[0] && A.advertisers[0].pending ? "!" : 0]]);
     const isCur = (k) => cur === k || (k === "listings" && (cur.startsWith("edit-") || cur === "new")) || (k === "my" && cur.startsWith("edit-")) || (k === "advertisers" && cur.startsWith("client-"));
     return `<div class="app">
       <aside class="side">
@@ -123,15 +129,17 @@
     const from = `${month}-01`, to = T.iso(new Date(y, m, 0));
     const ids = new Set(A.listings.filter((l) => l.owner_id === a.id).map((l) => l.id));
     const leads = A.leads.filter((q) => ids.has(q.listing_id) && (q.created_at || "").slice(0, 10) >= from && (q.created_at || "").slice(0, 10) <= to).length;
+    /* שיחות שנענו דרך המספר הווירטואלי נספרות כפניות (אם מוגדר כך בהגדרות) */
+    const calls = A.settings.calls_count_as_leads === false ? 0 : billableCalls(A.calls.filter((c) => ids.has(c.listing_id) && String(c.started_at || "").slice(0, 10) >= from && String(c.started_at || "").slice(0, 10) <= to));
     const model = a.billing_model || "subscription";
     const sub = model === "per_lead" ? 0 : Number((A.settings.plan_prices || {})[a.plan]) || 0;
-    const perLead = model === "subscription" ? 0 : leads * (Number(a.lead_price) || Number(A.settings.lead_price_default) || 0);
+    const perLead = model === "subscription" ? 0 : (leads + calls) * (Number(a.lead_price) || Number(A.settings.lead_price_default) || 0);
     const sponsored = A.listings.filter((l) => l.owner_id === a.id && l.sponsored_until && l.sponsored_until >= from).length * (Number(A.settings.sponsored_price) || 0);
     const active = a.status !== "paused" && a.status !== "ended" && (!a.start_date || a.start_date <= to);
     const total = active ? sub + perLead + sponsored : 0;
     const inMonth = (a.payments || []).filter((p) => p.month === month);
     const paid = inMonth.length ? { amount: inMonth.reduce((s, p) => s + (Number(p.amount) || 0), 0), paid_at: inMonth[0].paid_at || new Date().toISOString() } : null;
-    return { leads, sub: active ? sub : 0, perLead: active ? perLead : 0, sponsored: active ? sponsored : 0, total, paid, model, active };
+    return { leads, calls, sub: active ? sub : 0, perLead: active ? perLead : 0, sponsored: active ? sponsored : 0, total, paid, model, active };
   }
   function viewDashboard() {
     const active = A.listings.filter((l) => l.active).length;
@@ -146,11 +154,11 @@
     recent.forEach((q) => (per[q.listing_id] = (per[q.listing_id] || 0) + 1));
     const top = Object.entries(per).sort((a, b) => b[1] - a[1]).slice(0, 6);
     const max = top.length ? top[0][1] : 1;
-    const waiting = pendingListings().length + pendingReviews().length;
+    const waiting = pendingListings().length + pendingProfiles().length + pendingReviews().length;
     return ph("סקירה", `היום ${T.fmtLong(T.iso(T.today()))}`, `<a class="btn btn-primary" href="#new">${I("plus")}מתחם חדש</a>`) + `
       <div class="kpis">
-        <a class="kpi ${newLeads.length ? "attn" : ""}" href="#leads"><span>${I("inbox")}פניות חדשות</span><b>${newLeads.length}</b><small>${recent.length} פניות ב־30 יום · ${T.num(views)} צפיות${A.subscribers.length ? ` · ${A.subscribers.length} מנויי דיוור` : ""}</small></a>
-        <a class="kpi ${waiting ? "attn" : ""}" href="#${pendingListings().length ? "moderation" : "reviews"}"><span>${I("shield")}ממתין לאישור</span><b>${waiting}</b><small>${pendingListings().length} עדכוני תוכן · ${pendingReviews().length} חוות דעת</small></a>
+        <a class="kpi ${newLeads.length ? "attn" : ""}" href="#leads"><span>${I("inbox")}פניות חדשות</span><b>${newLeads.length}</b><small>${recent.length} פניות ב־30 יום${A.calls.length ? ` · ${recentCalls(30).length} שיחות` : ""} · ${T.num(views)} צפיות${A.subscribers.length ? ` · ${A.subscribers.length} מנויי דיוור` : ""}</small></a>
+        <a class="kpi ${waiting ? "attn" : ""}" href="#${pendingListings().length || pendingProfiles().length ? "moderation" : "reviews"}"><span>${I("shield")}ממתין לאישור</span><b>${waiting}</b><small>${pendingListings().length} עדכוני מתחמים · ${pendingProfiles().length ? pendingProfiles().length + " פרטי לקוח · " : ""}${pendingReviews().length} חוות דעת</small></a>
         <a class="kpi" href="#billing"><span>${I("receipt")}הכנסה צפויה החודש</span><b>${T.money(expected)}</b><small>${bill.filter((b) => b.paid).length} מתוך ${bill.filter((b) => b.total).length} שילמו</small></a>
         <a class="kpi ${expiring.length ? "attn" : ""}" href="#advertisers"><span>${I("clock")}מנויים לחידוש</span><b>${expiring.length}</b><small>${active} מתחמים פעילים באתר</small></a>
       </div>
@@ -241,7 +249,7 @@
     return `<div class="rows-edit">${rows.map((r, i) => `<div class="row-edit">${cols.map((c) => c.sel
       ? `<label class="field"${c.w ? ` style="flex-basis:${c.w}"` : ""}><span>${c.label}</span><select class="select" data-arr="${path}" data-i="${i}" data-k="${c.k}">${c.sel.map((o) => `<option value="${esc(o.key)}" ${String(r[c.k]) === String(o.key) ? "selected" : ""}>${esc(o.name)}</option>`).join("")}</select></label>`
       : c.area ? `<label class="field" style="flex-basis:100%"><span>${c.label}</span><textarea class="textarea" rows="2" style="min-height:64px" data-arr="${path}" data-i="${i}" data-k="${c.k}">${esc(r[c.k] == null ? "" : r[c.k])}</textarea></label>`
-      : `<label class="field"${c.w ? ` style="flex-basis:${c.w}"` : ""}><span>${c.label}</span><input class="input${c.num ? " num" : ""}" ${c.num ? `type="number" min="${c.min || 0}"${c.max ? ` max="${c.max}"` : ""} data-t="num"` : ""} data-arr="${path}" data-i="${i}" data-k="${c.k}" value="${esc(r[c.k] == null ? "" : r[c.k])}" ${c.ph ? `placeholder="${esc(c.ph)}"` : ""}></label>`).join("")}
+      : `<label class="field"${c.w ? ` style="flex-basis:${c.w}"` : ""}><span>${c.label}</span><input class="input${c.num ? " num" : ""}" ${c.num ? `type="number" min="${c.min || 0}"${c.max ? ` max="${c.max}"` : ""} data-t="num"` : ""}${c.cur ? " data-cur" : ""} data-arr="${path}" data-i="${i}" data-k="${c.k}" value="${esc(r[c.k] == null ? "" : r[c.k])}" ${c.ph ? `placeholder="${esc(c.ph)}"` : ""}></label>`).join("")}
       <button class="mini-btn" type="button" data-act="arr-del" data-arr="${path}" data-i="${i}" aria-label="הסרה">${I("trash")}</button></div>`).join("")}
       <button class="btn btn-line btn-sm" type="button" data-act="arr-add" data-arr="${path}" style="justify-self:start">${I("plus")}${addLabel}</button></div>`;
   };
@@ -259,7 +267,7 @@
       <div class="unit-edit-head"><label class="field" style="flex:1"><span>שם היחידה</span><input class="input" data-room="${i}" data-k="name" value="${esc(r.name)}"></label>
         <button class="mini-btn" type="button" data-act="room-del" data-i="${i}" aria-label="הסרת ${esc(r.name)}" ${d.rooms.length < 2 ? "disabled" : ""}>${I("trash")}</button></div>
       <div class="g-auto">${n("guests_max", "אורחים לכל היותר", 'min="1"')}${n("guests_base", "כלולים במחיר")}${n("bedrooms", "חדרי שינה")}${n("beds", "מיטות")}${n("bathrooms", "חדרי רחצה")}${n("size", "גודל (מ״ר)")}</div>
-      <div class="g-auto">${n("price_weekday", "₪ אמצ״ש")}${n("price_weekend", "₪ סופ״ש")}${n("price_holiday", "₪ חג")}${n("p2_weekday", "₪ אמצ״ש מ־2 לילות")}${n("p2_weekend", "₪ סופ״ש מ־2 לילות")}</div>
+      <div class="g-auto">${n("price_weekday", "אמצ״ש", "data-cur")}${n("price_weekend", "סופ״ש", "data-cur")}${n("price_holiday", "חג", "data-cur")}${n("p2_weekday", "אמצ״ש מ־2 לילות", "data-cur")}${n("p2_weekend", "סופ״ש מ־2 לילות", "data-cur")}</div>
       <details class="unit-more"><summary>תיאור, מאפיינים ותמונות של היחידה <span class="hint">${[r.desc ? "יש תיאור" : "אין תיאור", (r.amenities || []).length + " מאפיינים", (r.photos || []).length + " תמונות"].join(" · ")}</span></summary>
         <label class="field" style="margin-top:10px"><span>תיאור קצר</span><textarea class="textarea" rows="2" style="min-height:64px" data-room="${i}" data-k="desc" maxlength="240" placeholder="מיטת קינג, ג׳קוזי ליד החלון, מרפסת לנוף">${esc(r.desc || "")}</textarea></label>
         <p class="field-label" style="margin:12px 0 8px">מה יש ביחידה</p>
@@ -269,6 +277,31 @@
           <label class="uph add">${I("upload")}<span>העלאה</span><input type="file" accept="image/*" multiple class="sr" data-room-photo="${i}"></label></div>
       </details></div>`;
   }
+  /* רעש וסביבה: המארח מצהיר, המנהל יכול לתקן ולנעול */
+  function noiseSection(d) {
+    const n = d.noise && typeof d.noise === "object" ? d.noise : {};
+    const lockedForMe = !IS_ADMIN && !!n.locked;
+    const dis = lockedForMe ? "disabled" : "";
+    const chips = (name, arr, sel) => `<div class="amen-picks chips">${arr.map(([k, t]) => `<label><input type="checkbox" name="${name}" value="${k}" ${(sel || []).includes(k) ? "checked" : ""} ${dis}>${esc(t)}</label>`).join("")}</div>`;
+    return `<section class="panel" id="ed-noise"><h2>רעש וסביבה <span class="hint">מוצג לאורחים בדף המתחם, כתגית בכרטיס ובסינון באתר</span></h2>
+      ${lockedForMe ? `<p class="note note-info" style="margin-bottom:12px">${I("shield")}<span>סימון הרעש של המתחם נקבע על ידי צוות האתר אחרי בדיקה. לשינוי פונים לצוות.</span></p>` : ""}
+      <input type="hidden" name="noise_on" value="1" ${dis}>
+      <fieldset class="radio-row" ${dis}><legend class="field-label">איך הסביבה בדרך כלל</legend>
+        <label><input type="radio" name="noise_level" value="" ${!n.level ? "checked" : ""}>לא צוין</label>
+        ${T.NOISE_LEVELS.map((x) => `<label><input type="radio" name="noise_level" value="${x.key}" ${n.level === x.key ? "checked" : ""}>${esc(x.name)}</label>`).join("")}</fieldset>
+      <p class="field-label" style="margin:14px 0 8px">מה עלול להישמע <span class="hint">אורח שיודע מראש לא מתאכזב</span></p>
+      ${chips("noise_src", T.NOISE_SOURCES, n.sources)}
+      <label class="check party-check" style="margin-top:16px"><input type="checkbox" name="noise_party" ${n.party_ok ? "checked" : ""} ${dis}><span><b>מותר להרעיש במתחם</b><small class="muted" style="display:block;font-size:var(--t-xs)">מוזיקה, קריוקי או מסיבות בלי בעיה עם השכנים. מוצג כתגית ״מותר להרעיש״ ובסינון.</small></span></label>
+      <div class="noise-party" ${n.party_ok ? "" : "hidden"}>
+        <p class="field-label" style="margin:12px 0 8px">מה מותר</p>${chips("noise_allowed", T.PARTY_ALLOWED, n.allowed)}
+        <p class="field-label" style="margin:12px 0 8px">למה זה בסדר</p>${chips("noise_reason", T.PARTY_REASONS, n.reasons)}
+        <div class="form-grid" style="margin-top:10px"><label class="field"><span>שקט מהשעה (לא חובה)</span><input class="input" name="noise_quiet_from" maxlength="16" placeholder="02:00" value="${esc(n.quiet_from || "")}" ${dis}></label></div>
+      </div>
+      <div class="form-grid" style="margin-top:12px"><label class="field span2"><span>הסבר במילים שלכם (לא חובה)</span><textarea class="textarea" name="noise_note" rows="2" style="min-height:70px" maxlength="300" placeholder="למשל: המתחם בקצה המושב, 400 מטר מהבית הקרוב, אפשר מוזיקה בחוץ עד 1 בלילה" ${dis}>${esc(n.note || "")}</textarea></label></div>
+      ${IS_ADMIN ? `<label class="check" style="margin-top:12px"><input type="checkbox" name="noise_locked" ${n.locked ? "checked" : ""}><span>נעילת הסימון: המארח לא יכול לשנות אותו<small class="muted" style="display:block;font-size:var(--t-xs)">אחרי שבדקתם ותיקנתם. המארח רואה שהסימון נקבע על ידי הצוות.</small></span></label>` : ""}
+      <p class="hint" style="margin-top:10px">הסימון הוא הצהרה של המארח. גם במתחם שמותר בו להרעיש חלים חוקי הרעש וחוקי העזר המקומיים.</p>
+    </section>`;
+  }
   function viewEditor(id) {
     const d = draftFor(id);
     if (!d) return ph("המתחם לא נמצא", "") + `<a class="btn btn-line" href="#${IS_ADMIN ? "listings" : "my"}">חזרה</a>`;
@@ -276,12 +309,16 @@
     if (!d.details || typeof d.details !== "object") d.details = {};
     if (!d.terms || typeof d.terms !== "object") d.terms = {};
     const orig = A.listings.find((l) => l.id === id);
-    const moderated = !IS_ADMIN && A.settings.moderation !== false;
+    /* מה דורש אישור (לפי ההגדרות) ומה מתעדכן מיד */
+    const onG = IS_ADMIN ? [] : T.MOD_GROUPS.filter((g) => g.fields.length && T.modOn(A.settings, g.key));
+    const offG = T.MOD_GROUPS.filter((g) => g.fields.length && !onG.includes(g));
+    const moderated = onG.length > 0;
+    const instant = `מתעדכנים מיד: ${offG.map((g) => g.name).concat("יומן הזמינות").join(", ")}.`;
     const t = d.terms;
     const secs = [["location", "לוקיישן", "איפה בדיוק, איך מגיעים, חניה"], ["vibe", "אווירה", "שקט, נוף, סגנון"], ["facilities", "מתקנים", "ג׳קוזי, בריכה, מטבח"], ["area", "מה עושים באזור", "מסלולים, מסעדות, יקבים (עם זמני נסיעה)"]];
     return ph(id === "new" ? "מתחם חדש" : esc(d.name || "עריכת מתחם"), id === "new" ? "ממלאים, שומרים, ומפעילים כשהכרטיס מוכן." : `עודכן ${T.fmtStamp(d.updated_at)}`, id === "new" ? "" : `<a class="btn btn-line" href="${siteURL("stay-" + d.id)}" target="_blank" rel="noopener">${I("external")}צפייה באתר</a>`) + `
-      ${!IS_ADMIN && orig && contentPending(orig) ? `<p class="note note-info" style="margin-bottom:14px">${I("shield")}<span>שינויי תוכן ששלחתם ממתינים לאישור צוות האתר (${T.fmtStamp(orig.pending._at)}). מחירים, יומן, יחידות ומדיניות מתעדכנים מיד.</span></p>` : moderated ? `<p class="note note-info" style="margin-bottom:14px">${I("info")}<span>שינויים בשם, בתיאור, בתמונות, במאפיינים ובתוכן הדף מתפרסמים אחרי אישור צוות האתר. מחירים, יומן, יחידות ומדיניות מתעדכנים מיד.</span></p>` : ""}
-      <nav class="ed-jump" aria-label="קפיצה לחלק בטופס">${[["ed-main", "פרטים"], ["ed-photos", "תמונות"], ["ed-content", "תוכן הדף"], ["ed-units", "יחידות ומחירים"], ["ed-deals", "מבצעים והטבות"], ["ed-amen", "מאפיינים"], ["ed-policy", "מדיניות"], ["ed-calendar", "יומן"], ["ed-contact", "מיקום וקשר"]].map(([k, n]) => `<a href="#" data-act="ed-jump" data-to="${k}">${n}</a>`).join("")}</nav>
+      ${!IS_ADMIN && orig && contentPending(orig) ? `<p class="note note-info" style="margin-bottom:14px">${I("shield")}<span>שינויים ששלחתם ממתינים לאישור צוות האתר (${T.fmtStamp(orig.pending._at)}). ${instant}</span></p>` : moderated ? `<p class="note note-info" style="margin-bottom:14px">${I("info")}<span>שינויים ב${onG.map((g) => g.name).join(", ")} מתפרסמים באתר אחרי אישור צוות האתר. ${instant}</span></p>` : ""}
+      <nav class="ed-jump" aria-label="קפיצה לחלק בטופס">${[["ed-main", "פרטים"], ["ed-photos", "תמונות"], ["ed-content", "תוכן הדף"], ["ed-units", "יחידות ומחירים"], ["ed-deals", "מבצעים והטבות"], ["ed-amen", "מאפיינים"], ["ed-noise", "רעש וסביבה"], ["ed-policy", "מדיניות"], ["ed-calendar", "יומן"], ["ed-contact", "מיקום וקשר"]].map(([k, n]) => `<a href="#" data-act="ed-jump" data-to="${k}">${n}</a>`).join("")}</nav>
       <form class="editor" id="editor" data-form="listing" novalidate>
         <div>
           <section class="panel" id="ed-main"><h2>פרטי המתחם</h2><div class="form-grid">
@@ -315,11 +352,11 @@
               <button class="btn btn-line btn-sm" type="button" data-act="room-add" style="justify-self:start">${I("plus")}יחידה נוספת</button></div>`
             : `<div class="g-auto">
               ${num(d, "guests_max", "אורחים לכל היותר", 'min="1"')}${num(d, "guests_base", "אורחים כלולים במחיר")}${num(d, "bedrooms", "חדרי שינה")}${pNum(d, "terms.beds", "מיטות")}${num(d, "bathrooms", "חדרי רחצה")}${pNum(d, "terms.size", "גודל (מ״ר)")}</div>
-              <div class="g-auto" style="margin-top:10px">${num(d, "price_weekday", "₪ ללילה באמצ״ש", 'required min="1"')}${num(d, "price_weekend", "₪ ללילה בסופ״ש")}${num(d, "price_holiday", "₪ ללילה בחג")}${pNum(d, "terms.p2_weekday", "₪ אמצ״ש מ־2 לילות")}${pNum(d, "terms.p2_weekend", "₪ סופ״ש מ־2 לילות")}</div>`}
+              <div class="g-auto" style="margin-top:10px">${num(d, "price_weekday", "ללילה באמצ״ש", 'required min="1" data-cur')}${num(d, "price_weekend", "ללילה בסופ״ש", "data-cur")}${num(d, "price_holiday", "ללילה בחג", "data-cur")}${pNum(d, "terms.p2_weekday", "אמצ״ש מ־2 לילות", "data-cur")}${pNum(d, "terms.p2_weekend", "סופ״ש מ־2 לילות", "data-cur")}</div>`}
             <p class="field-label" style="margin:18px 0 8px">כללי מחיר לכל המתחם</p>
             <div class="g-auto">
               ${num(d, "min_nights", "לילות מינימום", 'min="1"')}${pNum(d, "terms.min_weekend", "מינימום בסופ״ש")}${pNum(d, "terms.min_holiday", "מינימום בחג")}
-              ${num(d, "extra_guest_price", "₪ למבוגר נוסף ללילה")}${pNum(d, "terms.extra_child_price", "₪ לילד נוסף ללילה")}
+              ${num(d, "extra_guest_price", "למבוגר נוסף ללילה", "data-cur")}${pNum(d, "terms.extra_child_price", "לילד נוסף ללילה", "data-cur")}
             </div>
             <div class="form-grid" style="margin-top:10px">${pTxt(d, "terms.price_note", "הערה למחירון (לא חובה)", 'maxlength="140" placeholder="המחירים כוללים מע״מ וארוחת בוקר"', true)}</div>
             <p class="hint" style="margin-top:10px">סופ״ש = הלילות שמתחילים בחמישי ובשישי. מחיר חג חל על לילות החגים שבהגדרות האתר. ״מ־2 לילות״ הוא מחיר ללילה כשמזמינים שני לילות ומעלה (ריק = אותו מחיר).</p>
@@ -342,11 +379,11 @@
             <p class="field-label" style="margin:18px 0 8px">הטבות (% הנחה שהאורח בוחר בטופס ההזמנה ומציג אישור בהגעה)</p>
             <div class="g-auto">${T.BENEFITS.map((b) => pNum(d, "terms.benefits." + b.key, esc(b.name) + " (%)", 'max="50"')).join("")}</div>
             <p class="field-label" style="margin:18px 0 8px">חבילות אירוח (האורח בוחר אחת: לינה בלבד או חבילה)</p>
-            ${arrRows(d, "terms.packages", [{ k: "name", label: "חבילה", w: "220px", ph: "לינה וארוחת בוקר" }, { k: "price", label: "₪ תוספת", num: true }, { k: "per", label: "לפי", sel: T.EXTRA_PER }], "חבילה")}
+            ${arrRows(d, "terms.packages", [{ k: "name", label: "חבילה", w: "220px", ph: "לינה וארוחת בוקר" }, { k: "price", label: "תוספת", num: true, cur: true }, { k: "per", label: "לפי", sel: T.EXTRA_PER }], "חבילה")}
             <p class="field-label" style="margin:18px 0 8px">תוספות ושירותים (האורח מסמן כמה שרוצה)</p>
             <div class="rows-edit">${d.extras.map((x, i) => `<div class="row-edit">
               <label class="field" style="flex-basis:220px"><span>תוספת</span><input class="input" data-extra="${i}" data-k="name" value="${esc(x.name)}" placeholder="עיסוי זוגי (60 דק׳)"></label>
-              <label class="field"><span>₪ מחיר</span><input class="input num" type="number" min="0" data-extra="${i}" data-k="price" value="${esc(x.price || "")}" placeholder="0 = בתיאום"></label>
+              <label class="field"><span>מחיר</span><input class="input num" type="number" min="0" data-cur data-extra="${i}" data-k="price" value="${esc(x.price || "")}" placeholder="0 = בתיאום"></label>
               <label class="field"><span>לפי</span><select class="select" data-extra="${i}" data-k="per">${T.EXTRA_PER.map((pp) => `<option value="${pp.key}" ${x.per === pp.key ? "selected" : ""}>${pp.name}</option>`).join("")}</select></label>
               <button class="mini-btn" type="button" data-act="extra-del" data-i="${i}" aria-label="הסרת תוספת">${I("trash")}</button></div>`).join("")}
               <button class="btn btn-line btn-sm" type="button" data-act="extra-add" style="justify-self:start">${I("plus")}תוספת</button></div>
@@ -357,6 +394,8 @@
             <p class="field-label" style="margin:16px 0 8px">מתאים ל</p>
             <div class="amen-picks chips">${T.AUDIENCE.map((a) => `<label><input type="checkbox" name="audience" value="${a.key}" ${d.audience.includes(a.key) ? "checked" : ""}>${a.name}</label>`).join("")}</div>
           </section>
+
+          ${noiseSection(d)}
 
           <section class="panel" id="ed-policy"><h2>שעות, מדיניות וחוקי הבית</h2>
             <div class="g-auto">${pTxt(d, "terms.checkin", "כניסה", 'placeholder="15:00" maxlength="16"')}${pTxt(d, "terms.checkout", "יציאה", 'placeholder="11:00" maxlength="16"')}${pTxt(d, "terms.checkin_sat", "כניסה בשבת", 'placeholder="18:00" maxlength="16"')}${pTxt(d, "terms.checkout_sat", "יציאה בשבת", 'placeholder="מוצאי שבת" maxlength="20"')}</div>
@@ -388,6 +427,7 @@
             <label class="field"><span>טלפון לאורחים</span><input class="input" name="phone" type="tel" dir="ltr" style="text-align:right" value="${esc(d.phone)}"></label>
             <label class="field"><span>וואטסאפ</span><input class="input" name="whatsapp" type="tel" dir="ltr" style="text-align:right" value="${esc(d.whatsapp)}" placeholder="אם ריק, משתמשים בטלפון"></label>
             <label class="field span2"><span>אימייל לקבלת פניות (לא מוצג באתר)</span><input class="input" name="email" type="email" dir="ltr" style="text-align:right" value="${esc(d.email)}"></label>
+            ${d.tracking_phone ? `<p class="note note-info span2">${I("phone")}<span>באתר מוצג המספר הווירטואלי <b dir="ltr">${esc(T.fmtPhone(d.tracking_phone))}</b>, והוא מעביר את השיחות לטלפון שלמעלה. כך נספרות השיחות מאורחים${IS_ADMIN ? "" : " (״שיחות״ בתפריט)"}. ${IS_ADMIN ? "משנים את המספר בחלק ״פרסום״." : "לשינוי המספר שאליו מועברות השיחות, מעדכנים את הטלפון ומודיעים לצוות האתר."}</span></p>` : ""}
           </div></section>
         </div>
 
@@ -400,10 +440,12 @@
             <div class="toggle-row"><span>מחיר הכי טוב<small>המארח התחייב שאין מחיר זול יותר באתר אחר</small></span><button class="switch" type="button" role="switch" aria-checked="${!!d.best_price}" data-act="ed-switch" data-k="best_price" aria-label="מחיר הכי טוב"></button></div>
             <label class="field" style="margin-top:12px"><span>שייך ללקוח (מפרסם)</span><select class="select" name="owner_id" data-act-change="ed-owner"><option value="">ללא לקוח</option>${A.advertisers.map((a) => `<option value="${esc(a.id)}" ${d.owner_id === a.id ? "selected" : ""}>${esc(a.business || a.name)}${a.email ? " · " + esc(a.email) : ""}</option>`).join("")}</select></label>
             <p class="note ${d.owner_id ? "note-ok" : "note-warn"}" id="owner-note" style="margin-top:8px">${I(d.owner_id ? "check" : "info")}<span>${d.owner_id ? "הלקוח רואה ועורך את המתחם בממשק המארחים שלו (אחרי שמירה)." : "המתחם לא משויך לאף לקוח, ולכן לא מופיע בממשק המארחים. בוחרים לקוח ושומרים."}</span></p>
+            <label class="field" style="margin-top:12px"><span>מספר מעקב שיחות (וירטואלי)</span><input class="input" name="tracking_phone" type="tel" dir="ltr" style="text-align:right" value="${esc(T.fmtPhone(d.tracking_phone))}" placeholder="072-0000000"></label>
+            <p class="hint" style="margin-top:6px">אם מוזן, זה המספר שמוצג לאורחים באתר, וכל שיחה נרשמת ב״שיחות״. אצל ספק הטלפוניה מגדירים שהמספר מעביר לטלפון של המארח.</p>
           </div>` : `<div class="panel"><h2>פרסום</h2><p class="muted" style="font-size:var(--t-s)">${d.active ? "המתחם מוצג באתר." : orig && orig.pending && orig.pending._publish ? `נשלח לבדיקה ${T.fmtStamp(orig.pending._at)}. נעדכן אתכם במייל כשהמתחם יעלה לאוויר.` : "המתחם עוד לא מוצג באתר. כשהכרטיס מוכן, שולחים לבדיקה וצוות האתר מפעיל אותו."}</p>
             ${!d.active && orig && !(orig.pending && orig.pending._publish) ? `<button class="btn btn-primary btn-block" type="button" data-act="ed-publish" style="margin-top:10px">${I("send")}שמירה ושליחה לפרסום</button>` : ""}</div>`}
           <div class="panel"><h2>שלמות הכרטיס</h2>${completeness(d)}</div>
-          ${d.id && A.stats[d.id] ? `<div class="panel"><h2>30 הימים האחרונים</h2><div class="stat-grid" style="grid-template-columns:1fr 1fr"><div><b>${T.num(A.stats[d.id].v)}</b><span>צפיות</span></div><div><b>${leadsFor(d.id).length}</b><span>פניות</span></div><div><b>${A.stats[d.id].p}</b><span>הצגות טלפון</span></div><div><b>${A.stats[d.id].w}</b><span>וואטסאפ</span></div></div></div>` : ""}
+          ${d.id && A.stats[d.id] ? `<div class="panel"><h2>30 הימים האחרונים</h2><div class="stat-grid" style="grid-template-columns:1fr 1fr"><div><b>${T.num(A.stats[d.id].v)}</b><span>צפיות</span></div><div><b>${leadsFor(d.id).length}</b><span>פניות</span></div><div><b>${A.stats[d.id].p}</b><span>הצגות טלפון</span></div><div><b>${A.stats[d.id].w}</b><span>וואטסאפ</span></div>${d.tracking_phone || A.calls.some((c) => c.listing_id === d.id) ? `<div><b>${recentCalls(30).filter((c) => c.listing_id === d.id).length}</b><span>שיחות</span></div>` : ""}</div></div>` : ""}
           ${IS_ADMIN && id !== "new" ? `<div class="panel" id="del-zone"><button class="btn btn-danger btn-block" type="button" data-act="ask-del" data-kind="listing" data-id="${esc(d.id)}">${I("trash")}מחיקת המתחם</button></div>` : ""}
         </div>
         <div class="savebar" style="grid-column:1/-1"><span class="state" id="save-state" aria-live="polite">${d._dirty ? "יש שינויים שלא נשמרו" : id === "new" ? "מתחם חדש, טרם נשמר" : "הכל שמור"}</span>
@@ -492,6 +534,12 @@
     ["lat", "lng"].forEach((k) => { if (fd.has(k)) d[k] = fd.get(k) === "" ? null : Number(fd.get(k)); });
     if (fd.has("sponsored_until")) d.sponsored_until = fd.get("sponsored_until") || null;
     if (fd.has("owner_id")) d.owner_id = fd.get("owner_id");
+    if (fd.has("tracking_phone")) d.tracking_phone = T.normPhone(fd.get("tracking_phone"));
+    /* רעש וסביבה (שדות מושבתים כשהמנהל נעל את הסימון, ואז לא נוגעים בו) */
+    if (fd.get("noise_on")) {
+      const was = d.noise && typeof d.noise === "object" ? d.noise : {};
+      d.noise = { level: fd.get("noise_level") || "", sources: fd.getAll("noise_src"), party_ok: !!fd.get("noise_party"), allowed: fd.getAll("noise_allowed"), reasons: fd.getAll("noise_reason"), quiet_from: String(fd.get("noise_quiet_from") || "").trim(), note: String(fd.get("noise_note") || "").trim(), locked: IS_ADMIN ? !!fd.get("noise_locked") : !!was.locked };
+    }
     d.amenities = fd.getAll("amenities");
     d.audience = fd.getAll("audience");
     $$("[data-room]", form).forEach((el) => { const r = d.rooms[Number(el.dataset.room)]; if (r) r[el.dataset.k] = el.type === "number" ? (el.value === "" ? 0 : Number(el.value)) : el.value; });
@@ -593,6 +641,11 @@
     if (!(T.fromPrice(T.normalizeListing(d)) > 0)) errs.push("מחיר ללילה");
     if (d.rooms.some((r) => !String(r.name).trim())) errs.push("שם לכל יחידה");
     if (errs.length) { T.toast("חסר: " + errs.join(", "), "err"); return; }
+    if (IS_ADMIN && d.tracking_phone) {
+      if (!/^0\d{8,9}$|^1\d{9}$/.test(d.tracking_phone)) { T.toast("מספר המעקב לא נראה תקין", "err"); return; }
+      const dup = A.listings.find((l) => l.id !== d.id && T.normPhone(l.tracking_phone) === d.tracking_phone);
+      if (dup) { T.toast(`מספר המעקב כבר משויך ל${dup.name}. לכל מתחם צריך מספר משלו, כדי לדעת לאן הגיעה השיחה.`, "err"); return; }
+    }
     const today = T.iso(T.today());
     const clean = Object.assign({}, d);
     delete clean._dirty;
@@ -611,6 +664,11 @@
     ["checkin", "checkout", "checkin_sat", "checkout_sat", "price_note", "cancel_note"].forEach((k) => { tm[k] = String(tm[k] || "").trim(); if (!tm[k]) delete tm[k]; });
     if (tm.kids !== "age") delete tm.kids_age;
     clean.details = det; clean.terms = tm;
+    /* רעש: בלי שדות ריקים, כדי ששמירה בלי שינוי לא תיצור ״שינוי ממתין״ */
+    const nz = Object.assign({}, clean.noise || {});
+    if (!nz.party_ok) { delete nz.allowed; delete nz.reasons; delete nz.quiet_from; }
+    Object.keys(nz).forEach((k) => { if (nz[k] === false || nz[k] === "" || nz[k] == null || (Array.isArray(nz[k]) && !nz[k].length)) delete nz[k]; });
+    clean.noise = nz;
     try {
       const wasNew = A.editId === "new";
       let saved;
@@ -625,22 +683,68 @@
   }
 
   /* ================================================================ moderation */
+  const PROF_LABELS = { name: "שם איש הקשר", phone: "טלפון", address: "כתובת לחשבוניות", tax_id: "ח.פ / ע.מ" };
+  const MONEY_KEYS = ["price_weekday", "price_weekend", "price_holiday", "extra_guest_price"];
+  function modShow(k, v) {
+    if (k === "photos") return `<span class="thumbs">${(v || []).slice(0, 8).map((p) => `<img src="${esc(T.img(p, 160))}" alt="">`).join("")}${(v || []).length > 8 ? `<span class="muted">+${v.length - 8}</span>` : ""}</span>`;
+    if (v == null || v === "" || (Array.isArray(v) && !v.length)) return "—";
+    if (k === "amenities") return esc(v.map((a) => T.amenityOf(a).name).join(", "));
+    if (k === "audience") return esc(v.map((a) => (T.AUDIENCE.find((x) => x.key === a) || { name: a }).name).join(", "));
+    if (k === "region") return esc(T.regionOf(v).name);
+    if (k === "type") return esc(T.typeOf(v).name);
+    if (MONEY_KEYS.includes(k)) return T.money(v);
+    if (k === "rooms") return esc(v.map((r) => `${r.name || "יחידה"}: ${T.money(r.price_weekday)} אמצ״ש · ${T.money(r.price_weekend || r.price_weekday)} סופ״ש · עד ${r.guests_max || "?"} אורחים`).join("\n"));
+    if (k === "seasons") return esc(v.map((x) => `${x.label || "עונה"}: ${T.fmtShort(x.from)}–${T.fmtShort(x.to)}${Number(x.pct) ? ` · ${x.pct > 0 ? "+" : ""}${x.pct}%` : ""}${Number(x.min) ? ` · מינימום ${x.min} לילות` : ""}`).join("\n"));
+    if (k === "extras") return esc(v.map((x) => `${x.name}: ${Number(x.price) ? T.money(x.price) : "בתיאום"}`).join("\n"));
+    if (k === "noise") {
+      const n = T.noiseOf({ noise: v });
+      return esc([n.level ? n.level.name : "", n.sources.length ? "ייתכן: " + n.sources.join(", ") : "", n.party ? `מותר להרעיש${n.allowed.length ? ": " + n.allowed.join(", ") : ""}${n.reasons.length ? " (" + n.reasons.join(", ") + ")" : ""}${n.quiet_from ? " · שקט מ־" + n.quiet_from : ""}` : "", n.note ? `״${n.note}״` : ""].filter(Boolean).join("\n") || "—");
+    }
+    if (k === "lastminute_pct") return esc(v + "%");
+    return esc(String(v));
+  }
+  const TERM_LABELS = { checkin: "כניסה", checkout: "יציאה", checkin_sat: "כניסה בשבת", checkout_sat: "יציאה בשבת", kids: "ילדים", kids_age: "ילדים מגיל", smoking: "עישון", couples_only: "לזוגות בלבד", cancel: "מדיניות ביטול", cancel_note: "הערה לביטול", packages: "חבילות", benefits: "הטבות", price_note: "הערה למחירון", p2_weekday: "אמצ״ש מ־2 לילות", p2_weekend: "סופ״ש מ־2 לילות", min_weekend: "מינימום בסופ״ש", min_holiday: "מינימום בחג", beds: "מיטות", size: "גודל (מ״ר)", extra_child_price: "לילד נוסף" };
+  function termText(k, v) {
+    if (v == null || v === "" || (Array.isArray(v) && !v.length) || (typeof v === "object" && !Array.isArray(v) && !Object.keys(v).length)) return "—";
+    if (k === "cancel") return v.map((x) => `מ־${x.days} ימים לפני: ${x.fee}% דמי ביטול`).join("\n");
+    if (k === "packages") return v.map((x) => `${x.name}: ${T.money(x.price)}`).join("\n");
+    if (k === "benefits") return Object.entries(v).map(([b, pct]) => `${(T.benefitOf(b) || { name: b }).name}: ${pct}%`).join("\n");
+    if (k === "kids") return T.statusName(T.KIDS_POLICY, v);
+    if (k === "smoking") return T.statusName(T.SMOKING_POLICY, v);
+    if (typeof v === "boolean") return v ? "כן" : "לא";
+    if (["p2_weekday", "p2_weekend", "extra_child_price"].includes(k)) return T.money(v);
+    return String(v);
+  }
+  function termsDiff(a, b) {
+    a = a || {}; b = b || {};
+    const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => !T.sameField(k, a[k], b[k]));
+    if (!keys.length) return `<div class="diff-row"><b>מדיניות</b><span class="old">—</span><span class="new">ללא שינוי</span></div>`;
+    return keys.map((k) => `<div class="diff-row"><b>${esc(TERM_LABELS[k] || k)}</b><span class="old">${esc(termText(k, a[k]))}</span><span class="new">${esc(termText(k, b[k]))}</span></div>`).join("");
+  }
+  function modRows(l) {
+    const p = l.pending;
+    const fields = T.MODERATED_FIELDS.filter(([k]) => p[k] !== undefined && !(k === "lng" && p.lat !== undefined));
+    return fields.map(([k, label]) => {
+      if (k === "details") return detailsDiff(l.details || {}, p.details || {});
+      if (k === "terms") return termsDiff(l.terms || {}, p.terms || {});
+      if (k === "lat" || k === "lng") { const o = [l.lat, l.lng].filter((x) => x != null).join(", "), nw = [p.lat !== undefined ? p.lat : l.lat, p.lng !== undefined ? p.lng : l.lng].filter((x) => x != null).join(", "); return `<div class="diff-row"><b>מיקום במפה</b><span class="old">${esc(o || "—")}</span><span class="new">${esc(nw || "—")}</span></div>`; }
+      return `<div class="diff-row"><b>${esc(label)}</b><span class="old">${modShow(k, l[k])}</span><span class="new">${modShow(k, p[k])}</span></div>`;
+    }).join("");
+  }
   function viewModeration() {
     const list = pendingListings();
-    const show = (k, v) => {
-      if (k === "photos") return `<span class="thumbs">${(v || []).slice(0, 8).map((p) => `<img src="${esc(T.img(p, 160))}" alt="">`).join("")}${(v || []).length > 8 ? `<span class="muted">+${v.length - 8}</span>` : ""}</span>`;
-      if (k === "amenities") return esc((v || []).map((a) => T.amenityOf(a).name).join(", "));
-      if (k === "audience") return esc((v || []).map((a) => (T.AUDIENCE.find((x) => x.key === a) || { name: a }).name).join(", "));
-      if (k === "region") return esc(T.regionOf(v).name);
-      if (k === "type") return esc(T.typeOf(v).name);
-      return esc(v || "—");
-    };
-    return ph("אישורי תוכן", A.settings.moderation === false ? "האישור כבוי בהגדרות, ומארחים מפרסמים שינויים ישירות." : "שינויים שמארחים שלחו בשם, בתיאור, בתמונות ובמאפיינים. מחירים ויומן לא דורשים אישור.") + `
-      ${list.length ? list.map((l) => { const fields = T.MODERATED_FIELDS.filter(([k]) => l.pending[k] !== undefined); const pub = !!l.pending._publish && !l.active; return `<div class="panel" data-row="${esc(l.id)}"><h2><span>${esc(l.name)} ${pub ? '<span class="pill pill-navy">בקשה לפרסום</span>' : ""} <span class="muted" style="font-family:var(--f-body);font-size:var(--t-xs)">· ${esc(advName(l.owner_id))} · נשלח ${T.fmtStamp(l.pending._at)}</span></span>
+    const profs = pendingProfiles();
+    const on = modGroupsOn();
+    const sub = on.length ? `מה שמארחים שינו ב${on.map((g) => g.name).join(", ")} מחכה כאן לאישור. קבוצות אחרות מתעדכנות מיד (בוחרים ב״הגדרות״), והיומן תמיד מתעדכן מיד.` : "האישור כבוי בהגדרות, ומארחים מפרסמים שינויים ישירות. כאן יופיעו בקשות פרסום של מתחמים חדשים.";
+    return ph("אישורים", sub) + `
+      ${list.map((l) => { const fields = T.MODERATED_FIELDS.filter(([k]) => l.pending[k] !== undefined); const pub = !!l.pending._publish && !l.active; return `<div class="panel" data-row="${esc(l.id)}"><h2><span>${esc(l.name)} ${pub ? '<span class="pill pill-navy">בקשה לפרסום</span>' : ""} <span class="muted" style="font-family:var(--f-body);font-size:var(--t-xs)">· ${esc(advName(l.owner_id))} · נשלח ${T.fmtStamp(l.pending._at)}</span></span>
           <span class="btn-row" style="margin:0">${!l.active ? `<button class="btn btn-primary btn-sm" type="button" data-act="mod-approve-live" data-id="${esc(l.id)}">${I("check")}אישור והצגה באתר</button>${fields.length ? `<button class="btn btn-line btn-sm" type="button" data-act="mod-approve" data-id="${esc(l.id)}">אישור בלי להציג</button>` : ""}` : `<button class="btn btn-primary btn-sm" type="button" data-act="mod-approve" data-id="${esc(l.id)}">${I("check")}אישור ופרסום</button>`}<a class="btn btn-line btn-sm" href="#edit-${esc(l.id)}">${I("edit")}לעורך</a><button class="btn btn-line btn-sm" type="button" data-act="mod-reject" data-id="${esc(l.id)}">דחייה</button></span></h2>
-          ${fields.length ? `<div class="diff">${fields.map(([k, label]) => k === "details" ? detailsDiff(l.details || {}, l.pending.details || {}) : `<div class="diff-row"><b>${label}</b><span class="old">${show(k, l[k])}</span><span class="new">${show(k, l.pending[k])}</span></div>`).join("")}</div>` : `<p class="muted" style="font-size:var(--t-s)">אין שינויי תוכן ממתינים: המארח ביקש לפרסם את המתחם כמו שהוא בעורך.</p>`}
-          <label class="field" style="margin-top:10px;max-width:520px"><span>סיבה, אם דוחים (נשלחת למארח במייל)</span><input class="input" data-mod-note="${esc(l.id)}" maxlength="400" placeholder="למשל: צריך תמונות באיכות גבוהה יותר"></label></div>`; }).join("")
-      : `<div class="panel"><div class="empty"><h3>אין שינויים שממתינים לאישור</h3><p>כשמארח ישנה תיאור או תמונות, השינוי יופיע כאן.</p></div></div>`}`;
+          ${fields.length ? `<div class="diff">${modRows(l)}</div>` : `<p class="muted" style="font-size:var(--t-s)">אין שינויים ממתינים: המארח ביקש לפרסם את המתחם כמו שהוא בעורך.</p>`}
+          <label class="field" style="margin-top:10px;max-width:520px"><span>סיבה, אם דוחים (נשלחת למארח במייל)</span><input class="input" data-mod-note="${esc(l.id)}" maxlength="400" placeholder="למשל: צריך תמונות באיכות גבוהה יותר"></label></div>`; }).join("")}
+      ${profs.length ? `<div class="panel"><h2><span class="h-ic">${I("user")}עדכוני פרטים בכרטיס הלקוח</span></h2>${profs.map((a) => `<div class="prof-mod" data-row="${esc(a.id)}"><p style="margin:0 0 8px"><a class="name" href="#client-${esc(a.id)}">${esc(a.business || a.name)}</a> <span class="muted" style="font-size:var(--t-xs)">· נשלח ${T.fmtStamp(a.pending._at)}</span></p>
+          <div class="diff">${Object.keys(PROF_LABELS).filter((k) => a.pending[k] !== undefined).map((k) => `<div class="diff-row"><b>${PROF_LABELS[k]}</b><span class="old">${esc(a[k] || "—")}</span><span class="new">${esc(a.pending[k] || "—")}</span></div>`).join("")}</div>
+          <div class="btn-row"><button class="btn btn-primary btn-sm" type="button" data-act="prof-approve" data-id="${esc(a.id)}">${I("check")}אישור העדכון</button><button class="btn btn-line btn-sm" type="button" data-act="prof-reject" data-id="${esc(a.id)}">דחייה</button></div></div>`).join("")}</div>` : ""}
+      ${!list.length && !profs.length ? `<div class="panel"><div class="empty"><h3>אין שינויים שממתינים לאישור</h3><p>${on.length ? "כשמארח ישנה משהו שדורש אישור, השינוי יופיע כאן." : "אפשר להפעיל אישור לפי סוג שינוי בהגדרות."}</p></div></div>` : ""}`;
   }
 
   const DETAIL_LABELS = { host_name: "שם המארחים", ribbon: "סרט על הכרטיס", sections: "תוכן לפי נושאים", included: "כלול באירוח", rules: "חוקי הבית", faq: "שאלות נפוצות", photo_cats: "קטגוריות תמונות" };
@@ -795,7 +899,7 @@
         <label class="field"><span>אימייל (כניסה לממשק המארחים)</span><input class="input" name="email" type="email" dir="ltr" style="text-align:right" value="${esc(a.email || "")}"></label>
         <label class="field"><span>חבילה</span><select class="select" name="plan">${T.PLANS.map((p) => `<option value="${p.key}" ${a.plan === p.key ? "selected" : ""}>${p.name} · ${T.money((A.settings.plan_prices || {})[p.key])}</option>`).join("")}</select></label>
         <label class="field"><span>מודל תשלום</span><select class="select" name="billing_model">${T.BILLING_MODELS.map((m) => `<option value="${m.key}" ${(a.billing_model || "subscription") === m.key ? "selected" : ""}>${m.name}</option>`).join("")}</select></label>
-        <label class="field"><span>₪ לפנייה (אם רלוונטי)</span><input class="input num" type="number" min="0" name="lead_price" value="${esc(a.lead_price || "")}" placeholder="${esc(A.settings.lead_price_default)}"></label>
+        <label class="field"><span>מחיר לפנייה (אם רלוונטי)</span><input class="input num" type="number" min="0" data-cur name="lead_price" value="${esc(a.lead_price || "")}" placeholder="${esc(A.settings.lead_price_default)}"></label>
         <label class="field"><span>סטטוס</span><select class="select" name="status">${T.ADV_STATUS.map((s) => `<option value="${s.key}" ${a.status === s.key ? "selected" : ""}>${s.name}</option>`).join("")}</select></label>
         <label class="field"><span>תחילת מנוי</span><input class="input" type="date" name="start_date" value="${esc(a.start_date || today)}"></label>
         <label class="field"><span>סיום מנוי</span><input class="input" type="date" name="end_date" value="${esc(a.end_date || T.iso(T.addDays(T.today(), 365)))}"></label>
@@ -813,15 +917,15 @@
     const sum = (k) => rows.reduce((s, r) => s + r[k], 0);
     const paid = rows.filter((r) => r.paid).reduce((s, r) => s + r.paid.amount, 0);
     const label = (mk) => T.fmtMonth(T.parseISO(mk + "-01"));
-    return ph("חיובים", "חישוב חודשי לכל לקוח: מנוי לפי החבילה, תשלום לפי פניות ומיקום ממומן. סימון התשלום נשמר אצל הלקוח.", `<select class="select" id="bill-month" aria-label="חודש" style="width:auto">${months.map((m) => `<option value="${m}" ${A.billMonth === m ? "selected" : ""}>${label(m)}</option>`).join("")}</select><button class="btn btn-line" type="button" data-act="bill-copy">${I("copy")}העתקת סיכום</button>`) + `
+    return ph("חיובים", "חישוב חודשי לכל לקוח: מנוי לפי החבילה, תשלום לפי פניות (כולל שיחות שנענו, אם מוגדר) ומיקום ממומן. סימון התשלום נשמר אצל הלקוח.", `<select class="select" id="bill-month" aria-label="חודש" style="width:auto">${months.map((m) => `<option value="${m}" ${A.billMonth === m ? "selected" : ""}>${label(m)}</option>`).join("")}</select><button class="btn btn-line" type="button" data-act="bill-copy">${I("copy")}העתקת סיכום</button>`) + `
       <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">
         <div class="kpi"><span>${I("receipt")}לחיוב ב${label(A.billMonth)}</span><b>${T.money(sum("total"))}</b><small>מנויים ${T.money(sum("sub"))} · פניות ${T.money(sum("perLead"))} · ממומן ${T.money(sum("sponsored"))}</small></div>
         <div class="kpi"><span>${I("check")}שולם</span><b>${T.money(paid)}</b><small>${rows.filter((r) => r.paid).length} לקוחות</small></div>
         <div class="kpi ${sum("total") - paid > 0 ? "attn" : ""}"><span>${I("clock")}פתוח לגבייה</span><b>${T.money(Math.max(0, sum("total") - paid))}</b><small>${rows.filter((r) => !r.paid && r.total).length} לקוחות</small></div>
       </div>
-      <div class="panel">${rows.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>לקוח</th><th>מודל</th><th>מנוי</th><th>פניות</th><th>תשלום פניות</th><th>ממומן</th><th>סה״כ</th><th>סטטוס</th><th></th></tr></thead><tbody>
+      <div class="panel">${rows.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>לקוח</th><th>מודל</th><th>מנוי</th><th>פניות ושיחות</th><th>תשלום פניות</th><th>ממומן</th><th>סה״כ</th><th>סטטוס</th><th></th></tr></thead><tbody>
         ${rows.map((r) => `<tr><td><div class="name">${esc(r.a.business || r.a.name)}</div><div class="sub">${planName(r.a.plan)}</div></td><td class="sub">${esc(T.statusName(T.BILLING_MODELS, r.model))}</td>
-          <td class="num">${T.money(r.sub)}</td><td class="num">${r.leads}</td><td class="num">${T.money(r.perLead)}</td><td class="num">${T.money(r.sponsored)}</td><td><span class="big">${T.money(r.total)}</span></td>
+          <td class="num">${T.money(r.sub)}</td><td class="num">${r.leads}${r.calls ? `<div class="sub">+ ${r.calls} שיחות</div>` : ""}</td><td class="num">${T.money(r.perLead)}</td><td class="num">${T.money(r.sponsored)}</td><td><span class="big">${T.money(r.total)}</span></td>
           <td>${r.paid ? `<span class="pill pill-ok">שולם ${T.fmtDate(r.paid.paid_at.slice(0, 10))}</span>` : `<span class="pill pill-warn">פתוח</span>`}</td>
           <td><div class="acts">${r.paid ? `<button class="btn btn-ghost btn-sm" type="button" data-act="unpay" data-id="${esc(r.a.id)}">ביטול סימון</button>` : `<button class="btn btn-line btn-sm" type="button" data-act="pay" data-id="${esc(r.a.id)}" data-amount="${r.total}">סימון כשולם</button>`}${r.a.phone && !r.paid ? `<a class="mini-btn" href="${esc(T.waLink(r.a.phone, `שלום ${r.a.name}, חשבון ${label(A.billMonth)} ב${A.settings.site_name}: ${T.money(r.total)}. תודה!`))}" target="_blank" rel="noopener" aria-label="שליחת חשבון בוואטסאפ">${I("chat")}</a>` : ""}</div></td></tr>`).join("")}
       </tbody></table></div>` : `<div class="empty"><h3>אין חיובים בחודש הזה</h3></div>`}</div>`;
@@ -835,7 +939,7 @@
       <div class="panel">${list.length ? list.map((a) => { const adv = (a.advertiser_id && A.advertisers.find((x) => x.id === a.advertiser_id)) || (a.email && A.advertisers.find((x) => x.email && x.email.toLowerCase() === a.email.toLowerCase())); return `<div class="lead-row" data-row="${esc(a.id)}"><div>
           <div class="who">${esc(a.business)} <span class="muted" style="font-weight:400">· ${esc(a.name)}</span> ${a.verified ? `<span class="pill pill-ok">${I("check")}נרשם ואימת מייל</span>` : `<span class="pill pill-muted">השאיר פרטים</span>`}</div>
           <div class="what">${esc(T.typeOf(a.type).name)} · ${esc(a.settlement)}, ${esc(T.regionOf(a.region).name)} · ${a.units} יחידות · <span dir="ltr">${esc(a.phone)}</span>${a.email ? " · " + esc(a.email) : ""} · ${T.fmtStamp(a.created_at)}</div>
-          ${a.tax_id || a.terms_version ? `<div class="what">${[a.tax_id ? "ח.פ / ע.מ " + esc(a.tax_id) : "", a.terms_version ? "אישר/ה את תנאי הפרסום (" + esc(a.terms_version) + ")" : "", a.marketing ? "מסכים/ה לקבל עדכונים" : ""].filter(Boolean).join(" · ")}</div>` : ""}
+          ${a.tax_id || a.terms_version ? `<div class="what">${[a.tax_id ? "ח.פ / ע.מ " + esc(a.tax_id) : "", a.terms_version ? "אישר/ה את הסכם הפרסום (" + esc(a.terms_version) + ")" : "", a.marketing ? "מסכים/ה לקבל עדכונים" : ""].filter(Boolean).join(" · ")}</div>` : ""}
           ${a.message ? `<div class="msg">״${esc(a.message)}״</div>` : ""}</div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">${statusPill(a.status)}
           ${a.status === "new" ? `<button class="btn btn-primary btn-sm" type="button" data-act="app-approve" data-id="${esc(a.id)}">${I("check")}אישור ופתיחת חשבון</button><button class="btn btn-line btn-sm" type="button" data-act="app-reject" data-id="${esc(a.id)}">דחייה</button>` : ""}
@@ -966,6 +1070,12 @@
               <label class="field"><span>אימייל להתראות (פניות והצטרפות)</span><input class="input" name="notify_email" type="email" dir="ltr" style="text-align:right" value="${esc(s.notify_email)}"></label>
               <label class="field"><span>רכז/ת נגישות (שם)</span><input class="input" name="a11y_coordinator" value="${esc(s.a11y_coordinator)}"></label>
             </div></section>
+            <section class="panel"><h2>פרטי המפעיל לחוזים <span class="hint">מופיעים בתנאי השימוש ובהסכם הפרסום למארחים</span></h2><div class="form-grid">
+              <label class="field"><span>שם החברה / העוסק</span><input class="input" name="legal_name" value="${esc(s.legal_name || "")}" maxlength="80" placeholder="תמרה צימרים בע״מ"></label>
+              <label class="field"><span>ח.פ / ע.מ</span><input class="input" name="legal_id" value="${esc(s.legal_id || "")}" maxlength="20" dir="ltr" style="text-align:right"></label>
+              <label class="field"><span>כתובת רשומה</span><input class="input" name="legal_address" value="${esc(s.legal_address || "")}" maxlength="120"></label>
+              <label class="field"><span>סמכות שיפוט (עיר)</span><input class="input" name="legal_court" value="${esc(s.legal_court || "")}" maxlength="40" placeholder="תל אביב-יפו"></label></div>
+              <p class="hint" style="margin-top:8px">לקריאה: <a href="${siteURL("terms")}" target="_blank" rel="noopener">תנאי שימוש ופרטיות</a> · <a href="${siteURL("terms-hosts")}" target="_blank" rel="noopener">הסכם פרסום למארחים</a> (גרסה ${esc(T.HOST_TERMS_VERSION)}). הנוסח הוא בסיס מקצועי, ומומלץ שעורך דין יעבור עליו לפני שמתחילים לגבות תשלום. כשמשנים את גרסת ההסכם בקוד, כל המארחים מתבקשים לאשר אותו שוב בכניסה הבאה.</p></section>
             <section class="panel"><h2>עמוד הבית</h2><div class="form-grid">
               <label class="field span2"><span>כותרת ראשית</span><input class="input" name="hero_title" value="${esc(s.hero_title)}" maxlength="70"></label>
               <label class="field span2"><span>משפט משנה</span><textarea class="textarea" name="hero_subtitle" rows="2" style="min-height:70px" maxlength="200">${esc(s.hero_subtitle)}</textarea></label></div>
@@ -981,7 +1091,17 @@
               <button class="btn btn-line btn-sm" type="button" data-act="col-add" style="justify-self:start">${I("plus")}אוסף</button></div></section>
           </div>
           <div>
-            <section class="panel"><h2>אישור תוכן</h2><div class="toggle-row" style="border:0"><span>שינויי תוכן של מארחים דורשים אישור<small>שם, תיאור, תמונות, מאפיינים ותוכן הדף</small></span><button class="switch" type="button" role="switch" aria-checked="${s.moderation !== false}" data-act="set-mod" aria-label="אישור תוכן"></button></div></section>
+            <section class="panel"><h2>אישור שינויים של מארחים</h2>
+              <p class="muted" style="font-size:var(--t-s);margin-bottom:6px">מה שמסומן נשמר אצל המארח כ״ממתין לאישור״ ומתפרסם רק אחרי אישור שלכם ב״אישורים״. מה שלא מסומן מתעדכן באתר מיד. יומן הזמינות תמיד מתעדכן מיד.</p>
+              ${T.MOD_GROUPS.map((g) => `<div class="toggle-row"><span>${esc(g.name)}<small>${esc(g.sub || [...new Set(g.fields.map((f) => f[1]))].slice(0, 7).join(", "))}</small></span><button class="switch" type="button" role="switch" aria-checked="${T.modOn(s, g.key)}" data-act="set-modg" data-k="${g.key}" aria-label="אישור לפני פרסום: ${esc(g.name)}"></button></div>`).join("")}</section>
+            <section class="panel"><h2>מעקב שיחות (מספרים וירטואליים)</h2>
+              <div class="toggle-row" style="border:0;padding-top:0"><span>שיחה שנענתה נספרת כפנייה בחיוב<small>ללקוחות שמשלמים לפי פנייה. נספרת שיחה של 15 שניות ומעלה, ומתקשר אחד פעם ביום לכל מתחם.</small></span><button class="switch" type="button" role="switch" aria-checked="${s.calls_count_as_leads !== false}" data-act="set-flag" data-k="calls_count_as_leads" aria-label="שיחה נספרת כפנייה"></button></div>
+              <ol class="steps-list" style="margin-top:10px">
+                <li>פותחים חשבון אצל ספק מספרים וירטואליים (למשל Voicenter, או Twilio) ומזמינים מספר לכל מתחם, עם העברה לטלפון של המארח.</li>
+                <li>ב-Vercel → Settings → Environment Variables מוסיפים <b dir="ltr">CALL_WEBHOOK_SECRET</b> עם מחרוזת אקראית של 32 תווים ומעלה, ועושים Redeploy.</li>
+                <li>אצל הספק מגדירים דיווח בסוף כל שיחה (CDR / Status Callback, בשיטת POST) לכתובת הזו, ומוסיפים בסוף את הסוד:<span class="copy-field" style="margin-top:6px"><input class="input" readonly dir="ltr" value="${esc(new URL("api/call-webhook?key=", location.href).href)}" aria-label="כתובת לדיווח שיחות"><button class="mini-btn" type="button" data-act="copy" data-text="${esc(new URL("api/call-webhook?key=", location.href).href)}" aria-label="העתקה">${I("copy")}</button></span></li>
+                <li>בעורך של כל מתחם מזינים את המספר הווירטואלי ב״מספר מעקב שיחות״. מעכשיו הוא מוצג באתר, והשיחות מופיעות ב״שיחות״, בכרטיס הלקוח ואצל המארח.</li></ol>
+              <p class="hint" style="margin-top:8px">שיחה שלא נענתה נשלחת למארח גם במייל עם מספר המתקשר. הקלטת שיחות מחייבת הודעה למתקשר בתחילת השיחה (מגדירים אצל הספק).</p></section>
             <section class="panel"><h2>מארחים חדשים ומנויים</h2>
               <div class="toggle-row"><span>פתיחת חשבון אוטומטית אחרי אימות המייל<small>המארח נרשם באתר, מאשר את המייל ומקבל מיד חשבון בתקופת ניסיון ומתחם מוסתר להשלמה. כבוי: ההרשמה מחכה לאישור שלכם ב״בקשות הצטרפות״.</small></span><button class="switch" type="button" role="switch" aria-checked="${s.auto_open_hosts !== false}" data-act="set-flag" data-k="auto_open_hosts" aria-label="פתיחה אוטומטית"></button></div>
               <div class="form-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:12px">
@@ -1002,9 +1122,9 @@
             <section class="panel"><h2>רשתות חברתיות <span class="hint">מופיעות בתחתית האתר</span></h2><div class="form-grid">
               ${[["instagram", "Instagram"], ["facebook", "Facebook"], ["tiktok", "TikTok"], ["youtube", "YouTube"]].map(([k, n]) => `<label class="field"><span>${n}</span><input class="input" dir="ltr" name="social_${k}" value="${esc((s.social || {})[k] || "")}" placeholder="https://"></label>`).join("")}</div></section>
             <section class="panel"><h2>מחירים למפרסמים</h2><div class="form-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-              ${T.PLANS.map((pl) => `<label class="field"><span>${pl.name} (₪/חודש)</span><input class="input num" type="number" min="0" name="price_${pl.key}" value="${esc(p[pl.key])}"></label>`).join("")}
-              <label class="field"><span>₪ לפנייה</span><input class="input num" type="number" min="0" name="lead_price_default" value="${esc(s.lead_price_default)}"></label>
-              <label class="field"><span>₪ מיקום ממומן/חודש</span><input class="input num" type="number" min="0" name="sponsored_price" value="${esc(s.sponsored_price)}"></label></div></section>
+              ${T.PLANS.map((pl) => `<label class="field"><span>${pl.name} (לחודש)</span><input class="input num" type="number" min="0" data-cur name="price_${pl.key}" value="${esc(p[pl.key])}"></label>`).join("")}
+              <label class="field"><span>מחיר לפנייה</span><input class="input num" type="number" min="0" data-cur name="lead_price_default" value="${esc(s.lead_price_default)}"></label>
+              <label class="field"><span>מיקום ממומן (לחודש)</span><input class="input num" type="number" min="0" data-cur name="sponsored_price" value="${esc(s.sponsored_price)}"></label></div></section>
             <section class="panel"><h2>קופונים</h2><div class="rows-edit">${(s.coupons || []).map((c, i) => `<div class="row-edit"><label class="field"><span>קוד</span><input class="input" dir="ltr" data-cpn="${i}" data-k="code" value="${esc(c.code)}"></label><label class="field"><span>% הנחה</span><input class="input num" type="number" min="1" max="90" data-cpn="${i}" data-k="pct" value="${esc(c.pct)}"></label><label class="field"><span>בתוקף עד</span><input class="input" type="date" data-cpn="${i}" data-k="until" value="${esc(c.until || "")}"></label><button class="mini-btn" type="button" data-act="cpn-del" data-i="${i}" aria-label="הסרה">${I("trash")}</button></div>`).join("")}
               <button class="btn btn-line btn-sm" type="button" data-act="cpn-add" style="justify-self:start">${I("plus")}קופון</button></div><p class="hint" style="margin-top:8px">הקופון מופיע בבקשת ההזמנה, והמארח מכבד את ההנחה. כדאי לתאם איתם מראש.</p></section>
             <section class="panel"><h2>חיבור והפצה</h2>
@@ -1026,18 +1146,152 @@
     const tot = A.listings.reduce((t, l) => { const s = A.stats[l.id] || { v: 0, p: 0, w: 0 }; t.v += s.v; t.p += s.p; t.w += s.w; return t; }, { v: 0, p: 0, w: 0 });
     const since = Date.now() - 30 * 864e5;
     const leads30 = A.leads.filter((q) => new Date(q.created_at).getTime() >= since).length;
-    return ph(`שלום${advs[0] ? ", " + esc(advs[0].name) : ""}`, "מעדכנים מחירים, תמונות ויומן, ורואים פניות וחוות דעת מאורחים.") + `
+    const hasCalls = A.calls.length > 0 || A.listings.some((l) => l.tracking_phone);
+    const c30 = recentCalls(30);
+    const missed = A.calls.filter((c) => c.status !== "answered" && Date.now() - new Date(c.started_at).getTime() < 3 * 864e5);
+    const many = A.listings.length > 1 || A.listings.some((l) => T.unitsOf(l).length > 1);
+    const canAdd = advs[0] && ["active", "trial"].includes(advs[0].status || "active");
+    return ph(`שלום${advs[0] ? ", " + esc(advs[0].name) : ""}`, A.listings.length > 1 ? `${A.listings.length} מתחמים בחשבון אחד. כל מתחם מופיע באתר בדף משלו, וכאן רואים את כולם יחד.` : "מעדכנים מחירים, תמונות ויומן, ורואים פניות וחוות דעת מאורחים.", `${many ? `<a class="btn btn-line" href="#calendar">${I("calendar")}יומן מרוכז</a>` : ""}${canAdd ? `<button class="btn btn-primary" type="button" data-act="own-add">${I("plus")}מתחם נוסף</button>` : ""}`) + `
       ${A.listings.filter((l) => !l.active).map(onboarding).join("")}
       ${advs.map(subPanel).join("")}
       ${newLeads ? `<a class="note note-info" href="#leads" style="text-decoration:none;margin:16px 0">${I("inbox")}<span><b>${newLeads === 1 ? "פנייה חדשה אחת" : `${newLeads} פניות חדשות`}</b> מחכות לתשובה. מי שחוזר ראשון, סוגר.</span></a>` : ""}
-      <div class="panel"><h2>30 הימים האחרונים</h2><div class="stat-grid"><div><b>${T.num(tot.v)}</b><span>צפיות בדפי המתחמים</span></div><div><b>${tot.p}</b><span>הצגות מספר טלפון</span></div><div><b>${tot.w}</b><span>לחיצות וואטסאפ</span></div><div><b>${leads30}</b><span>בקשות הזמנה</span></div></div></div>
-      <div class="panel"><h2>המתחמים שלי</h2>
-        ${A.listings.length ? `<div class="table-wrap"><table class="tbl"><tbody>${A.listings.map((l) => { const s = A.stats[l.id] || { v: 0 }; return `<tr><td style="width:90px"><img class="thumb" src="${esc(T.thumbOf(l))}" alt=""></td>
-          <td><a class="name" href="#edit-${esc(l.id)}">${esc(l.name)}</a><div class="sub">${esc(l.settlement)} · החל מ־${T.money(T.fromPrice(l))} ללילה</div></td>
+      ${missed.length ? `<a class="note note-warn" href="#calls" style="text-decoration:none;margin:16px 0">${I("phone")}<span><b>${missed.length === 1 ? "שיחה אחת שלא נענתה" : `${missed.length} שיחות שלא נענו`}</b> בימים האחרונים. כדאי לחזור לאורחים.</span></a>` : ""}
+      <div class="panel"><h2>30 הימים האחרונים${A.listings.length > 1 ? ' <span class="hint">כל המתחמים יחד</span>' : ""}</h2><div class="stat-grid" ${hasCalls ? 'style="grid-template-columns:repeat(5,minmax(0,1fr))"' : ""}><div><b>${T.num(tot.v)}</b><span>צפיות בדפי המתחמים</span></div><div><b>${tot.p}</b><span>הצגות מספר טלפון</span></div><div><b>${tot.w}</b><span>לחיצות וואטסאפ</span></div><div><b>${leads30}</b><span>בקשות הזמנה</span></div>${hasCalls ? `<div><b>${c30.length}</b><span>שיחות (${c30.filter((c) => c.status === "answered").length} נענו)</span></div>` : ""}</div></div>
+      <div class="panel"><h2>${A.listings.length > 1 ? "המתחמים שלי" : "המתחם שלי"}</h2>
+        ${A.listings.length ? `<div class="table-wrap"><table class="tbl"><tbody>${A.listings.map((l) => { const s = A.stats[l.id] || { v: 0 }; const cn = c30.filter((c) => c.listing_id === l.id).length; const units = T.unitsOf(l).length; return `<tr><td style="width:90px"><img class="thumb" src="${esc(T.thumbOf(l))}" alt=""></td>
+          <td><a class="name" href="#edit-${esc(l.id)}">${esc(l.name)}</a><div class="sub">${esc(l.settlement || "")}${units > 1 ? ` · ${units} יחידות` : ""}${T.fromPrice(l) ? ` · החל מ־${T.money(T.fromPrice(l))} ללילה` : ""}</div></td>
           <td>${l.active ? '<span class="pill pill-ok">מוצג באתר</span>' : l.pending && l.pending._publish ? '<span class="pill pill-navy">נשלח לבדיקה</span>' : '<span class="pill pill-muted">עוד לא פורסם</span>'} ${contentPending(l) ? '<span class="pill pill-warn">שינויים ממתינים לאישור</span>' : ""}</td>
-          <td class="num">${T.num(s.v)} צפיות · ${leadsFor(l.id).length} פניות</td>
+          <td class="num">${T.num(s.v)} צפיות · ${leadsFor(l.id).length} פניות${hasCalls ? ` · ${cn} שיחות` : ""}</td>
           <td><div class="acts"><a class="btn btn-primary btn-sm" href="#edit-${esc(l.id)}">${I("edit")}עריכה</a><a class="mini-btn" href="${siteURL("stay-" + l.id)}" target="_blank" rel="noopener" aria-label="צפייה באתר">${I("external")}</a></div></td></tr>`; }).join("")}</tbody></table></div>`
-        : `<div class="empty"><h3>עוד אין מתחמים בחשבון</h3><p>צוות האתר יוסיף את המתחם שלכם, ואז תוכלו לערוך אותו כאן.</p></div>`}</div>`;
+        : `<div class="empty"><h3>עוד אין מתחמים בחשבון</h3><p>${canAdd ? "פותחים מתחם, ממלאים פרטים ושולחים לבדיקה." : "צוות האתר יוסיף את המתחם שלכם, ואז תוכלו לערוך אותו כאן."}</p>${canAdd ? `<button class="btn btn-primary" type="button" data-act="own-add">${I("plus")}פתיחת מתחם</button>` : ""}</div>`}</div>`;
+  }
+  /* מארח עם כמה מתחמים: פתיחת מתחם נוסף באותו חשבון */
+  function addListingModal() {
+    return `<div class="modal-back" id="modal"><form class="modal" data-form="own-add" role="dialog" aria-modal="true" aria-labelledby="m-title" novalidate>
+      <div class="modal-head"><h2 id="m-title">מתחם נוסף בחשבון</h2><button class="icon-btn" type="button" data-act="modal-close" aria-label="סגירה">${I("x")}</button></div>
+      <p class="muted" style="font-size:var(--t-s);font-weight:300">המתחם נפתח מוסתר. ממלאים תמונות, תיאור ומחירים ושולחים לבדיקה. באתר הוא מקבל דף משלו, וכאן מנהלים את כל המתחמים מאותו חשבון.</p>
+      <div class="form-grid">
+        <label class="field"><span>שם המתחם</span><input class="input" name="name" required maxlength="60"></label>
+        <label class="field"><span>יישוב</span><input class="input" name="settlement" required maxlength="40"></label>
+        <label class="field"><span>אזור</span><select class="select" name="region">${T.REGIONS.map((r) => `<option value="${r.key}" ${A.listings[0] && A.listings[0].region === r.key ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select></label>
+        <label class="field"><span>סוג אירוח</span><select class="select" name="type">${T.TYPES.map((x) => `<option value="${x.key}">${esc(x.name)}</option>`).join("")}</select></label>
+      </div>
+      <p class="hint">כמה יחידות באותו מקום (למשל 3 סוויטות באותו מתחם)? לא צריך מתחם נוסף: בעורך מסמנים ״המתחם כולל כמה יחידות נפרדות״.</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-ghost" type="button" data-act="modal-close">ביטול</button><button class="btn btn-primary" type="submit">${I("plus")}פתיחת המתחם</button></div>
+    </form></div>`;
+  }
+
+  /* ================================================================ שיחות (מספרים וירטואליים) */
+  const CALL_ST = { answered: ["נענתה", "ok"], missed: ["לא נענתה", "warn"], busy: ["תפוס", "warn"], failed: ["נכשלה", "muted"] };
+  const callPill = (c) => { const x = CALL_ST[c.status] || [c.status || "—", "muted"]; return `<span class="pill pill-${x[1]}">${esc(x[0])}</span>`; };
+  const durTxt = (sec) => { const n = Math.max(0, Math.round(Number(sec) || 0)); return n >= 60 ? `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")} דק׳` : `${n} שנ׳`; };
+  const listingName = (id) => { const l = A.listings.find((x) => x.id === id); return l ? l.name : ""; };
+  const recentCalls = (days) => { const since = Date.now() - days * 864e5; return A.calls.filter((c) => new Date(c.started_at).getTime() >= since); };
+  const missedNew = () => A.calls.filter((c) => c.status !== "answered" && Date.now() - new Date(c.started_at).getTime() < 864e5).length;
+  /* שיחה שנספרת כפנייה בחיוב: נענתה, 15 שניות לפחות, ומתקשר אחד פעם ביום לכל מתחם */
+  const billableCalls = (calls) => { const seen = new Set(); return calls.filter((c) => { if (c.status !== "answered" || (Number(c.duration) || 0) < 15 || !c.caller) return false; const k = `${c.listing_id}|${c.caller}|${String(c.started_at).slice(0, 10)}`; if (seen.has(k)) return false; seen.add(k); return true; }).length; };
+  function callRows(list, compact) {
+    const per = {};
+    A.calls.forEach((c) => { if (c.caller) per[c.caller] = (per[c.caller] || 0) + 1; });
+    return list.map((c) => `<tr>
+      <td class="sub" style="white-space:nowrap">${T.fmtStamp(c.started_at)}</td>
+      <td>${c.caller ? `<a class="name" href="tel:${esc(c.caller)}" dir="ltr">${esc(T.fmtPhone(c.caller))}</a>${per[c.caller] > 1 ? `<div class="sub">${per[c.caller]} שיחות מהמספר הזה</div>` : ""}` : '<span class="muted">מספר חסוי</span>'}</td>
+      ${compact ? "" : `<td>${c.listing_id ? esc(listingName(c.listing_id) || "מתחם שנמחק") : '<span class="muted">לא זוהה</span>'}</td>`}
+      <td>${callPill(c)}</td>
+      <td class="num">${c.status === "answered" ? durTxt(c.duration) : Number(c.ring) ? `<span class="sub">צלצל ${durTxt(c.ring)}</span>` : "—"}</td>
+      ${IS_ADMIN && !compact ? `<td class="sub" dir="ltr">${esc(T.fmtPhone(c.tracking_phone))}</td><td>${/^https:\/\//.test(c.recording || "") ? `<a href="${esc(c.recording)}" target="_blank" rel="noopener noreferrer">${I("play")}האזנה</a>` : '<span class="muted">—</span>'}</td>` : ""}
+      <td><div class="acts">${c.caller ? `<a class="mini-btn" href="tel:${esc(c.caller)}" title="חזרה בטלפון" aria-label="חזרה ל־${esc(T.fmtPhone(c.caller))}">${I("phone")}</a><a class="mini-btn" href="${esc(T.waLink(c.caller, `שלום, ראינו שהתקשרת ל${listingName(c.listing_id) || A.settings.site_name}. איך אפשר לעזור?`))}" target="_blank" rel="noopener" title="וואטסאפ" aria-label="וואטסאפ ל־${esc(T.fmtPhone(c.caller))}">${I("chat")}</a>` : ""}</div></td></tr>`).join("");
+  }
+  function viewCalls() {
+    const f = A.cf;
+    const tracked = A.listings.filter((l) => l.tracking_phone);
+    let list = A.calls.slice();
+    if (f.listing) list = list.filter((c) => c.listing_id === f.listing);
+    if (f.status === "answered") list = list.filter((c) => c.status === "answered");
+    if (f.status === "missed") list = list.filter((c) => c.status !== "answered");
+    const c30 = recentCalls(30);
+    const ans = c30.filter((c) => c.status === "answered");
+    const avg = ans.length ? ans.reduce((sum, c) => sum + (Number(c.duration) || 0), 0) / ans.length : 0;
+    const missed = c30.filter((c) => c.status !== "answered");
+    const callers = new Set(c30.map((c) => c.caller).filter(Boolean)).size;
+    const tabs = [["all", "הכל", A.calls.length], ["answered", "נענו", A.calls.filter((c) => c.status === "answered").length], ["missed", "לא נענו", A.calls.filter((c) => c.status !== "answered").length]];
+    const ids = [...new Set(A.calls.map((c) => c.listing_id).filter(Boolean))];
+    return ph("שיחות", IS_ADMIN ? "שיחות שעברו דרך המספרים הווירטואליים של המתחמים: מי התקשר, לאיזה מתחם, מתי, כמה זמן ואם נענתה." : "שיחות של אורחים שהגיעו דרך המספר שמוצג באתר. שיחה שלא נענתה נשלחת אליכם גם במייל, כדי שתוכלו לחזור.", A.calls.length ? `<button class="btn btn-line" type="button" data-act="calls-csv">${I("download")}ייצוא CSV</button>` : "") + `
+      ${!tracked.length ? `<p class="note note-info" style="margin-bottom:16px">${I("phone")}<span>${IS_ADMIN ? "עוד אין מתחם עם מספר מעקב. ההגדרה בשני שלבים: ספק טלפוניה (״הגדרות״ → ״מעקב שיחות״), ואז מספר וירטואלי בעורך של כל מתחם." : "למתחמים שלכם עוד לא הוגדר מספר מעקב. כשצוות האתר יגדיר אחד, השיחות יופיעו כאן."}</span></p>` : ""}
+      <div class="kpis">
+        <div class="kpi"><span>${I("phone")}שיחות ב־30 יום</span><b>${c30.length}</b><small>${callers} מתקשרים שונים</small></div>
+        <div class="kpi"><span>${I("check")}נענו</span><b>${ans.length}</b><small>${c30.length ? Math.round((ans.length / c30.length) * 100) + "% מהשיחות" : "—"}</small></div>
+        <div class="kpi ${missed.length ? "attn" : ""}"><span>${I("clock")}לא נענו</span><b>${missed.length}</b><small>כדאי לחזור כמה שיותר מהר</small></div>
+        <div class="kpi"><span>${I("history")}משך ממוצע</span><b style="font-size:1.7rem">${ans.length ? durTxt(avg) : "—"}</b><small>לשיחה שנענתה</small></div>
+      </div>
+      <div class="panel"><div class="toolbar">
+        ${ids.length > 1 ? `<select class="select" id="cf-listing" aria-label="מתחם" style="width:auto"><option value="">כל המתחמים</option>${ids.map((id) => `<option value="${esc(id)}" ${f.listing === id ? "selected" : ""}>${esc(listingName(id) || "מתחם שנמחק")}</option>`).join("")}</select>` : ""}
+        <span class="seg-tabs" role="group" aria-label="סטטוס">${tabs.map(([k, t, n]) => `<button type="button" data-act="cf-status" data-v="${k}" aria-pressed="${f.status === k}">${t} · ${n}</button>`).join("")}</span></div>
+      ${list.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>מתי</th><th>מתקשר</th><th>מתחם</th><th>סטטוס</th><th>משך</th>${IS_ADMIN ? "<th>מספר מעקב</th><th>הקלטה</th>" : ""}<th></th></tr></thead><tbody>${callRows(list.slice(0, 300))}</tbody></table></div>${list.length > 300 ? `<p class="hint" style="margin-top:8px">מוצגות 300 השיחות האחרונות. הייצוא כולל את כולן.</p>` : ""}`
+        : `<div class="empty"><h3>${A.calls.length ? "אין שיחות בסינון הזה" : "עוד אין שיחות"}</h3><p>שיחות שעוברות דרך המספר הווירטואלי של המתחם יופיעו כאן אוטומטית.</p></div>`}</div>`;
+  }
+
+  /* ================================================================ יומן מרוכז: כל המתחמים והיחידות בטבלה אחת */
+  const BOARD_DAYS = 42;
+  function boardListings() {
+    let ls = A.listings.slice();
+    if (IS_ADMIN) ls = A.board.client ? ls.filter((l) => l.owner_id === A.board.client) : ls.filter((l) => l.active);
+    return ls.sort((a, b) => String(a.name).localeCompare(String(b.name), "he"));
+  }
+  function boardHTML() {
+    const start = A.board.start ? T.parseISO(A.board.start) : T.today();
+    const days = Array.from({ length: BOARD_DAYS }, (_, i) => T.addDays(start, i));
+    const today = T.iso(T.today());
+    const rows = [];
+    boardListings().forEach((l0) => { const l = A.boardEdits[l0.id] || (IS_ADMIN ? l0 : T.withPending(l0)); const units = T.unitsOf(l); units.forEach((u, ui) => rows.push({ l, u, ui, n: units.length })); });
+    if (!rows.length) return `<div class="empty"><h3>אין מתחמים להצגה</h3>${IS_ADMIN ? "<p>בוחרים לקוח, או מציגים מתחמים באתר.</p>" : ""}</div>`;
+    const head = `<tr><th class="bd-name" scope="col"><span class="sr">מתחם ויחידה</span></th>${days.map((d, i) => { const iso = T.iso(d); const hol = T.holidayOf(iso, A.settings); const m1 = i === 0 || d.getDate() === 1; return `<th scope="col" class="${T.isWeekendNight(d) ? "wknd" : ""}${hol ? " hol" : ""}${m1 ? " m1" : ""}" title="${esc(T.fmtLong(iso))}${hol ? " · " + esc(hol.label) : ""}">${m1 ? `<span class="bd-month">${esc(T.fmtMonth(d))}</span>` : ""}<span class="bd-dow">${"אבגדהוש"[d.getDay()]}</span><b>${d.getDate()}</b></th>`; }).join("")}</tr>`;
+    const freeRow = rows.length > 1 ? `<tr class="bd-free"><th class="bd-name" scope="row">פנויים</th>${days.map((d) => { const iso = T.iso(d); const n = rows.filter((r) => !(r.u.blocked_dates || []).includes(iso) && !(r.u.ical_blocked || []).includes(iso)).length; return `<td class="${n === 0 ? "full" : ""}">${n}/${rows.length}</td>`; }).join("")}</tr>` : "";
+    const body = rows.map(({ l, u, ui, n }) => {
+      const man = new Set(u.blocked_dates || []), syn = new Set(u.ical_blocked || []);
+      const who = l.name + (n > 1 ? " · " + (u.name || "יחידה") : "");
+      return `<tr class="${ui === 0 ? "bd-first" : ""}"><th class="bd-name" scope="row">${ui === 0 ? `<a href="#edit-${esc(l.id)}">${esc(l.name)}</a>${l.active ? "" : ' <span class="pill pill-muted">מוסתר</span>'}` : ""}${n > 1 ? `<span class="bd-unit">${esc(u.name || "יחידה")}</span>` : ""}</th>${days.map((d) => { const iso = T.iso(d); const b = man.has(iso), sy = syn.has(iso) && !b, past = iso < today; return `<td><button type="button" class="bd-cell${b ? " blocked" : sy ? " synced" : ""}${T.isWeekendNight(d) ? " wknd" : ""}" data-act="bd-day" data-l="${esc(l.id)}" data-u="${esc(u.id)}" data-d="${iso}" ${past || sy ? "disabled" : ""} aria-pressed="${b}" aria-label="${esc(who)}, ${esc(T.fmtLong(iso))}${b ? ", תפוס" : sy ? ", תפוס מסנכרון" : ", פנוי"}"></button></td>`; }).join("")}</tr>`;
+    }).join("");
+    return `<div class="board-wrap"><table class="board"><thead>${head}</thead><tbody>${freeRow}${body}</tbody></table></div>`;
+  }
+  function boardBar() {
+    const n = Object.keys(A.boardEdits).length;
+    return n ? `<span class="state" aria-live="polite">שינויים ב${n === 1 ? "מתחם אחד" : `־${n} מתחמים`} שעוד לא נשמרו</span><span style="display:flex;gap:8px"><button class="btn btn-ghost" type="button" data-act="bd-discard">ביטול</button><button class="btn btn-primary" type="button" data-act="bd-save">${I("check")}שמירת היומן</button></span>` : "";
+  }
+  function viewBoard() {
+    const start = A.board.start ? T.parseISO(A.board.start) : T.today();
+    const end = T.addDays(start, BOARD_DAYS - 1);
+    const atToday = T.iso(start) <= T.iso(T.today());
+    return ph("יומן", IS_ADMIN ? "כל המתחמים והיחידות בטבלה אחת. לחיצה על משבצת מסמנת לילה כתפוס, ולחיצה נוספת משחררת." : "כל המתחמים והיחידות שלכם בטבלה אחת. לחיצה על משבצת מסמנת לילה כתפוס, ולחיצה נוספת משחררת. היומן מתעדכן באתר מיד אחרי השמירה.") + `
+      <div class="panel">
+        <div class="toolbar">
+          ${IS_ADMIN ? `<select class="select" id="bd-client" aria-label="לקוח" style="width:auto"><option value="">כל המתחמים המוצגים באתר</option>${A.advertisers.filter((a) => A.listings.some((l) => l.owner_id === a.id)).map((a) => `<option value="${esc(a.id)}" ${A.board.client === a.id ? "selected" : ""}>${esc(a.business || a.name)}</option>`).join("")}</select>` : ""}
+          <span class="bd-nav"><button class="icon-btn" type="button" data-act="bd-nav" data-d="-28" aria-label="ארבעה שבועות אחורה" ${atToday ? "disabled" : ""}>${I("chev-r")}</button><button class="btn btn-ghost btn-sm" type="button" data-act="bd-nav" data-d="0" ${atToday ? "disabled" : ""}>היום</button><button class="icon-btn" type="button" data-act="bd-nav" data-d="28" aria-label="ארבעה שבועות קדימה">${I("chev-l")}</button><span class="hint">${T.fmtDate(T.iso(start))} – ${T.fmtDate(T.iso(end))}</span></span>
+        </div>
+        <div id="board">${boardHTML()}</div>
+        <div class="cal-legend"><span><i class="l-free"></i>פנוי</span><span><i class="l-blocked"></i>תפוס (ידני)</span><span><i class="l-synced"></i>תפוס מסנכרון iCal</span><span><i class="l-hol"></i>חג</span><span><i class="l-wknd"></i>סופ״ש</span></div>
+      </div>
+      <div class="savebar" id="bd-bar" ${boardDirty() ? "" : "hidden"}>${boardBar()}</div>`;
+  }
+
+  /* ================================================================ הסכם פרסום: אישור הגרסה הנוכחית לפני העבודה בממשק */
+  const needsTerms = () => !IS_ADMIN && A.authed && A.advertisers[0] && A.advertisers[0].terms_version !== T.HOST_TERMS_VERSION;
+  function viewTermsGate() {
+    const a = A.advertisers[0];
+    const again = !!a.terms_version;
+    return `<div class="login"><div class="login-card terms-card"><img class="logo" src="${LOGO_S}" alt="${esc(A.settings.site_name)}">
+      <h1>${again ? "עדכנו את הסכם הפרסום" : "הסכם הפרסום למארחים"}</h1>
+      <p>${again ? `ההסכם התעדכן (גרסה ${esc(T.HOST_TERMS_VERSION)}). כדי להמשיך לנהל את המתחמים צריך לאשר את הגרסה החדשה.` : "לפני שמתחילים, צריך לאשר את ההסכם שמסדיר את הפרסום באתר."} עיקרי הדברים:</p>
+      <ul class="todo terms-sum">
+        <li>${I("check")}האתר מפרסם ומעביר פניות ושיחות. ההזמנה, התשלום והאחריות לאירוח הם בינכם לבין האורחים.</li>
+        <li>${I("check")}אתם אחראים לדיוק המידע, לזכויות בתמונות, לרישיונות, לבטיחות ולביטוח במתחם.</li>
+        <li>${I("check")}בחלק מהמתחמים מוצג מספר וירטואלי, ונתוני השיחות נשמרים לדוחות ולחיוב.</li>
+        <li>${I("check")}פרטי אורחים משמשים רק לטיפול בבקשה שלהם, בלי דיוור בלי הסכמה.</li>
+        <li>${I("check")}שינויים בהסכם נמסרים מראש, ואפשר להפסיק לפרסם בכל עת.</li></ul>
+      <a class="link-more" href="${siteURL("terms-hosts")}" target="_blank" rel="noopener">${I("book")}לקריאת ההסכם המלא</a>
+      <label class="check"><input type="checkbox" id="terms-ok"><span>קראתי ואני מסכים/ה ל<a href="${siteURL("terms-hosts")}" target="_blank" rel="noopener">הסכם הפרסום</a> ול<a href="${siteURL("terms")}" target="_blank" rel="noopener">תנאי השימוש והפרטיות</a></span></label>
+      <button class="btn btn-primary btn-lg btn-block" type="button" data-act="accept-terms">${I("check")}אישור והמשך</button>
+      <button class="btn btn-ghost btn-block" type="button" data-act="logout">יציאה</button></div></div>`;
   }
 
   /* ================================================================ חשבונות: כניסה, סיסמה, אימות דו-שלבי */
@@ -1132,17 +1386,21 @@
     if (!a) return ph("החשבון שלי", "") + `<div class="panel"><p class="muted">לא נמצא כרטיס לקוח לחשבון הזה.</p></div>`;
     const pr = a.prefs || {};
     const chk = (k, n, sub) => `<label class="check" style="align-items:flex-start"><input type="checkbox" name="${k}" ${pr[k] !== false ? "checked" : ""}><span>${n}<small class="hint" style="display:block">${sub}</small></span></label>`;
+    const pend = a.pending && typeof a.pending === "object" ? a.pending : null;
+    const pv2 = (k) => (pend && pend[k] !== undefined ? pend[k] : a[k]) || "";
     return ph("החשבון שלי", "פרטי הלקוח, התראות, סיסמה ומנוי.") + `<div class="cols2"><div>
-      <form class="panel" data-form="profile" novalidate><h2>פרטי הלקוח</h2><div class="form-grid">
-        <label class="field"><span>שם איש הקשר</span><input class="input" name="name" value="${esc(a.name || "")}" required maxlength="120" autocomplete="name"></label>
-        <label class="field"><span>טלפון</span><input class="input" name="phone" type="tel" dir="ltr" style="text-align:right" value="${esc(a.phone || "")}" required autocomplete="tel"></label>
+      <form class="panel" data-form="profile" novalidate><h2>פרטי הלקוח</h2>
+      ${pend ? `<p class="note note-info" style="margin-bottom:12px">${I("shield")}<span>העדכון ששלחתם ${pend._at ? "ב־" + T.fmtStamp(pend._at) + " " : ""}ממתין לאישור צוות האתר. עד האישור מופיעים בכרטיס הפרטים הקודמים.</span></p>` : ""}
+      <div class="form-grid">
+        <label class="field"><span>שם איש הקשר</span><input class="input" name="name" value="${esc(pv2("name"))}" required maxlength="120" autocomplete="name"></label>
+        <label class="field"><span>טלפון</span><input class="input" name="phone" type="tel" dir="ltr" style="text-align:right" value="${esc(pv2("phone"))}" required autocomplete="tel"></label>
         <label class="field"><span>שם העסק</span><input class="input" value="${esc(a.business || "")}" disabled></label>
         <label class="field"><span>אימייל (הכניסה לחשבון)</span><input class="input" dir="ltr" value="${esc(a.email || "")}" disabled></label>
-        <label class="field"><span>ח.פ / ע.מ (לחשבוניות)</span><input class="input" name="tax_id" inputmode="numeric" dir="ltr" style="text-align:right" value="${esc(a.tax_id || "")}" maxlength="12"></label>
-        <label class="field"><span>כתובת לחשבוניות</span><input class="input" name="address" value="${esc(a.address || "")}" maxlength="200"></label></div>
+        <label class="field"><span>ח.פ / ע.מ (לחשבוניות)</span><input class="input" name="tax_id" inputmode="numeric" dir="ltr" style="text-align:right" value="${esc(pv2("tax_id"))}" maxlength="12"></label>
+        <label class="field"><span>כתובת לחשבוניות</span><input class="input" name="address" value="${esc(pv2("address"))}" maxlength="200"></label></div>
         <p class="field-label" style="margin:16px 0 8px">התראות במייל</p>
-        <div style="display:grid;gap:10px">${chk("notify_leads", "פנייה חדשה מאורח", "מייל ברגע שאורח שולח בקשה. הפניות מופיעות כאן בכל מקרה.")}${chk("notify_reviews", "חוות דעת חדשה", "מייל כשחוות דעת על המתחם מתפרסמת")}</div>
-        <p class="hint" style="margin-top:10px">לשינוי שם העסק או האימייל פונים לצוות האתר.</p>
+        <div style="display:grid;gap:10px">${chk("notify_leads", "פנייה חדשה מאורח", "מייל ברגע שאורח שולח בקשה. הפניות מופיעות כאן בכל מקרה.")}${chk("notify_calls", "שיחה שלא נענתה", "מייל עם מספר המתקשר, כשאורח התקשר למספר שבאתר ולא ענו לו")}${chk("notify_reviews", "חוות דעת חדשה", "מייל כשחוות דעת על המתחם מתפרסמת")}</div>
+        <p class="hint" style="margin-top:10px">${T.modOn(A.settings, "account") ? "שינוי בשם, בטלפון, בכתובת או במספר העוסק מתעדכן אחרי אישור צוות האתר. " : ""}לשינוי שם העסק או האימייל פונים לצוות האתר.</p>
         <div style="margin-top:12px"><button class="btn btn-primary" type="submit">${I("check")}שמירה</button></div></form>
       ${passwordPanel()}</div>
       <div>${subPanel(a)}<div class="panel"><h2>אבטחה</h2><p class="muted" style="font-size:var(--t-s)">שכחתם להתנתק במחשב אחר? מנתקים את החשבון בכל המכשירים, ונכנסים מחדש איפה שצריך.</p><button class="btn btn-line" type="button" data-act="logout-all" style="margin-top:10px">${I("logout")}יציאה מכל המכשירים</button></div></div></div>`;
@@ -1227,6 +1485,8 @@
     const ids = new Set(ls.map((l) => l.id));
     const leads = A.leads.filter((q) => ids.has(q.listing_id));
     const since = Date.now() - 30 * 864e5;
+    const calls = A.calls.filter((c) => ids.has(c.listing_id));
+    const calls30 = calls.filter((c) => new Date(c.started_at).getTime() >= since);
     const pays = (a.payments || []).map((p, i) => Object.assign({ i }, p)).sort((x, y) => (y.month || "").localeCompare(x.month || "") || String(y.paid_at || "").localeCompare(String(x.paid_at || "")));
     const year = String(T.today().getFullYear());
     const paidYear = pays.filter((p) => String(p.month || "").startsWith(year)).reduce((s, p) => s + (Number(p.amount) || 0), 0);
@@ -1241,7 +1501,7 @@
       <div class="kpis">
         <div class="kpi ${st.tone === "danger" || st.tone === "warn" ? "attn" : ""}"><span>${I("clock")}מנוי</span><b style="font-size:1.35rem;line-height:1.3">${esc(st.label)}</b><small>${planName(a.plan)} · ${esc(T.statusName(T.BILLING_MODELS, a.billing_model || "subscription"))}</small></div>
         <div class="kpi"><span>${I("home")}מתחמים</span><b>${ls.length}</b><small>${st.visible ? `${ls.filter((l) => l.active).length} מוצגים באתר` : "מוסתרים: המנוי לא בתוקף"}</small></div>
-        <div class="kpi"><span>${I("inbox")}פניות ב־30 יום</span><b>${leads.filter((q) => new Date(q.created_at).getTime() >= since).length}</b><small>${leads.length} בסך הכל</small></div>
+        <div class="kpi"><span>${I("inbox")}פניות ב־30 יום</span><b>${leads.filter((q) => new Date(q.created_at).getTime() >= since).length}</b><small>${leads.length} בסך הכל${calls30.length ? ` · ${calls30.length} שיחות (${calls30.filter((c) => c.status === "answered").length} נענו)` : ""}</small></div>
         <div class="kpi"><span>${I("receipt")}שולם ב־${year}</span><b>${T.money(paidYear)}</b><small>${pays.length} תשלומים רשומים</small></div>
       </div>
       <div class="cols2"><div>
@@ -1253,7 +1513,7 @@
           ${pays.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>חודש</th><th>סכום</th><th>אמצעי</th><th>נרשם</th><th>הערה</th><th></th></tr></thead><tbody>${pays.map((p) => `<tr><td>${esc(mName(p.month) || p.month || "")}</td><td class="num"><b>${T.money(p.amount)}</b></td><td class="sub">${esc((PAY_METHODS.find((m) => m[0] === p.method) || ["", ""])[1])}</td><td class="sub">${p.paid_at ? T.fmtDate(String(p.paid_at).slice(0, 10)) : ""}</td><td class="sub">${esc(p.note || "")}</td><td><button class="mini-btn" type="button" data-act="pay-del" data-id="${esc(a.id)}" data-i="${p.i}" aria-label="מחיקת התשלום">${I("trash")}</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="muted" style="font-size:var(--t-s)">עוד לא נרשמו תשלומים.</p>`}
           <form data-form="payment" data-id="${esc(a.id)}" class="pay-form" novalidate>
             <label class="field"><span>חודש</span><select class="select" name="month">${months.map((m) => `<option value="${m}" ${m === T.monthKey(T.today()) ? "selected" : ""}>${esc(mName(m))}</option>`).join("")}</select></label>
-            <label class="field"><span>₪ סכום</span><input class="input num" name="amount" type="number" min="1" inputmode="numeric" required value="${esc(due.total || "")}"></label>
+            <label class="field"><span>סכום</span><input class="input num" data-cur name="amount" type="number" min="1" inputmode="numeric" required value="${esc(due.total || "")}"></label>
             <label class="field"><span>אמצעי</span><select class="select" name="method">${PAY_METHODS.map(([k, n]) => `<option value="${k}">${n}</option>`).join("")}</select></label>
             <label class="field"><span>הערה / מס׳ קבלה</span><input class="input" name="note" maxlength="80"></label>
             <button class="btn btn-line" type="submit">${I("plus")}רישום תשלום</button></form></div>
@@ -1261,8 +1521,9 @@
           <div class="btn-row"><button class="btn btn-primary btn-sm" type="button" data-act="client-new-listing" data-id="${esc(a.id)}">${I("plus")}מתחם חדש ללקוח</button>
             ${A.listings.some((l) => l.owner_id !== a.id) ? `<label class="field" style="flex:1 1 220px"><span class="sr">שיוך מתחם קיים</span><select class="select" data-act-change="assign-listing" data-id="${esc(a.id)}"><option value="">שיוך מתחם קיים ללקוח…</option>${A.listings.filter((l) => l.owner_id !== a.id).map((l) => `<option value="${esc(l.id)}">${esc(l.name)}${l.owner_id ? " (כרגע: " + esc(advName(l.owner_id)) + ")" : " (לא משויך)"}</option>`).join("")}</select></label>` : ""}</div></div>
         <div class="panel"><h2>פניות אחרונות</h2>${leads.length ? leads.slice(0, 5).map(leadRow).join("") : `<p class="muted">עוד לא הגיעו פניות.</p>`}</div>
+        ${calls.length || ls.some((l) => l.tracking_phone) ? `<div class="panel"><h2>שיחות אחרונות <a class="link-more" href="#calls">לכל השיחות ${I("fwd")}</a></h2>${calls.length ? `<div class="table-wrap"><table class="tbl"><tbody>${callRows(calls.slice(0, 6), ls.length < 2)}</tbody></table></div>` : `<p class="muted">עוד אין שיחות דרך מספר המעקב.</p>`}</div>` : ""}
       </div><div>
-        <div class="panel"><h2>פרטי הלקוח</h2><ul class="list-plain">${kv("איש קשר", esc(a.name))}${kv("טלפון", a.phone ? `<a href="tel:${esc(a.phone)}" dir="ltr">${esc(a.phone)}</a>` : "")}${kv("אימייל", a.email ? `<span dir="ltr">${esc(a.email)}</span>` : '<span class="muted">חסר</span>')}${kv("ח.פ / ע.מ", esc(a.tax_id || ""))}${kv("כתובת", esc(a.address || ""))}${kv("מקור", a.source === "signup" ? "הרשמה עצמית באתר" : "נוסף בפאנל")}${kv("תנאי שימוש", a.terms_version ? `אושרו${a.terms_at ? " ב־" + T.fmtDate(String(a.terms_at).slice(0, 10)) : ""} (גרסה ${esc(a.terms_version)})` : "")}${kv("התראות", (a.prefs || {}).notify_leads === false ? "ביקש לא לקבל מייל על פניות" : "")}</ul>${a.notes ? `<p class="msg" style="margin-top:10px">״${esc(a.notes)}״</p>` : ""}</div>
+        <div class="panel"><h2>פרטי הלקוח</h2><ul class="list-plain">${kv("איש קשר", esc(a.name))}${kv("טלפון", a.phone ? `<a href="tel:${esc(a.phone)}" dir="ltr">${esc(a.phone)}</a>` : "")}${kv("אימייל", a.email ? `<span dir="ltr">${esc(a.email)}</span>` : '<span class="muted">חסר</span>')}${kv("ח.פ / ע.מ", esc(a.tax_id || ""))}${kv("כתובת", esc(a.address || ""))}${kv("מקור", a.source === "signup" ? "הרשמה עצמית באתר" : "נוסף בפאנל")}${kv("הסכם פרסום", a.terms_version ? `${a.terms_version === T.HOST_TERMS_VERSION ? "" : '<span class="pill pill-warn">גרסה ישנה</span> '}אושר${a.terms_at ? " ב־" + T.fmtDate(String(a.terms_at).slice(0, 10)) : ""} (גרסה ${esc(a.terms_version)})` : "")}${kv("מספרי מעקב", ls.filter((l) => l.tracking_phone).map((l) => `<span dir="ltr">${esc(T.fmtPhone(l.tracking_phone))}</span> (${esc(l.name)})`).join("<br>"))}${kv("התראות", (a.prefs || {}).notify_leads === false ? "ביקש לא לקבל מייל על פניות" : "")}${kv("ממתין לאישור", a.pending && typeof a.pending === "object" && Object.keys(a.pending).some((k) => !k.startsWith("_")) ? `<a href="#moderation">עדכון פרטים</a>` : "")}</ul>${a.notes ? `<p class="msg" style="margin-top:10px">״${esc(a.notes)}״</p>` : ""}</div>
         <div class="panel"><h2><span class="h-ic">${I("key")}כניסה לממשק המארחים</span></h2><p><span class="pill pill-${ac.tone}">${esc(ac.text)}</span></p>
           ${T.isLive && a.email ? `<div class="btn-col"><button class="btn btn-line btn-block" type="button" data-act="client-invite" data-id="${esc(a.id)}">${I("mail")}${ac.tone === "muted" ? "שליחת הזמנה במייל" : "שליחה חוזרת: הזמנה / קישור לסיסמה"}</button>
             <button class="btn btn-ghost btn-block" type="button" data-act="client-link" data-id="${esc(a.id)}">${I("link")}קישור כניסה לשליחה בוואטסאפ</button></div>
@@ -1321,6 +1582,8 @@
     A.maps = [];
     if (!A.ready) { app.innerHTML = `<div class="login"><p class="muted">טוען…</p></div>`; return; }
     if (!A.authed) { app.innerHTML = A.gate ? viewGate() : viewLogin(); return; }
+    /* מארח: קודם מאשרים את הגרסה הנוכחית של הסכם הפרסום */
+    if (needsTerms()) { app.innerHTML = viewTermsGate(); document.title = "הסכם פרסום | " + A.settings.site_name; return; }
     const h = location.hash.slice(1) || (IS_ADMIN ? "dashboard" : "my");
     const entering = A.route !== h;
     A.route = h;
@@ -1341,7 +1604,7 @@
     if (h !== "articles") A.editArticle = null;
     let html;
     if (IS_ADMIN) {
-      const routes = { dashboard: viewDashboard, listings: viewListings, leads: viewLeads, moderation: viewModeration, reviews: viewReviews, advertisers: viewAdvertisers, billing: viewBilling, applications: viewApplications, articles: viewArticles, places: viewPlaces, subscribers: viewSubscribers, activity: viewActivity, account: viewAdminAccount, "site-settings": viewSettings, system: viewSystem };
+      const routes = { dashboard: viewDashboard, listings: viewListings, calendar: viewBoard, calls: viewCalls, leads: viewLeads, moderation: viewModeration, reviews: viewReviews, advertisers: viewAdvertisers, billing: viewBilling, applications: viewApplications, articles: viewArticles, places: viewPlaces, subscribers: viewSubscribers, activity: viewActivity, account: viewAdminAccount, "site-settings": viewSettings, system: viewSystem };
       if (h === "new") html = viewEditor("new");
       else if (h.startsWith("edit-")) html = viewEditor(h.slice(5));
       else if (h.startsWith("client-")) html = viewClient(h.slice(7));
@@ -1349,6 +1612,8 @@
     } else {
       if (h.startsWith("edit-") && A.listings.some((l) => l.id === h.slice(5))) html = viewEditor(h.slice(5));
       else if (h === "leads") html = viewLeads();
+      else if (h === "calendar") html = viewBoard();
+      else if (h === "calls") html = viewCalls();
       else if (h === "reviews") html = viewReviews();
       else if (h === "account") html = viewOwnerAccount();
       else html = viewMy();
@@ -1363,8 +1628,8 @@
   /* טוען כל חלק בנפרד: אם טבלה אחת נכשלת, השאר עדיין נטענים ומוצגים */
   async function reload() {
     const jobs = IS_ADMIN
-      ? { listings: () => T.store.listListings({ all: true }), advertisers: () => T.store.listAdvertisers(), leads: () => T.store.listLeads(), applications: () => T.store.listApplications(), reviews: () => T.store.listReviews({ all: true }), articles: () => T.store.listArticles({ all: true }), settings: () => T.store.getSettings(), stats: () => T.store.stats(30), places: () => T.store.listPlaces({ all: true }), subscribers: () => T.store.listSubscribers() }
-      : { listings: () => T.store.myListings(), advertisers: () => T.store.myAdvertisers(), leads: () => T.store.myLeads(), reviews: () => T.store.myReviews(), settings: () => T.store.getSettings(), stats: () => T.store.stats(30) };
+      ? { listings: () => T.store.listListings({ all: true }), advertisers: () => T.store.listAdvertisers(), leads: () => T.store.listLeads(), applications: () => T.store.listApplications(), reviews: () => T.store.listReviews({ all: true }), articles: () => T.store.listArticles({ all: true }), settings: () => T.store.getSettings(), stats: () => T.store.stats(30), places: () => T.store.listPlaces({ all: true }), subscribers: () => T.store.listSubscribers(), calls: () => T.store.listCalls({ limit: 2000 }) }
+      : { listings: () => T.store.myListings(), advertisers: () => T.store.myAdvertisers(), leads: () => T.store.myLeads(), reviews: () => T.store.myReviews(), settings: () => T.store.getSettings(), stats: () => T.store.stats(30), calls: () => T.store.listCalls({ limit: 1000 }) };
     const keys = Object.keys(jobs);
     const res = await Promise.allSettled(keys.map((k) => jobs[k]()));
     const errs = [];
@@ -1441,7 +1706,7 @@
     const fd = new FormData(form);
     A.settings.social = {};
     ["instagram", "facebook", "tiktok", "youtube"].forEach((k) => { const v = (fd.get("social_" + k) || "").trim(); if (v) A.settings.social[k] = /^https?:\/\//.test(v) ? v : "https://" + v; });
-    ["site_name", "site_tagline", "phone", "whatsapp", "email", "notify_email", "a11y_coordinator", "hero_title", "hero_subtitle"].forEach((k) => (A.settings[k] = (fd.get(k) || "").trim()));
+    ["site_name", "site_tagline", "phone", "whatsapp", "email", "notify_email", "a11y_coordinator", "hero_title", "hero_subtitle", "legal_name", "legal_id", "legal_address", "legal_court"].forEach((k) => { if (fd.has(k)) A.settings[k] = (fd.get(k) || "").trim(); });
     A.settings.plan_prices = {};
     T.PLANS.forEach((p) => (A.settings.plan_prices[p.key] = Number(fd.get("price_" + p.key)) || 0));
     A.settings.lead_price_default = Number(fd.get("lead_price_default")) || 0;
@@ -1689,6 +1954,69 @@
     else if (act === "art-new") { A.editArticle = { title: "", excerpt: "", body: "", cover: "", published: false }; rerenderKeepScroll(); }
     else if (act === "art-edit") { e.preventDefault(); A.editArticle = T.clone(A.articles.find((a) => a.id === id)); render(); window.scrollTo(0, 0); }
     else if (act === "art-cancel") { A.editArticle = null; render(); }
+    /* אישורים לפי קבוצה, פרטי לקוח, יומן מרוכז, שיחות, מתחם נוסף, הסכם */
+    else if (act === "set-modg") {
+      const k = el.dataset.k;
+      const on = !T.modOn(A.settings, k);
+      A.settings.moderate = Object.assign({}, A.settings.moderate || {}, { [k]: on });
+      if (k === "content") A.settings.moderation = on;
+      el.setAttribute("aria-checked", on);
+    }
+    else if (act === "prof-approve" || act === "prof-reject") {
+      const a = A.advertisers.find((x) => x.id === id);
+      if (!a || !a.pending) return;
+      const ch = { id: a.id, pending: null };
+      if (act === "prof-approve") Object.keys(PROF_LABELS).forEach((k) => { if (a.pending[k] !== undefined) ch[k] = a.pending[k]; });
+      save(() => T.store.saveAdvertiser(ch), act === "prof-approve" ? "הפרטים עודכנו בכרטיס הלקוח" : "העדכון נדחה. הפרטים הקודמים נשארו.");
+    }
+    else if (act === "cf-status") { A.cf.status = el.dataset.v; rerenderKeepScroll(); }
+    else if (act === "calls-csv") downloadCSV(`calls-${T.iso(T.today())}.csv`, ["מתי", "מתקשר", "מתחם", "סטטוס", "משך (שניות)", "צלצול (שניות)", "מספר מעקב"].concat(IS_ADMIN ? ["הקלטה"] : []), A.calls.map((c) => [c.started_at, c.caller, listingName(c.listing_id), (CALL_ST[c.status] || [c.status])[0], c.duration || 0, c.ring || 0, c.tracking_phone].concat(IS_ADMIN ? [c.recording || ""] : [])));
+    else if (act === "own-add") { document.body.insertAdjacentHTML("beforeend", addListingModal()); $("#modal input").focus(); }
+    else if (act === "accept-terms") {
+      if (!$("#terms-ok") || !$("#terms-ok").checked) { T.toast("כדי להמשיך מסמנים שקראתם ומסכימים להסכם", "err"); $("#terms-ok") && $("#terms-ok").focus(); return; }
+      el.disabled = true;
+      try { await T.store.acceptHostTerms(); await reload(); render(); T.toast("תודה! ההסכם אושר."); } catch (ex) { el.disabled = false; fail("האישור נכשל", ex); }
+    }
+    else if (act === "bd-nav") {
+      const dd = Number(el.dataset.d);
+      const cur = A.board.start ? T.parseISO(A.board.start) : T.today();
+      const next = dd === 0 ? T.today() : T.addDays(cur, dd);
+      A.board.start = T.iso(next) <= T.iso(T.today()) ? null : T.iso(next);
+      rerenderKeepScroll();
+    }
+    else if (act === "bd-day") {
+      const l0 = A.listings.find((x) => x.id === el.dataset.l);
+      if (!l0) return;
+      const ed = A.boardEdits[l0.id] || T.clone(IS_ADMIN ? l0 : T.withPending(l0));
+      const iso = el.dataset.d, uid = el.dataset.u;
+      const target = uid ? (ed.rooms || []).find((r) => r.id === uid) : ed;
+      if (!target) return;
+      const cur = target.blocked_dates || [];
+      target.blocked_dates = cur.includes(iso) ? cur.filter((x) => x !== iso) : cur.concat(iso).sort();
+      /* חזר למצב השמור: אין מה לשמור במתחם הזה */
+      const base = IS_ADMIN ? l0 : T.withPending(l0);
+      const same = JSON.stringify(base.blocked_dates || []) === JSON.stringify(ed.blocked_dates || []) && (ed.rooms || []).every((r) => { const o = (base.rooms || []).find((x) => x.id === r.id); return JSON.stringify((o && o.blocked_dates) || []) === JSON.stringify(r.blocked_dates || []); });
+      if (same) delete A.boardEdits[l0.id]; else A.boardEdits[l0.id] = ed;
+      $("#board").innerHTML = boardHTML();
+      const bar = $("#bd-bar"); if (bar) { bar.innerHTML = boardBar(); bar.hidden = !boardDirty(); }
+      const b = $(`#board [data-l="${CSS.escape(l0.id)}"][data-u="${CSS.escape(uid)}"][data-d="${iso}"]`); if (b) b.focus();
+    }
+    else if (act === "bd-discard") { A.boardEdits = {}; rerenderKeepScroll(); T.toast("השינויים ביומן בוטלו"); }
+    else if (act === "bd-save") {
+      el.disabled = true;
+      const today = T.iso(T.today());
+      try {
+        for (const [lid, ed] of Object.entries(A.boardEdits)) {
+          const orig = A.listings.find((x) => x.id === lid);
+          if (!orig) continue;
+          const clean = Object.assign({}, ed, { blocked_dates: (ed.blocked_dates || []).filter((x) => x >= today), rooms: (ed.rooms || []).map((r) => Object.assign({}, r, { blocked_dates: (r.blocked_dates || []).filter((x) => x >= today) })) });
+          if (IS_ADMIN) await T.store.saveListing(clean); else await T.store.saveListingAsOwner(clean, orig);
+          delete A.drafts[lid];
+          delete A.boardEdits[lid];
+        }
+        await reload(); rerenderKeepScroll(); T.toast("היומן נשמר ומתעדכן באתר");
+      } catch (ex) { el.disabled = false; fail("שמירת היומן נכשלה", ex); }
+    }
     /* settings */
     else if (act === "set-mod") { A.settings.moderation = !(A.settings.moderation !== false); el.setAttribute("aria-checked", A.settings.moderation); }
     else if (act === "hol-add") settingsRows("holidays", (rows) => rows.push({ label: "", from: "", to: "" }));
@@ -1730,6 +2058,9 @@
     else if (t.id === "pf-region") { A.pf.region = t.value; rerenderKeepScroll(); }
     else if (t.id === "sf-region") { A.sf.region = t.value; rerenderKeepScroll(); }
     else if (t.id === "act-f") { A.actF = t.value; rerenderKeepScroll(); }
+    else if (t.id === "cf-listing") { A.cf.listing = t.value; rerenderKeepScroll(); }
+    else if (t.id === "bd-client") { A.board.client = t.value; rerenderKeepScroll(); }
+    else if (t.name === "noise_party" && t.closest("#editor")) { const box = $(".noise-party"); if (box) box.hidden = !t.checked; }
     else if (t.dataset.actChange === "assign-listing" && t.value) {
       const l = A.listings.find((x) => x.id === t.value), a = A.advertisers.find((x) => x.id === t.dataset.id);
       if (!l || !a) return;
@@ -1824,12 +2155,12 @@
       try { await T.store.mfaVerify(A.enroll.id, code); await T.store.adminSetMfa(true); A.enroll = null; A.acct = null; render(); T.toast("האימות הדו-שלבי הופעל. מעכשיו בכל כניסה תתבקשו קוד מהאפליקציה."); }
       catch (ex) { busy(false); T.toast(T.authError(ex), "err"); }
     } else if (kind === "profile") {
-      const pr = { name: String(fd.get("name") || "").trim(), phone: String(fd.get("phone") || "").trim(), address: String(fd.get("address") || "").trim(), tax_id: String(fd.get("tax_id") || "").replace(/\D/g, ""), prefs: { notify_leads: !!fd.get("notify_leads"), notify_reviews: !!fd.get("notify_reviews") } };
+      const pr = { name: String(fd.get("name") || "").trim(), phone: String(fd.get("phone") || "").trim(), address: String(fd.get("address") || "").trim(), tax_id: String(fd.get("tax_id") || "").replace(/\D/g, ""), prefs: { notify_leads: !!fd.get("notify_leads"), notify_reviews: !!fd.get("notify_reviews"), notify_calls: !!fd.get("notify_calls") } };
       if (!pr.name) { T.toast("חסר שם איש קשר", "err"); return; }
       if (!T.validPhone(pr.phone)) { T.toast("מספר הטלפון לא נראה תקין", "err"); return; }
       if (pr.tax_id && !/^\d{8,9}$/.test(pr.tax_id)) { T.toast("ח.פ / ע.מ הוא 9 ספרות", "err"); return; }
       busy(true);
-      try { await T.store.updateMyProfile(pr); await reload(); rerenderKeepScroll(); T.toast("הפרטים נשמרו"); } catch (ex) { busy(false); fail("השמירה נכשלה", ex); }
+      try { const r = await T.store.updateMyProfile(pr); await reload(); rerenderKeepScroll(); T.toast(r === "pending" ? "נשמר. השינוי בפרטים נשלח לאישור צוות האתר, וההתראות עודכנו מיד." : "הפרטים נשמרו"); } catch (ex) { busy(false); fail("השמירה נכשלה", ex); }
     } else if (kind === "add-admin") {
       if (!T.validEmail(email)) { T.toast("כתובת האימייל לא נראית תקינה", "err"); return; }
       busy(true);
@@ -1846,6 +2177,12 @@
       const payments = (a.payments || []).concat({ month: fd.get("month"), amount, method: fd.get("method") || "", note: String(fd.get("note") || "").trim().slice(0, 80), paid_at: new Date().toISOString() });
       busy(true);
       try { await T.store.saveAdvertiser({ id: a.id, payments }); await reload(); rerenderKeepScroll(); T.toast("התשלום נרשם"); } catch (ex) { busy(false); fail("השמירה נכשלה", ex); }
+    } else if (kind === "own-add") {
+      const f = { name: String(fd.get("name") || "").trim(), settlement: String(fd.get("settlement") || "").trim(), region: fd.get("region") || "", type: fd.get("type") || "" };
+      if (!f.name || !f.settlement) { T.toast("חסר שם מתחם או יישוב", "err"); return; }
+      busy(true);
+      try { const nid = await T.store.ownerAddListing(f); $("#modal").remove(); await reload(); location.hash = "edit-" + nid; T.toast("המתחם נפתח. ממלאים פרטים, תמונות ומחירים ושולחים לבדיקה."); }
+      catch (ex) { busy(false); const m = String(ex.message || ""); T.toast(/not active/.test(m) ? "החשבון לא פעיל כרגע. כדי לפתוח מתחם נוסף מחדשים את המנוי." : /יותר מדי/.test(m) ? m : "הפתיחה נכשלה: " + m, "err"); }
     } else if (kind === "listing") saveEditor();
     else if (kind === "advertiser") {
       const a = Object.fromEntries(fd.entries());
@@ -1904,7 +2241,7 @@
     if (A.authed) await reload(); else if (was && !A.loginMsg) A.loginMsg = { tone: "info", text: "החשבון התנתק. היכנסו שוב כדי להמשיך." };
     render();
   });
-  window.addEventListener("beforeunload", (e) => { if (Object.values(A.drafts).some((d) => d._dirty)) { e.preventDefault(); e.returnValue = ""; } });
+  window.addEventListener("beforeunload", (e) => { if (Object.values(A.drafts).some((d) => d._dirty) || boardDirty()) { e.preventDefault(); e.returnValue = ""; } });
 
   async function boot() {
     /* קישורים מהמייל: איפוס סיסמה או הזמנה → בחירת סיסמה; קישור שפג תוקפו → הסבר ברור ומה עושים */
@@ -1925,12 +2262,12 @@
     if (A.authed) await reload();
     A.ready = true;
     render();
-    T.store.onChange(async () => { if (!A.authed || A.editId || A.editArticle) return; await reload(); if (!$("#modal")) rerenderKeepScroll(); });
+    T.store.onChange(async () => { if (!A.authed || A.editId || A.editArticle || boardDirty()) return; await reload(); if (!$("#modal")) rerenderKeepScroll(); });
     /* סנכרון: כשחוזרים ללשונית, וכל 3 דקות כשהיא פתוחה, טוענים מחדש פניות, לקוחות ובקשות שנוספו בינתיים
        (לא באמצע עריכה, ולא כשחלון פתוח או כשמקלידים) */
     let lastSync = Date.now();
     const sync = async (force) => {
-      if (!A.authed || document.hidden || A.editId || A.editArticle || $("#modal") || $("#deny")) return;
+      if (!A.authed || document.hidden || A.editId || A.editArticle || boardDirty() || $("#modal") || $("#deny")) return;
       if (!force && Date.now() - lastSync < 25e3) return;
       const a = document.activeElement;
       if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.closest("form")) return;

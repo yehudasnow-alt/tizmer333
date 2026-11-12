@@ -7,8 +7,8 @@
     listings: ["id", "name", "type", "region", "settlement", "tagline", "description", "guests_max", "bedrooms", "bathrooms", "units", "min_nights",
       "price_weekday", "price_weekend", "price_holiday", "guests_base", "extra_guest_price", "deal_label", "deal_text", "lastminute_pct", "sponsored_until",
       "video_url", "amenities", "audience", "photos", "blocked_dates", "ical_url", "rooms", "extras", "seasons", "lat", "lng",
-      "phone", "whatsapp", "email", "owner_id", "featured", "active", "pending", "details", "terms", "exclusive", "best_price"],
-    advertisers: ["id", "name", "business", "phone", "email", "plan", "status", "billing_model", "lead_price", "start_date", "end_date", "notes", "payments", "tax_id", "address", "prefs", "source", "invited_at", "renewal_requested_at", "terms_version", "terms_at"],
+      "phone", "whatsapp", "email", "owner_id", "featured", "active", "pending", "details", "terms", "exclusive", "best_price", "noise", "tracking_phone"],
+    advertisers: ["id", "name", "business", "phone", "email", "plan", "status", "billing_model", "lead_price", "start_date", "end_date", "notes", "payments", "tax_id", "address", "prefs", "source", "invited_at", "renewal_requested_at", "terms_version", "terms_at", "pending"],
     leads: ["id", "listing_id", "listing_name", "unit_id", "unit_name", "name", "phone", "email", "check_in", "check_out", "guests", "children", "extras", "coupon", "est_total",
       "message", "status", "source", "admin_note", "review_token", "benefit", "package", "rooms_req", "flexible", "meta"],
     applications: ["id", "name", "phone", "email", "business", "settlement", "region", "type", "units", "message", "status", "tax_id", "advertiser_id", "marketing"],
@@ -27,7 +27,7 @@
   };
   const byNewest = (a, b) => (b.created_at || "").localeCompare(a.created_at || "");
   /* גרסת הסכמה שהקוד הזה מצפה לה (supabase/schema.sql → public.schema_version()) */
-  T.SCHEMA_VERSION = 4;
+  T.SCHEMA_VERSION = 5;
   /* מה חסר במסד (טבלאות/עמודות/פונקציות) לפי שגיאות שחזרו מהשרת */
   T.schemaIssues = T.schemaIssues || new Set();
   /* האם הדף הזה נפתח מקישור כניסה (הטוקן בכתובת)? רק לשונית כזו עוברת ליעד אחרי הכניסה */
@@ -49,31 +49,42 @@
     return v;
   };
   const trimCats = (c) => { const a = (c || []).slice(); while (a.length && (!a[a.length - 1] || a[a.length - 1] === "general")) a.pop(); return a; };
+  const noCal = (rs) => (rs || []).map((r) => { const o = Object.assign({}, r); T.CAL_KEYS.forEach((c) => delete o[c]); return o; });
   T.sameField = (k, a, b) => {
     if (k === "amenities" || k === "audience") return same([...(a || [])].sort(), [...(b || [])].sort());
+    if (k === "rooms") return JSON.stringify(canon(noCal(a))) === JSON.stringify(canon(noCal(b)));
+    if (k === "lat" || k === "lng") return (a == null || a === "" ? null : Number(a)) === (b == null || b === "" ? null : Number(b));
     if (k === "details") { const n = (d) => canon(Object.assign({}, d || {}, { photo_cats: trimCats((d || {}).photo_cats) })); return JSON.stringify(n(a)) === JSON.stringify(n(b)); }
     return JSON.stringify(canon(a)) === JSON.stringify(canon(b));
   };
   /* מארח: שדות תוכן נשמרים כ״ממתין לאישור״, מחירים ויומן נשמרים מיד */
   /* מתחם חדש שעוד לא פורסם: המארח יכול לבקש פרסום (_publish), והבקשה נשמרת עד שהמנהל מפעיל אותו */
-  T.ownerSplit = (draft, original, moderation) => {
+  /* settings: אובייקט ההגדרות (מה דורש אישור לפי קבוצות) או true/false (תוכן בלבד, לתאימות) */
+  T.ownerSplit = (draft, original, settings) => {
+    const st = settings && typeof settings === "object" ? settings : { moderation: settings !== false };
+    const keys = T.moderatedKeys(st);
     const row = Object.assign({}, draft);
     delete row._publish;
     const publish = !!draft._publish || !!(original && original.pending && original.pending._publish && !original.active);
     const flag = (pend) => (publish ? Object.assign(pend || { _at: new Date().toISOString() }, { _publish: true }) : pend);
-    if (!moderation) { row.pending = flag(null); return row; }
+    if (!keys.length) { row.pending = flag(null); return row; }
     const diff = {};
-    T.MODERATED_FIELDS.forEach(([k]) => {
-      if (!T.sameField(k, draft[k], original[k])) diff[k] = draft[k];
-      row[k] = original[k];
+    keys.forEach((k) => {
+      if (!T.sameField(k, draft[k], original[k])) diff[k] = k === "rooms" ? noCal(draft.rooms) : draft[k];
+      /* היומן של כל יחידה נשמר מיד גם כשהיחידות עצמן ממתינות לאישור */
+      row[k] = k === "rooms" ? T.roomsWithCalendar(original.rooms, draft.rooms) : original[k];
     });
-    row.pending = flag(Object.keys(diff).length ? Object.assign(diff, { _at: new Date().toISOString() }) : null);
+    /* אותם שינויים שכבר ממתינים (למשל שמירה מהיומן): שומרים את מועד השליחה המקורי */
+    const prev = original && original.pending && typeof original.pending === "object" ? original.pending : null;
+    const prevKeys = prev ? Object.keys(prev).filter((k) => !k.startsWith("_")) : [];
+    const same = prev && prev._at && prevKeys.length === Object.keys(diff).length && prevKeys.every((k) => diff[k] !== undefined && T.sameField(k, diff[k], prev[k]));
+    row.pending = flag(Object.keys(diff).length ? Object.assign(diff, { _at: same ? prev._at : new Date().toISOString() }) : null);
     return row;
   };
   T.withPending = (l) => {
     if (!l || !l.pending) return l;
     const out = Object.assign({}, l);
-    T.MODERATED_FIELDS.forEach(([k]) => { if (l.pending[k] !== undefined) out[k] = l.pending[k]; });
+    T.MODERATED_FIELDS.forEach(([k]) => { if (l.pending[k] !== undefined) out[k] = k === "rooms" ? T.roomsWithCalendar(l.pending.rooms, l.rooms) : l.pending[k]; });
     return out;
   };
 
@@ -136,7 +147,11 @@
       async listListings(o) { load(); const all = db.listings.map(T.normalizeListing); return o && o.all ? all : all.filter((l) => l.active); },
       async getListing(id) { load(); const l = db.listings.find((x) => x.id === id); return l ? T.normalizeListing(l) : null; },
       async saveListing(l) { return upsert("listings", T.normalizeListing(l), "l-"); },
-      async saveListingAsOwner(draft, original) { load(); return upsert("listings", T.normalizeListing(T.ownerSplit(draft, original, db.settings.moderation !== false)), "l-"); },
+      async saveListingAsOwner(draft, original) { load(); return upsert("listings", T.normalizeListing(T.ownerSplit(draft, original, Object.assign({}, T.DEFAULT_SETTINGS, db.settings))), "l-"); },
+      /* מארח מוסיף מתחם נוסף לחשבון: נוצר מוסתר, ועולה לאוויר אחרי בדיקה */
+      async ownerAddListing(f) { load(); const l = upsert("listings", T.normalizeListing({ name: f.name, settlement: f.settlement || "", region: f.region || "galil-elyon", type: f.type || "zimmer", owner_id: ownerId(), active: false, units: 1, photos: [], amenities: [], audience: [], rooms: [], blocked_dates: [] }), "l-"); return l.id; },
+      async acceptHostTerms() { load(); const a = db.advertisers.find((x) => x.id === ownerId()); if (a) { a.terms_version = T.HOST_TERMS_VERSION; a.terms_at = new Date().toISOString(); persist(); emit(); } return true; },
+      async listCalls() { load(); return T.clone(db.calls || []).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at))); },
       async approvePending(id, o) { load(); const l = db.listings.find((x) => x.id === id); if (!l || !l.pending) return; const m = T.withPending(l); m.pending = null; if (o && o.activate) m.active = true; return upsert("listings", m, "l-"); },
       async rejectPending(id) { return upsert("listings", { id, pending: null }, "l-"); },
       async deleteListing(id) { remove("listings", id); },
@@ -200,7 +215,7 @@
         load();
         const day = T.iso(T.today());
         const s = (db.stats[listingId] = db.stats[listingId] || {});
-        const row = (s[day] = s[day] || { v: 0, p: 0, w: 0 });
+        const row = (s[day] = s[day] || { v: 0, p: 0, w: 0, c: 0 });
         row[kind] = (row[kind] || 0) + 1;
         try { persist(); } catch (e) {}
       },
@@ -209,8 +224,8 @@
         const from = T.iso(T.addDays(T.today(), -(days || 30) + 1));
         const out = {};
         Object.entries(db.stats).forEach(([id, byDay]) => {
-          const t = (out[id] = { v: 0, p: 0, w: 0 });
-          Object.entries(byDay).forEach(([day, r]) => { if (day >= from) { t.v += r.v || 0; t.p += r.p || 0; t.w += r.w || 0; } });
+          const t = (out[id] = { v: 0, p: 0, w: 0, c: 0 });
+          Object.entries(byDay).forEach(([day, r]) => { if (day >= from) { t.v += r.v || 0; t.p += r.p || 0; t.w += r.w || 0; t.c += r.c || 0; } });
         });
         return out;
       },
@@ -237,7 +252,18 @@
       async updatePassword() { return true; },
       async claimHostSignup() { return { status: "none" }; },
       async myApplication() { return null; },
-      async updateMyProfile(p) { load(); const a = db.advertisers.find((x) => x.id === ownerId()); if (a) { Object.assign(a, { name: p.name || a.name, phone: p.phone || a.phone, address: p.address || "", tax_id: p.tax_id || "", prefs: Object.assign({}, a.prefs, p.prefs) }); persist(); emit(); } return true; },
+      async updateMyProfile(p) {
+        load();
+        const a = db.advertisers.find((x) => x.id === ownerId());
+        if (!a) return false;
+        const ch = { name: p.name || a.name, phone: p.phone || a.phone, address: p.address || "", tax_id: p.tax_id || "" };
+        a.prefs = Object.assign({}, a.prefs, p.prefs);
+        if (T.modOn(Object.assign({}, T.DEFAULT_SETTINGS, db.settings), "account")) {
+          const diff = {}; Object.keys(ch).forEach((k) => { if (String(ch[k] || "") !== String(a[k] || "")) diff[k] = ch[k]; });
+          a.pending = Object.keys(diff).length ? Object.assign(diff, { _at: new Date().toISOString() }) : null;
+        } else Object.assign(a, ch, { pending: null });
+        persist(); emit(); return a.pending ? "pending" : true;
+      },
       async requestRenewal() { load(); const a = db.advertisers.find((x) => x.id === ownerId()); if (a) { a.renewal_requested_at = new Date().toISOString(); persist(); emit(); } return true; },
       async adminStatus() { return { admin: ss("tamara.demo.admin") === "1", mfa_required: false, aal: "aal1" }; },
       async mfaFactors() { return []; },
@@ -349,7 +375,16 @@
       async saveListing(l) { return T.normalizeListing(await save("listings", T.normalizeListing(l), COLS.listings)); },
       async saveListingAsOwner(draft, original) {
         const s = await store.getSettings();
-        return T.normalizeListing(await save("listings", T.ownerSplit(T.normalizeListing(draft), original, s.moderation !== false), COLS.listings));
+        return T.normalizeListing(await save("listings", T.ownerSplit(T.normalizeListing(draft), original, s), COLS.listings));
+      },
+      async ownerAddListing(f) { const r = await sb.rpc("owner_add_listing", { p_name: f.name || "", p_settlement: f.settlement || "", p_region: f.region || "", p_type: f.type || "" }); const id = ok(r); emit(); return id; },
+      async acceptHostTerms() { ok(await sb.rpc("accept_host_terms", { p_version: T.HOST_TERMS_VERSION })); emit(); return true; },
+      async listCalls(o) {
+        let q = sb.from("calls").select("*").order("started_at", { ascending: false }).limit((o && o.limit) || 500);
+        if (o && o.since) q = q.gte("started_at", o.since);
+        const r = await q;
+        if (r.error) { if (isMissing(r.error, r.status)) { noteMissing(r.error); return []; } ok(r); }
+        return r.data || [];
       },
       async approvePending(id, o) { const l = await store.getListing(id); if (!l || !l.pending) return; const m = T.withPending(l); m.pending = null; if (o && o.activate) m.active = true; return store.saveListing(m); },
       async rejectPending(id) { ok(await sb.from("listings").update({ pending: null }).eq("id", id)); emit(); },
@@ -465,7 +500,7 @@
         const from = T.iso(T.addDays(T.today(), -(days || 30) + 1));
         const rows = ok(await sb.from("listing_stats").select("*").gte("day", from).limit(10000));
         const out = {};
-        rows.forEach((r) => { const t = (out[r.listing_id] = out[r.listing_id] || { v: 0, p: 0, w: 0 }); t.v += r.views || 0; t.p += r.phone || 0; t.w += r.whatsapp || 0; });
+        rows.forEach((r) => { const t = (out[r.listing_id] = out[r.listing_id] || { v: 0, p: 0, w: 0, c: 0 }); t.v += r.views || 0; t.p += r.phone || 0; t.w += r.whatsapp || 0; t.c += r.calls || 0; });
         return out;
       },
       async getSettings() {
@@ -524,8 +559,9 @@
       async schemaCheck() {
         const out = [];
         const probe = async (label, table, cols) => { const r = await sb.from(table).select(cols).limit(0); out.push({ group: "db", label, ok: !r.error, detail: r.error ? (isMissing(r.error) ? "חסר: " + (missingName(r.error.message) || table) : r.error.message) : "" }); };
-        await probe("טבלת מתחמים + שדות התוכן החדשים", "listings", "id,details,terms,exclusive,best_price,pending,rooms,extras,seasons,video_url,ical_blocked");
-        await probe("טבלת לקוחות (מפרסמים)", "advertisers", "id,billing_model,lead_price,payments,tax_id,prefs,invited_at,renewal_requested_at");
+        await probe("טבלת מתחמים + שדות התוכן החדשים", "listings", "id,details,terms,exclusive,best_price,pending,rooms,extras,seasons,video_url,ical_blocked,noise,tracking_phone");
+        await probe("טבלת לקוחות (מפרסמים)", "advertisers", "id,billing_model,lead_price,payments,tax_id,prefs,invited_at,renewal_requested_at,pending,terms_version");
+        await probe("שיחות (מספרים וירטואליים)", "calls", "id,listing_id,caller,status,duration,started_at");
         await probe("טבלת פניות + שדות חדשים", "leads", "id,children,benefit,package,rooms_req,flexible,meta,source");
         await probe("חוות דעת + דירוג לפי קטגוריות", "reviews", "id,title,scores,unit_name,reply");
         await probe("מה עושים באזור", "places", "id,name,kind,region,lat,lng");
@@ -569,7 +605,7 @@
       async updatePassword(password) { ok(await sb.auth.updateUser({ password })); return true; },
       async claimHostSignup() { const r = await sb.rpc("claim_host_signup"); if (r.error && isMissing(r.error, r.status)) { noteMissing(r.error); return { status: "none" }; } return ok(r) || { status: "none" }; },
       async myApplication() { const r = await sb.rpc("my_application"); if (r.error && isMissing(r.error, r.status)) return null; return ok(r) || null; },
-      async updateMyProfile(p) { return !!ok(await sb.rpc("update_my_profile", { p_name: p.name || "", p_phone: p.phone || "", p_address: p.address || "", p_tax_id: p.tax_id || "", p_prefs: p.prefs || {} })); },
+      async updateMyProfile(p) { const r = ok(await sb.rpc("update_my_profile", { p_name: p.name || "", p_phone: p.phone || "", p_address: p.address || "", p_tax_id: p.tax_id || "", p_prefs: p.prefs || {} })); emit(); return r; },
       async requestRenewal() { const r = ok(await sb.rpc("request_renewal")); await store.mail("renewal").catch(() => {}); return !!r; },
       /* אימות דו-שלבי למנהלים */
       async adminStatus() { const r = await sb.rpc("admin_status"); if (r.error) return { admin: await store.isAdmin(), mfa_required: false, aal: "aal1" }; return r.data; },

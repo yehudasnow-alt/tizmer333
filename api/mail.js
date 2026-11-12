@@ -130,7 +130,7 @@ export default async function handler(req, res) {
       const adv = await first(`advertisers?select=name,business,phone&id=eq.${enc(l.owner_id)}`);
       const day = new Date().toISOString().slice(0, 10);
       const r = await sendOnce(`publish-request:${id}:${day}`, { to: adminTo, replyTo: user.email, subject: `בקשה לפרסום מתחם: ${l.name}`,
-        html: L({ title: "מארח ביקש לפרסם מתחם", body: table([row("מתחם", esc(l.name)), row("לקוח", esc((adv && (adv.business || adv.name)) || "")), row("טלפון", esc((adv && adv.phone) || "")), row("מייל", esc(user.email)), row("תמונות", String((l.photos || []).length))].join("")) + p("בודקים את התוכן ב״אישורי תוכן״, ומאשרים עם ״אישור והצגה באתר״."), cta: base && { href: `${base}/admin.html#moderation`, label: "לאישורי תוכן" } }) });
+        html: L({ title: "מארח ביקש לפרסם מתחם", body: table([row("מתחם", esc(l.name)), row("לקוח", esc((adv && (adv.business || adv.name)) || "")), row("טלפון", esc((adv && adv.phone) || "")), row("מייל", esc(user.email)), row("תמונות", String((l.photos || []).length))].join("")) + p("בודקים את התוכן ב״אישורים״, ומאשרים עם ״אישור והצגה באתר״."), cta: base && { href: `${base}/admin.html#moderation`, label: "לאישורים" } }) });
       return send(res, 200, Object.assign({ ok: true }, r));
     }
 

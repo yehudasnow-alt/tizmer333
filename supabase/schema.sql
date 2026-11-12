@@ -236,7 +236,25 @@ $$;
 
 create or replace function public.moderation_on()
 returns boolean language sql stable security definer set search_path = public as $$
-  select coalesce((select (data ->> 'moderation')::boolean from public.settings where id = 1), true);
+  select coalesce((select coalesce((data -> 'moderate' ->> 'content')::boolean, (data ->> 'moderation')::boolean) from public.settings where id = 1), true);
+$$;
+
+-- מה דורש אישור מנהל כשמארח משנה: content / prices / policies / contact / account (הגדרות → אישור שינויים)
+create or replace function public.moderate_group(p_group text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select case when p_group = 'content' then public.moderation_on()
+    else coalesce((select (data -> 'moderate' ->> p_group)::boolean from public.settings where id = 1), false) end;
+$$;
+
+-- יחידות שממתינות לאישור: הפרטים והמחירים נשארים כמו שהיו, היומן של כל יחידה מתעדכן מיד
+create or replace function public.rooms_keep_calendar(p_old jsonb, p_new jsonb)
+returns jsonb language sql immutable as $$
+  select coalesce(jsonb_agg(case when n.r is null then o.r
+      else o.r || jsonb_build_object('blocked_dates', coalesce(n.r -> 'blocked_dates', '[]'::jsonb), 'ical_url', coalesce(n.r -> 'ical_url', o.r -> 'ical_url', '""'::jsonb)) end
+      order by o.i), '[]'::jsonb)
+  from jsonb_array_elements(case when jsonb_typeof(p_old) = 'array' then p_old else '[]'::jsonb end) with ordinality o(r, i)
+  left join lateral (select x as r from jsonb_array_elements(case when jsonb_typeof(p_new) = 'array' then p_new else '[]'::jsonb end) x
+                     where x ->> 'id' = o.r ->> 'id' limit 1) n on true;
 $$;
 
 create or replace function public.touch_updated_at()
@@ -250,6 +268,7 @@ end $$;
 -- security invoker: רץ בהרשאות של מי שמעדכן, כדי ש-is_service יזהה אותו נכון
 create or replace function public.protect_listing_columns()
 returns trigger language plpgsql security invoker set search_path = public as $$
+declare held boolean := false;
 begin
   -- תאריכים מסונכרנים נכתבים רק ע"י השרת (גם מנהל לא דורס אותם משמירה ישנה בעורך)
   if not public.is_service() then
@@ -272,12 +291,35 @@ begin
     new.sponsored_until := old.sponsored_until;
     new.exclusive := old.exclusive;
     new.best_price := old.best_price;
-    if public.moderation_on() then
+    new.tracking_phone := old.tracking_phone;
+    -- תגית רעש שהמנהל נעל: המארח לא משנה אותה
+    if jsonb_typeof(old.noise) = 'object' and coalesce((old.noise ->> 'locked')::boolean, false) then new.noise := old.noise; end if;
+    -- שינויים בקבוצה שדורשת אישור נשמרים רק ב-pending (המארח רואה אותם, האתר לא)
+    if public.moderate_group('content') then
       new.name := old.name; new.type := old.type; new.region := old.region; new.settlement := old.settlement;
       new.tagline := old.tagline; new.description := old.description; new.photos := old.photos;
       new.amenities := old.amenities; new.audience := old.audience; new.video_url := old.video_url;
-      new.details := old.details;
-    else
+      new.details := old.details; new.noise := old.noise; new.lat := old.lat; new.lng := old.lng;
+      held := true;
+    end if;
+    if public.moderate_group('prices') then
+      new.price_weekday := old.price_weekday; new.price_weekend := old.price_weekend; new.price_holiday := old.price_holiday;
+      new.guests_base := old.guests_base; new.extra_guest_price := old.extra_guest_price; new.guests_max := old.guests_max;
+      new.bedrooms := old.bedrooms; new.bathrooms := old.bathrooms; new.units := old.units;
+      new.seasons := old.seasons; new.extras := old.extras; new.deal_label := old.deal_label; new.deal_text := old.deal_text;
+      new.lastminute_pct := old.lastminute_pct;
+      new.rooms := public.rooms_keep_calendar(old.rooms, new.rooms);
+      held := true;
+    end if;
+    if public.moderate_group('policies') then
+      new.terms := old.terms; new.min_nights := old.min_nights;
+      held := true;
+    end if;
+    if public.moderate_group('contact') then
+      new.phone := old.phone; new.whatsapp := old.whatsapp; new.email := old.email;
+      held := true;
+    end if;
+    if not held then
       -- בלי אישור תוכן נשמרת רק בקשת הפרסום של מתחם חדש (המנהל מפעיל אותו)
       new.pending := case when jsonb_typeof(new.pending) = 'object' and new.pending ? '_publish'
         then jsonb_build_object('_publish', true, '_at', coalesce(new.pending -> '_at', to_jsonb(now()))) else null end;
@@ -391,7 +433,7 @@ grant execute on function public.set_ical_blocked(text, text, text[]) to service
 
 -- גרסת הסכמה: האתר בודק אותה ב"בדיקת מערכת" בפאנל הניהול. מעלים את המספר בכל שינוי מבני.
 create or replace function public.schema_version()
-returns integer language sql immutable as $$ select 4 $$;
+returns integer language sql immutable as $$ select 5 $$;
 grant execute on function public.schema_version() to anon, authenticated;
 
 grant execute on function public.is_admin() to anon, authenticated;
@@ -572,19 +614,27 @@ returns jsonb language sql stable security definer set search_path = public as $
 $$;
 
 -- מארח מעדכן את פרטי הקשר וההעדפות שלו (לא חבילה, תאריכים או תשלומים)
+drop function if exists public.update_my_profile(text, text, text, text, jsonb);
+-- מחזיר 'saved', או 'pending' כשפרטי החשבון דורשים אישור מנהל (ההעדפות נשמרות תמיד)
 create or replace function public.update_my_profile(p_name text, p_phone text, p_address text, p_tax_id text, p_prefs jsonb)
-returns boolean language plpgsql security definer set search_path = public as $$
+returns text language plpgsql security definer set search_path = public as $$
+declare a public.advertisers; nv jsonb; diff jsonb;
 begin
-  update public.advertisers set
-    name = left(coalesce(nullif(trim(p_name), ''), name), 120),
-    phone = left(coalesce(nullif(trim(p_phone), ''), phone), 30),
-    address = left(coalesce(p_address, address), 200),
-    tax_id = left(coalesce(p_tax_id, tax_id), 20),
-    prefs = case when jsonb_typeof(p_prefs) = 'object' then prefs || coalesce((
+  select * into a from public.advertisers where email <> '' and lower(email) = lower(coalesce(auth.jwt() ->> 'email', '')) order by created_at limit 1;
+  if a.id is null then return 'none'; end if;
+  update public.advertisers set prefs = case when jsonb_typeof(p_prefs) = 'object' then prefs || coalesce((
       select jsonb_object_agg(k, v) from jsonb_each(p_prefs) e(k, v)
-      where k in ('notify_leads', 'notify_reviews', 'monthly_report') and jsonb_typeof(v) = 'boolean'), '{}'::jsonb) else prefs end
-  where email <> '' and lower(email) = lower(coalesce(auth.jwt() ->> 'email', ''));
-  return found;
+      where k in ('notify_leads', 'notify_reviews', 'notify_calls', 'monthly_report') and jsonb_typeof(v) = 'boolean'), '{}'::jsonb) else prefs end
+  where id = a.id;
+  nv := jsonb_build_object('name', left(coalesce(nullif(trim(p_name), ''), a.name), 120), 'phone', left(coalesce(nullif(trim(p_phone), ''), a.phone), 30),
+                           'address', left(coalesce(p_address, a.address), 200), 'tax_id', left(coalesce(p_tax_id, a.tax_id), 20));
+  if public.moderate_group('account') then
+    select coalesce(jsonb_object_agg(k, v), '{}'::jsonb) into diff from jsonb_each(nv) e(k, v) where v is distinct from to_jsonb(a) -> k;
+    update public.advertisers set pending = case when diff = '{}'::jsonb then null else diff || jsonb_build_object('_at', now()) end where id = a.id;
+    return case when diff = '{}'::jsonb then 'saved' else 'pending' end;
+  end if;
+  update public.advertisers set name = nv ->> 'name', phone = nv ->> 'phone', address = nv ->> 'address', tax_id = nv ->> 'tax_id', pending = null where id = a.id;
+  return 'saved';
 end $$;
 
 -- מארח מבקש חידוש מנוי (המנהל מקבל מייל)
@@ -711,6 +761,83 @@ do $$ begin
 exception when others then raise notice 'לא עודכנו מגבלות הקבצים של התמונות: %', sqlerrm;
 end $$;
 
+-- ===================================================================== גרסה 5
+-- רעש וסביבה, מספר וירטואלי ומעקב שיחות, אישור שינויים בפרטי החשבון, הוספת מתחם ע"י המארח, אישור תנאים
+
+alter table public.listings add column if not exists noise jsonb not null default '{}'::jsonb;
+alter table public.listings add column if not exists tracking_phone text not null default '';
+alter table public.advertisers add column if not exists pending jsonb;
+alter table public.listing_stats add column if not exists calls integer not null default 0;
+create index if not exists listings_tracking_phone on public.listings (tracking_phone) where tracking_phone <> '';
+
+-- שיחות שהגיעו דרך המספר הווירטואלי (נכתב רק ע"י /api/call-webhook)
+create table if not exists public.calls (
+  id           uuid primary key default gen_random_uuid(),
+  listing_id   text references public.listings (id) on delete set null,
+  owner_id     text references public.advertisers (id) on delete set null,
+  tracking_phone text not null default '',
+  caller       text not null default '',
+  status       text not null default 'answered' check (status in ('answered', 'missed', 'busy', 'failed')),
+  duration     integer not null default 0,
+  ring         integer not null default 0,
+  started_at   timestamptz not null default now(),
+  provider     text not null default '',
+  provider_id  text,
+  recording    text not null default '',
+  created_at   timestamptz not null default now()
+);
+create unique index if not exists calls_provider_id on public.calls (provider, provider_id);
+create index if not exists calls_listing_time on public.calls (listing_id, started_at desc);
+create index if not exists calls_owner_time on public.calls (owner_id, started_at desc);
+
+-- ספירת צפיות / הצגת טלפון / וואטסאפ / לחיצה לחיוג
+create or replace function public.track_event(p_listing text, p_kind text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if p_kind not in ('v', 'p', 'w', 'c') then return; end if;
+  if not exists (select 1 from public.listings where id = p_listing and active) then return; end if;
+  insert into public.listing_stats (listing_id, day, views, phone, whatsapp, calls)
+  values (p_listing, current_date, (p_kind = 'v')::int, (p_kind = 'p')::int, (p_kind = 'w')::int, (p_kind = 'c')::int)
+  on conflict (listing_id, day) do update set
+    views = public.listing_stats.views + excluded.views,
+    phone = public.listing_stats.phone + excluded.phone,
+    whatsapp = public.listing_stats.whatsapp + excluded.whatsapp,
+    calls = public.listing_stats.calls + excluded.calls;
+end $$;
+
+-- מארח מוסיף מתחם נוסף לחשבון שלו: נוצר מוסתר, ועולה לאוויר אחרי בדיקה ("שליחה לפרסום")
+create or replace function public.owner_add_listing(p_name text, p_settlement text, p_region text, p_type text)
+returns text language plpgsql security definer set search_path = public as $$
+declare a public.advertisers; n integer; lid text;
+begin
+  select * into a from public.advertisers where email <> '' and lower(email) = lower(coalesce(auth.jwt() ->> 'email', '')) order by created_at limit 1;
+  if a.id is null then raise exception 'not a client' using errcode = '42501'; end if;
+  if a.status not in ('active', 'trial') then raise exception 'account not active' using errcode = '42501'; end if;
+  select count(*) into n from public.listings where owner_id = a.id;
+  if n >= 20 then raise exception 'יותר מדי מתחמים בחשבון אחד' using errcode = 'TM429'; end if;
+  insert into public.listings (name, type, region, settlement, units, phone, whatsapp, email, owner_id, active)
+  values (left(coalesce(nullif(trim(p_name), ''), a.business), 60), coalesce(nullif(p_type, ''), 'zimmer'), coalesce(nullif(p_region, ''), 'galil-elyon'),
+          left(coalesce(p_settlement, ''), 40), 1, a.phone, a.phone, a.email, a.id, false)
+  returning id into lid;
+  return lid;
+end $$;
+
+-- מארח מאשר את תנאי הפרסום (גרסה) בכניסה לממשק
+create or replace function public.accept_host_terms(p_version text)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  if coalesce(p_version, '') = '' then return false; end if;
+  update public.advertisers set terms_version = left(p_version, 20), terms_at = now()
+  where email <> '' and lower(email) = lower(coalesce(auth.jwt() ->> 'email', ''));
+  return found;
+end $$;
+
+grant execute on function public.update_my_profile(text, text, text, text, jsonb) to authenticated;
+grant execute on function public.owner_add_listing(text, text, text, text) to authenticated;
+grant execute on function public.accept_host_terms(text) to authenticated;
+grant execute on function public.moderate_group(text) to anon, authenticated;
+grant execute on function public.track_event(text, text) to anon, authenticated;
+
 -- ------------------------------------------------------------ הרשאות (RLS)
 
 alter table public.admins        enable row level security;
@@ -818,6 +945,15 @@ create policy settings_read on public.settings for select using (true);
 drop policy if exists settings_write on public.settings;
 create policy settings_write on public.settings for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
+
+-- שיחות: מנהל רואה הכל, מארח רואה את השיחות למתחמים שלו. כתיבה רק מהשרת.
+alter table public.calls enable row level security;
+drop policy if exists calls_read on public.calls;
+create policy calls_read on public.calls for select to authenticated
+  using (public.is_admin() or owner_id in (select public.my_advertiser_ids())
+         or listing_id in (select id from public.listings where owner_id in (select public.my_advertiser_ids())));
+drop policy if exists calls_admin_delete on public.calls;
+create policy calls_admin_delete on public.calls for delete to authenticated using (public.is_admin());
 
 -- ------------------------------------------------------------ גישה לטבלאות דרך ה-API
 -- גם אם בפרויקט כובתה האפשרות "Automatically expose new tables".

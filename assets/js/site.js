@@ -12,7 +12,7 @@
   const PAGE_SIZE = 24;
   const defaultFilters = () => ({
     q: "", place: "", town: "", type: "", guests: 0, children: 0, ci: "", co: "", priceMax: 0, amenities: [], audience: [], benefit: "", units: 0,
-    deals: false, lastminute: false, tonight: false, weekend: false, couplesOnly: false, exclusive: false, bestPrice: false, isNew: false, sort: "rec", view: "list"
+    deals: false, lastminute: false, tonight: false, weekend: false, couplesOnly: false, exclusive: false, bestPrice: false, isNew: false, quiet: false, party: false, sort: "rec", view: "list"
   });
   const store = (k, d) => T.storage.get(k, d);
   const S = {
@@ -52,7 +52,8 @@
     });
     return h;
   };
-  const contactPhone = (l) => (l && (l.phone || l.whatsapp)) || S.settings.phone || S.settings.whatsapp || "";
+  /* מספר וירטואלי למעקב שיחות (אם הוגדר) מוצג במקום הטלפון של המארח; וואטסאפ נשאר ישיר */
+  const contactPhone = (l) => (l && l.tracking_phone ? T.fmtPhone(l.tracking_phone) : "") || (l && (l.phone || l.whatsapp)) || S.settings.phone || S.settings.whatsapp || "";
   const contactWA = (l) => (l && (l.whatsapp || l.phone)) || S.settings.whatsapp || S.settings.phone || "";
   const minDate = () => T.iso(T.today());
   const saveSaved = () => T.storage.set("tamara.saved", [...S.saved]);
@@ -98,6 +99,8 @@
     if (f.audience.length && !f.audience.some((a) => (l.audience || []).includes(a))) return false;
     if (f.benefit && !T.benefitsOf(l).some((b) => b.key === f.benefit)) return false;
     if (f.couplesOnly && !T.termsOf(l).couples_only) return false;
+    if (f.quiet) { const nz = T.noiseOf(l); if (!(nz.level && nz.level.key === "quiet")) return false; }
+    if (f.party && !T.noiseOf(l).party) return false;
     if (f.exclusive && !l.exclusive) return false;
     if (f.bestPrice && !l.best_price) return false;
     if (f.isNew && !isNewL(l)) return false;
@@ -283,7 +286,7 @@
       <div><h4>סוגי אירוח</h4><ul>${T.TYPES.map((t) => `<li><a href="#type-${t.key}">${esc(t.plural)}</a></li>`).join("")}<li><a href="#deals">דילים ודקה 90</a></li><li><a href="#weekend">פנויים לסופ״ש הקרוב</a></li></ul></div>
       <div><h4>מידע</h4><ul>
         <li><a href="#about">אודות</a></li><li><a href="#contact">צרו קשר</a></li><li><a href="#find">מצא לי צימר</a></li><li><a href="#places">אטרקציות ומסעדות</a></li><li><a href="#magazine">מגזין</a></li><li><a href="#top">המומלצים ביותר</a></li>
-        <li><a href="#join">פרסום מתחם באתר</a></li><li><a href="owner.html">כניסת מארחים</a></li><li><a href="#terms-hosts">תנאי פרסום למארחים</a></li><li><a href="#accessibility">הצהרת נגישות</a></li><li><a href="#terms">תנאי שימוש, פרטיות ועוגיות</a></li></ul></div>
+        <li><a href="#join">פרסום מתחם באתר</a></li><li><a href="owner.html">כניסת מארחים</a></li><li><a href="#terms-hosts">הסכם פרסום למארחים</a></li><li><a href="#accessibility">הצהרת נגישות</a></li><li><a href="#terms">תנאי שימוש, פרטיות ועוגיות</a></li></ul></div>
       <div class="legal"><span>© ${new Date().getFullYear()} ${esc(s.site_name)} – ${esc(s.site_tagline)}</span><a href="admin.html">ניהול האתר</a></div></div>`;
   }
   function floating() {
@@ -451,6 +454,8 @@
     else if (f.weekend) t = "פנויים לסופ״ש הקרוב";
     else if (f.tonight) t = "פנויים הלילה";
     else if (f.couplesOnly) t = "צימרים לזוגות בלבד";
+    else if (f.party) t = "צימרים שמותר בהם להרעיש";
+    else if (f.quiet) t = "צימרים בסביבה שקטה";
     else if (f.amenities.length === 1 && !f.type) { const sf = T.SEO_FEATURES.find((x) => x.key === f.amenities[0]); t = "צימרים " + (sf ? sf.phrase : "עם " + T.amenityOf(f.amenities[0]).name); }
     else if (f.audience.length === 1 && !f.type) t = "צימרים ל" + (T.AUDIENCE.find((a) => a.key === f.audience[0]) || { name: "" }).name;
     if (f.town) t += " ב" + f.town;
@@ -478,7 +483,7 @@
           <fieldset><legend>מי מגיע</legend><div class="row2">
             <div class="field"><span id="fa-lbl">מבוגרים</span><div class="stepper" role="group" aria-labelledby="fa-lbl"><button type="button" data-act="step" data-d="-1" aria-label="פחות">${I("minus")}</button><input name="guests" type="number" min="0" max="40" value="${f.guests || 0}" aria-labelledby="fa-lbl" inputmode="numeric"><button type="button" data-act="step" data-d="1" aria-label="יותר">${I("plus")}</button></div></div>
             <div class="field"><span id="fk-lbl">ילדים</span><div class="stepper" role="group" aria-labelledby="fk-lbl"><button type="button" data-act="step" data-d="-1" aria-label="פחות">${I("minus")}</button><input name="children" type="number" min="0" max="20" value="${f.children || 0}" aria-labelledby="fk-lbl" inputmode="numeric"><button type="button" data-act="step" data-d="1" aria-label="יותר">${I("plus")}</button></div></div></div>
-            ${T.AUDIENCE.map((a) => chk("audience", a.key, f.audience.includes(a.key), a.name, "audience:" + a.key)).join("")}${chk("couplesOnly", "1", f.couplesOnly, "לזוגות בלבד (בלי ילדים)", "couplesOnly")}</fieldset>
+            ${T.AUDIENCE.map((a) => chk("audience", a.key, f.audience.includes(a.key), a.name, "audience:" + a.key)).join("")}${chk("couplesOnly", "1", f.couplesOnly, "לזוגות בלבד (בלי ילדים)", "couplesOnly")}${chk("quiet", "1", f.quiet, "סביבה שקטה", "quiet")}${chk("party", "1", f.party, "מותר להרעיש (מוזיקה, קריוקי, מסיבות)", "party")}</fieldset>
           <fieldset><legend>הטבה שמגיעה לכם</legend><select class="select" name="benefit" aria-label="הטבה"><option value="">ללא</option>${T.BENEFITS.map((b) => `<option value="${b.key}" ${f.benefit === b.key ? "selected" : ""}>${esc(b.name)} (${cntKey("benefit:" + b.key)})</option>`).join("")}</select><span class="hint">המחירים בתוצאות יכללו את ההנחה</span></fieldset>
           <fieldset><legend>סוג אירוח</legend><label class="check"><input type="radio" name="type" value="" ${!f.type ? "checked" : ""}><span>הכל</span></label>${T.TYPES.map((t) => `<label class="check"><input type="radio" name="type" value="${t.key}" ${f.type === t.key ? "checked" : ""}><span>${esc(t.plural)}</span>${cnt("type:" + t.key)}</label>`).join("")}</fieldset>
           <fieldset><legend>מספר יחידות במתחם</legend><div class="pill-pick"><label><input type="radio" name="units" value="0" ${!f.units ? "checked" : ""}><span>הכל</span></label>${T.UNIT_COUNTS.map((u) => `<label><input type="radio" name="units" value="${u}" ${f.units === u ? "checked" : ""}><span>${u}+</span></label>`).join("")}</div></fieldset>
@@ -529,7 +534,7 @@
     if (f.benefit) chips.push(["benefit", "", "הטבה ל" + T.benefitOf(f.benefit).name]);
     f.audience.forEach((a) => chips.push(["audience", a, (T.AUDIENCE.find((x) => x.key === a) || { name: a }).name]));
     f.amenities.forEach((a) => chips.push(["amenities", a, T.amenityOf(a).name]));
-    [["tonight", "פנוי הלילה"], ["weekend", "פנוי בסופ״ש"], ["couplesOnly", "לזוגות בלבד"], ["lastminute", "דקה 90"], ["deals", "דילים"], ["exclusive", "בלעדי"], ["bestPrice", "מחיר הכי טוב"], ["isNew", "חדשים"]].forEach(([k, tx]) => { if (f[k]) chips.push([k, "", tx]); });
+    [["tonight", "פנוי הלילה"], ["weekend", "פנוי בסופ״ש"], ["couplesOnly", "לזוגות בלבד"], ["quiet", "סביבה שקטה"], ["party", "מותר להרעיש"], ["lastminute", "דקה 90"], ["deals", "דילים"], ["exclusive", "בלעדי"], ["bestPrice", "מחיר הכי טוב"], ["isNew", "חדשים"]].forEach(([k, tx]) => { if (f[k]) chips.push([k, "", tx]); });
     if (f.q) chips.push(["q", "", `״${f.q}״`]);
     $("#active-chips").innerHTML = chips.map(([k, v, tx]) => `<button type="button" data-act="unfilter" data-k="${k}" data-v="${esc(v)}" aria-label="הסרת הסינון ${esc(tx)}">${esc(tx)} ${I("x")}</button>`).join("") + (chips.length > 1 ? `<button type="button" data-act="clear-all">ניקוי הכל</button>` : "");
     updateCounts();
@@ -563,7 +568,7 @@
       guests: Number(fd.get("guests")) || 0, children: Number(fd.get("children")) || 0, type: fd.get("type") || "", priceMax: maxEl && pm >= Number(maxEl.max) ? 0 : pm,
       audience: fd.getAll("audience"), amenities: fd.getAll("amenities"), benefit: fd.get("benefit") || "", units: Number(fd.get("units")) || 0,
       deals: !!fd.get("deals"), lastminute: !!fd.get("lastminute"), tonight: !!fd.get("tonight"), weekend: !!fd.get("weekend"),
-      couplesOnly: !!fd.get("couplesOnly"), exclusive: !!fd.get("exclusive"), bestPrice: !!fd.get("bestPrice"), isNew: !!fd.get("isNew"), sort: fd.get("sort") || "rec"
+      couplesOnly: !!fd.get("couplesOnly"), quiet: !!fd.get("quiet"), party: !!fd.get("party"), exclusive: !!fd.get("exclusive"), bestPrice: !!fd.get("bestPrice"), isNew: !!fd.get("isNew"), sort: fd.get("sort") || "rec"
     });
     if (S.filters.ci && S.filters.co && S.filters.co <= S.filters.ci) S.filters.co = "";
     S.page = 1;
@@ -763,11 +768,11 @@
       <label class="field"><span>אימייל (לא חובה, לאישור בכתב ולאזור האישי)</span><input class="input" name="email" type="email" autocomplete="email" dir="ltr" style="text-align:right" value="${esc(g.email || "")}"></label>
       <label class="field"><span>הערות למארחים</span><textarea class="textarea" name="message" rows="2" style="min-height:70px" placeholder="יום הולדת, מיטת תינוק, שעת הגעה…"></textarea></label>
       <label class="check"><input type="checkbox" name="remember" ${S.guest ? "checked" : ""}><span>לזכור את הפרטים שלי בדפדפן הזה, כדי שלא אצטרך למלא שוב</span></label>
-      ${HP}<label class="check"><input type="checkbox" name="consent" required><span>אני מאשר/ת להעביר את הפרטים למארחי ${esc(l.name)} לצורך חזרה אליי (<a href="#terms">פרטיות</a>)</span></label>
+      ${HP}<label class="check"><input type="checkbox" name="consent" required><span>אני מאשר/ת להעביר את הפרטים למארחי ${esc(l.name)} לצורך חזרה אליי, ומסכים/ה ל<a href="#terms" target="_blank" rel="noopener">תנאי השימוש והפרטיות</a></span></label>
       <p class="err" id="book-err" role="alert"></p>
       <button class="btn btn-primary btn-lg btn-block" type="submit">שליחת בקשת הזמנה</button>
       <a class="btn btn-line btn-block" href="${esc(T.waLink(contactWA(l), waText(l, { check_in: st.ci, check_out: st.co, guests: st.rooms.reduce((s2, r) => s2 + r.guests, 0), children: st.rooms.reduce((s2, r) => s2 + r.children, 0), unit_name: units.length > 1 ? st.rooms.map((r) => T.unitOf(l, r.unitId).name).join(", ") : "" })))}" target="_blank" rel="noopener" data-track="w">${I("chat")}שאלה למארחים בוואטסאפ</a>
-      ${phone ? `<div class="contact-line"><span>${I("phone")} ${host ? `לשיחה עם ${esc(host)}` : "טלפון"}</span>${st.phone ? `<b><a href="tel:${esc(phone)}">${esc(phone)}</a></b><button class="mini-btn" type="button" data-act="copy" data-text="${esc(phone)}" aria-label="העתקת מספר הטלפון">${I("copy")}</button>` : `<button class="btn btn-ghost btn-sm" type="button" data-act="reveal">הצגת מספר</button>`}</div>` : ""}
+      ${phone ? `<div class="contact-line"><span>${I("phone")} ${host ? `לשיחה עם ${esc(host)}` : "טלפון"}</span>${st.phone ? `<b><a href="tel:${esc(phone)}" data-track="c">${esc(phone)}</a></b><button class="mini-btn" type="button" data-act="copy" data-text="${esc(phone)}" aria-label="העתקת מספר הטלפון">${I("copy")}</button>` : `<button class="btn btn-ghost btn-sm" type="button" data-act="reveal">הצגת מספר</button>`}</div>` : ""}
       <p class="hint">התשלום והאישור הסופי נעשים ישירות מול המארחים. המחיר משוער ועשוי להשתנות.</p>
     </form>`;
   }
@@ -826,6 +831,21 @@
     return `<section class="stay-section" id="prices"><h2>מחירון</h2><div class="table-scroll"><table class="price-table"><thead><tr><th></th><th>אמצ״ש</th>${any2 ? "<th>אמצ״ש · מ־2 לילות</th>" : ""}<th>סופ״ש</th>${any2 ? "<th>סופ״ש · מ־2 לילות</th>" : ""}${anyHol ? "<th>חג</th>" : ""}</tr></thead><tbody>${rows}</tbody></table></div>
       <p class="hint" style="margin-top:10px">${notes.map(esc).join(" · ")}. סופ״ש = לילות חמישי ושישי. ${t.price_note ? esc(t.price_note) : ""}</p></section>`;
   }
+  /* רעש וסביבה: מה המארח הצהיר (רמת שקט, מקורות רעש, ומה מותר להרעיש ולמה) */
+  function noiseHTML(l) {
+    const nz = T.noiseOf(l);
+    if (!nz.set && !nz.note) return "";
+    const tone = nz.party ? "party" : nz.level ? nz.level.key : "normal";
+    const head = nz.party ? "מותר להרעיש" : nz.level ? nz.level.name : "רעש וסביבה";
+    const lines = [];
+    if (nz.party && nz.allowed.length) lines.push(`<li>${I("mic")}<span><b>מה מותר:</b> ${esc(nz.allowed.join(", "))}</span></li>`);
+    if (nz.party && nz.reasons.length) lines.push(`<li>${I("tree")}<span><b>למה זה בסדר:</b> ${esc(nz.reasons.join(", "))}</span></li>`);
+    if (nz.party && nz.quiet_from) lines.push(`<li>${I("moon")}<span><b>שעות שקט:</b> מ־${esc(nz.quiet_from)}</span></li>`);
+    if (!nz.party && nz.level && nz.level.key === "quiet") lines.push(`<li>${I("leaf")}<span>סביבה שקטה, בלי מקורות רעש קבועים בסביבה.</span></li>`);
+    if (nz.sources.length) lines.push(`<li>${I("info")}<span><b>בסביבה:</b> ${esc(nz.sources.join(", "))}</span></li>`);
+    return `<section class="stay-section" id="noise"><h2>רעש וסביבה</h2><div class="noise-box noise-${tone}"><b>${I(nz.party ? "mic" : tone === "quiet" ? "leaf" : "info")}${esc(head)}</b>
+      ${lines.length ? `<ul>${lines.join("")}</ul>` : ""}${nz.note ? `<p>${esc(nz.note)}</p>` : ""}<small class="muted">לפי הצהרת המארחים${nz.locked ? " ובדיקת צוות האתר" : ""}.</small></div></section>`;
+  }
   function policiesHTML(l) {
     const t = T.termsOf(l), d = T.detailsOf(l);
     const kids = t.kids === "none" ? "מבוגרים בלבד" : t.kids === "age" ? `ילדים מגיל ${t.kids_age || "—"}` : t.kids === "welcome" ? "ילדים מתקבלים בברכה" : "";
@@ -883,6 +903,8 @@
     const here = T.coordsOf(l);
     const nearby = S.listings.filter((x) => x.id !== l.id).map((x) => ({ x, km: T.distKm(here, T.coordsOf(x)) })).filter((o) => o.km <= 60).sort((a, b) => a.km - b.km).slice(0, 3);
     const sameTown = S.listings.filter((x) => x.id !== l.id && x.settlement === l.settlement).length;
+    /* מארח עם כמה מתחמים: כל מתחם בדף משלו, ובתחתית קישור לשאר המתחמים שלו */
+    const sameHost = l.owner_id ? S.listings.filter((x) => x.id !== l.id && x.owner_id === l.owner_id).slice(0, 8) : [];
     const desc = (l.description || "").split(/\n+/).filter(Boolean).map((p) => `<p>${esc(p)}</p>`).join("");
     const lm = T.lastMinuteActive(l);
     const benefits = T.benefitsOf(l);
@@ -936,6 +958,7 @@
           <section class="stay-section"><h2>מה יש במתחם</h2>${groups.length ? groups.map(({ g, items }) => `<h3 class="sub-h">${esc(g.name)}</h3><div class="amen-grid">${items.map((m) => `<div class="amen">${I(m.icon)}<span>${esc(m.name)}</span></div>`).join("")}</div>`).join("") : '<p class="muted">המארחים עוד לא פירטו.</p>'}</section>
           ${(t.packages || []).length || (l.extras || []).length ? `<section class="stay-section"><h2>חבילות, תוספות ושירותים</h2><div class="extra-list">${(t.packages || []).map((p) => `<div><span>${I("coffee")}${esc(p.name)}</span><b>${T.money(p.price)} <small>${esc(T.statusName(T.EXTRA_PER, p.per))}</small></b></div>`).join("")}${(l.extras || []).map((x) => `<div><span>${I("gift")}${esc(x.name)}</span><b>${Number(x.price) ? `${T.money(x.price)} <small>${esc(T.statusName(T.EXTRA_PER, x.per))}</small>` : "<small>בתיאום מראש</small>"}</b></div>`).join("")}</div></section>` : ""}
           ${l.video_url ? `<section class="stay-section"><h2>סרטון</h2><div id="video">${videoHTML(l)}</div></section>` : ""}
+          ${noiseHTML(l)}
           <section class="stay-section" id="avail"><h2>יומן זמינות</h2><div id="cal">${calendarHTML(l)}</div></section>
           ${policiesHTML(l)}
           <section class="stay-section" id="reviews"><h2>חוות דעת</h2><div id="rev-host">${reviewsHTML(l)}</div></section>
@@ -948,6 +971,7 @@
         <aside aria-label="בקשת הזמנה" id="book-host">${bookHTML(l)}</aside>
       </div>
       ${nearby.length ? `<section class="section" aria-labelledby="h-sim">${head("בסביבה", `<span id="h-sim">מתחמים בסביבה הקרובה</span>`, "", sameTown ? `<a class="link-more" href="#town-${encodeURIComponent(l.settlement)}">עוד ב${esc(l.settlement)} ${I("fwd")}</a>` : `<a class="link-more" href="#region-${reg.key}">כל ${esc(reg.name)} ${I("fwd")}</a>`)}<div class="grid">${nearby.map((o) => card(o.x, { km: o.km })).join("")}</div></section>` : ""}
+      ${sameHost.length ? `<section class="section" aria-labelledby="h-host">${head("מאותם מארחים", `<span id="h-host">עוד מתחמים של ${esc(T.detailsOf(l).host_name || "המארחים")}</span>`, "", "")}${rail(sameHost)}</section>` : ""}
       ${viewedOthers.length >= 2 ? `<section class="section" aria-labelledby="h-viewed">${head("נצפו לאחרונה", `<span id="h-viewed">מקומות שראיתם</span>`, "", `<a class="link-more" href="#me-viewed">לכל הרשימה ${I("fwd")}</a>`)}${rail(viewedOthers)}</section>` : ""}
       <div class="mbar"><span class="price"><b>${T.money(T.fromPrice(l))}</b>ללילה</span><button class="btn btn-primary" type="button" data-act="to-book">בדיקת זמינות</button></div>
     </div>`;
@@ -1072,8 +1096,8 @@
         <ul class="todo pw-rules span2" id="join-pw" aria-live="polite">${pwRulesHTML("")}</ul>` : ""}
         <label class="field span2"><span>ספרו לנו בקצרה על המקום (לא חובה)</span><textarea class="textarea" name="message" maxlength="2000"></textarea></label>
         ${HP}
-        ${acc ? `<label class="check span2"><input type="checkbox" name="consent" required><span>קראתי ואני מסכים/ה ל<a href="#terms-hosts" target="_blank" rel="noopener">תנאי הפרסום למארחים</a> ול<a href="#terms" target="_blank" rel="noopener">מדיניות הפרטיות</a></span></label>`
-          : `<label class="check span2"><input type="checkbox" name="consent" required><span>אני מאשר/ת שתחזרו אליי בטלפון או בוואטסאפ בנוגע לפרסום (<a href="#terms">פרטיות</a>)</span></label>`}
+        ${acc ? `<label class="check span2"><input type="checkbox" name="consent" required><span>קראתי ואני מסכים/ה ל<a href="#terms-hosts" target="_blank" rel="noopener">הסכם הפרסום למארחים</a> ול<a href="#terms" target="_blank" rel="noopener">מדיניות הפרטיות</a></span></label>`
+          : `<label class="check span2"><input type="checkbox" name="consent" required><span>אני מאשר/ת שתחזרו אליי בטלפון או בוואטסאפ בנוגע לפרסום (<a href="#terms" target="_blank" rel="noopener">תנאי שימוש ופרטיות</a>)</span></label>`}
         <label class="check span2"><input type="checkbox" name="marketing"><span>אשמח לקבל במייל טיפים ומבצעים למארחים (פרסומת; אפשר להסיר בכל רגע)</span></label>
         <p class="err span2" id="join-err" role="alert"></p>
         <div class="span2"><button class="btn btn-primary btn-lg" type="submit">${acc ? `${I("check")}פתיחת חשבון` : "שליחת פרטים"}</button>${acc ? ` <a class="link-more" href="owner.html" style="margin-inline-start:12px">כבר יש לכם חשבון? כניסה</a>` : ""}</div>
@@ -1116,7 +1140,7 @@
           <label class="field"><span>שם מלא</span><input class="input" name="name" autocomplete="name" value="${esc(g.name || "")}" required></label>
           <label class="field"><span>טלפון נייד</span><input class="input" name="phone" type="tel" dir="ltr" style="text-align:right" autocomplete="tel" value="${esc(g.phone || "")}" required></label>
           <label class="field span2"><span>אימייל (לא חובה)</span><input class="input" name="email" type="email" dir="ltr" style="text-align:right" autocomplete="email" value="${esc(g.email || "")}"></label>
-          ${HP}<label class="check span2"><input type="checkbox" name="consent" required><span>אני מאשר/ת שתחזרו אליי בטלפון או בוואטסאפ עם הצעות (<a href="#terms">פרטיות</a>)</span></label>
+          ${HP}<label class="check span2"><input type="checkbox" name="consent" required><span>אני מאשר/ת שתחזרו אליי בטלפון או בוואטסאפ עם הצעות (<a href="#terms" target="_blank" rel="noopener">תנאי שימוש ופרטיות</a>)</span></label>
           <p class="err span2" id="find-err" role="alert"></p>
           <div class="span2"><button class="btn btn-primary btn-lg" type="submit">${I("send")}שליחה</button></div>
         </div>
@@ -1190,7 +1214,7 @@
         <label class="field"><span>טלפון</span><input class="input" name="phone" type="tel" dir="ltr" style="text-align:right" autocomplete="tel" required value="${esc((S.guest || {}).phone || "")}"></label>
         <label class="field span2"><span>אימייל (לא חובה)</span><input class="input" name="email" type="email" dir="ltr" style="text-align:right" autocomplete="email"></label>
         <label class="field span2"><span>הודעה</span><textarea class="textarea" name="message" required></textarea></label>
-        ${HP}<label class="check span2"><input type="checkbox" name="consent" required><span>אני מאשר/ת שתחזרו אליי (<a href="#terms">פרטיות</a>)</span></label>
+        ${HP}<label class="check span2"><input type="checkbox" name="consent" required><span>אני מאשר/ת שתחזרו אליי (<a href="#terms" target="_blank" rel="noopener">תנאי שימוש ופרטיות</a>)</span></label>
         <p class="err span2" id="ct-err" role="alert"></p><div class="span2"><button class="btn btn-primary btn-lg" type="submit">${I("send")}שליחה</button></div></div></form></div></div>`;
   }
 
@@ -1247,6 +1271,8 @@
   function viewText(kind) {
     const s = S.settings;
     const contact = [s.phone && `טלפון: <span dir="ltr">${esc(s.phone)}</span>`, s.email && `אימייל: ${esc(s.email)}`].filter(Boolean).join(" · ") || "פרטי הקשר יעודכנו בקרוב.";
+    const op = s.legal_name ? `האתר מופעל על ידי ${esc(s.legal_name)}${s.legal_id ? ` (${esc(s.legal_id)})` : ""}${s.legal_address ? `, ${esc(s.legal_address)}` : ""}` : `האתר מופעל על ידי צוות ${esc(s.site_name)}`;
+    const court = s.legal_court ? `בתי המשפט המוסמכים ב${esc(s.legal_court)}` : "בתי המשפט המוסמכים בישראל";
     const pages = {
       about: `<span class="eyebrow">אודות</span><h1>${esc(s.site_name)} – ${esc(s.site_tagline)}</h1>
         <p>${esc(s.site_name)} הוא אתר צימרים ווילות ישראלי. אנחנו מרכזים מתחמי אירוח מהגולן ועד הערבה, ומחברים בין אורחים למארחים ישירות.</p>
@@ -1263,27 +1289,56 @@
         <h2>נתקלתם בבעיה?</h2><p>אם משהו באתר לא נגיש לכם, נשמח לשמוע ולתקן. ${s.a11y_coordinator ? `רכז/ת הנגישות: ${esc(s.a11y_coordinator)}. ` : ""}${contact}</p>
         <p class="muted">עודכן לאחרונה: ${T.fmtMonth(new Date())}</p>`,
       terms: `<span class="eyebrow">מידע משפטי</span><h1>תנאי שימוש, פרטיות ועוגיות</h1>
-        <h2>השירות</h2><p>${esc(s.site_name)} מציג מתחמי אירוח שמפרסמים בעליהם. המידע על כל מתחם (תיאור, מחירים, זמינות, מדיניות ביטול ותמונות) נמסר על ידי המארחים. ההזמנה, התשלום ותנאי הביטול נקבעים ישירות בין האורחים למארחים, ובהתאם לחוק הגנת הצרכן.</p>
-        <h2>מחירים, הטבות וזמינות</h2><p>המחירים באתר מתעדכנים על ידי המארחים ועשויים להשתנות, והמחיר המוצג במחשבון הוא הערכה. הטבות (מילואים, חיילים, סטודנטים, גיל הזהב ומפונים) וקופונים כפופים לאישור המארחים ולהצגת אישור מתאים. המחיר הסופי והזמינות מאושרים רק מול המארחים.</p>
-        <h2>פרטיות</h2><p>${esc(s.site_name)} אחראי על המידע שנאסף באתר. כששולחים בקשת הזמנה, בקשת ״מצא לי צימר״, חוות דעת, דיווח, הרשמה לדיוור או הרשמת מארח, אנחנו שומרים את מה שמילאתם בטופס: שם, טלפון, אימייל (אם נמסר) ופרטי הבקשה.</p>
-        <ul><li><b>למה:</b> כדי להעביר את הבקשה למארחי המתחם שבחרתם ושיחזרו אליכם, לשלוח לכם אישור ועדכונים על הבקשה, ולמנוע ספאם והונאות.</li>
-          <li><b>מי מקבל:</b> המארחים של המתחם שפניתם אליו, צוות האתר, וספקי שירות שמפעילים את האתר בשבילנו (אחסון ומסד נתונים, שליחת מיילים, תמונות). חלקם שומרים מידע בשרתים מחוץ לישראל. איננו מוכרים מידע לאף אחד.</li>
-          <li><b>כמה זמן:</b> פניות וחוות דעת נשמרים כל עוד הם נחוצים לשירות ולטיפול בבירורים. הרשמה לדיוור שלא אושרה במייל נמחקת אחרי 30 יום, ויומן הפעולות נשמר שנה.</li>
+        <p class="muted">גרסה ${esc(T.SITE_TERMS_VERSION)}. ${op}. השימוש באתר, כולל חיפוש, שליחת בקשה, פנייה טלפונית למתחם או כתיבת חוות דעת, מהווה הסכמה לתנאים האלה. אם אינכם מסכימים להם, אנא אל תשתמשו באתר.</p>
+        <nav class="toc" aria-label="תוכן העניינים"><a href="#terms" data-act="jump" data-to="t1">השירות</a><a href="#terms" data-act="jump" data-to="t3">ההזמנה מול המארח</a><a href="#terms" data-act="jump" data-to="t5">רעש ושיחות</a><a href="#terms" data-act="jump" data-to="t9">אחריות</a><a href="#terms" data-act="jump" data-to="t11">פרטיות</a><a href="#terms" data-act="jump" data-to="t12">עוגיות</a></nav>
+        <h2 id="t1">1. מה האתר עושה</h2><p>${esc(s.site_name)} הוא לוח פרסום של מתחמי אירוח. האתר מציג מתחמים שבעליהם או מי מטעמם (״המארחים״) מפרסמים בו, ומעביר אליהם בקשות ושיחות של אורחים. <b>האתר אינו משכיר את המתחמים, אינו סוכן נסיעות, אינו שלוחו של המארח או של האורח ואינו צד להזמנה</b>. אנחנו לא גובים תשלום על האירוח ולא מחזיקים כספים של אורחים.</p>
+        <h2 id="t2">2. המידע על המתחמים</h2><p>התיאור, התמונות, המחירים, היומן, המאפיינים, מדיניות הביטול והצהרות הרעש של כל מתחם נמסרים על ידי המארחים ובאחריותם. אנחנו בודקים את המידע לפני פרסום במידה סבירה, אבל לא יכולים להבטיח שהוא מלא, מדויק או עדכני, ולא בודקים בשטח את מצב המתחם, הניקיון, הבטיחות או קיומם של רישיונות והיתרים. התמונות להמחשה. המחיר במחשבון הוא הערכה בלבד, והמחיר הסופי, הזמינות וההטבות מאושרים רק מול המארחים.</p>
+        <h2 id="t3">3. ההזמנה, התשלום והביטול</h2><p>בקשה שנשלחת דרך האתר אינה הזמנה. ההזמנה נוצרת רק כשהמארח מאשר אותה ישירות מולכם, וההסכם על האירוח הוא בינכם לבין המארח בלבד. התשלום, הקבלה או החשבונית, הפיקדון, מדיניות הביטול וההחזרים נקבעים מול המארח ובכפוף לחוק הגנת הצרכן. הטבות וקופונים כפופים לאישור המארח ולהצגת אישור מתאים. מחלוקת לגבי האירוח מתבררת מול המארח. אנחנו ננסה לעזור כשפונים אלינו, אבל איננו מחויבים להכריע בה.</p>
+        <h2 id="t4">4. בטיחות וכללי המתחם</h2><p>האחריות להתנהגות בזמן השהייה היא של האורחים ושל המארח. בריכה, ג׳קוזי, קמין, מרפסות, שטחים פתוחים ובעלי חיים דורשים זהירות והשגחה צמודה על ילדים. אורחים מתחייבים לשמור על חוקי הבית של המתחם, על הדין ועל הציוד, ולשאת בנזק שגרמו.</p>
+        <h2 id="t5">5. רעש וסביבה</h2><p>התגיות ״סביבה שקטה״, ״ייתכנו רעשים״ ו״מותר להרעיש״ מבוססות על הצהרת המארח ועל בדיקה שלנו כשנעשתה. מתחם שמסומן שמותר בו להרעיש מאפשר מוזיקה, מסיבות או קריוקי <b>רק במסגרת מה שהמארח פירט ובכפוף לדין</b>, כולל החוק למניעת מפגעים ותקנות הרעש וחוקי העזר של הרשות המקומית. התגית אינה היתר להפר את החוק או את חוקי הבית, והאחריות לכך היא של האורחים ושל המארח.</p>
+        <h2 id="t6">6. שיחות טלפון ומספרים וירטואליים</h2><p>בחלק מהמתחמים מוצג מספר טלפון וירטואלי שמפעיל ספק טלפוניה מטעמנו, והשיחה מועברת ממנו אוטומטית למארח. במקרה כזה נשמרים פרטי השיחה: המספר שממנו התקשרתם, המתחם, המועד, משך השיחה ואם נענתה. המידע משמש לדיווח למארח (כולל מספר המתקשר, כדי שיוכל לחזור אליכם אם פספס את השיחה), לחיוב המארח לפי החבילה, לבקרת איכות ולבירור תלונות. אם שיחה מוקלטת, תושמע על כך הודעה בתחילתה, ואפשר לנתק לפני שהשיחה מועברת.</p>
+        <h2 id="t7">7. חוות דעת, דיווחים ותוכן שאתם שולחים</h2><p>חוות דעת נכתבות על חוויה אמיתית שלכם, בלי פרטים אישיים של אחרים, בלי לשון הרע ובלי תוכן פוגעני או פרסומי. אתם נותנים לנו רישיון חינם, לא בלעדי ולא מוגבל בזמן, לפרסם את התוכן באתר ובערוצים שלו, לקצר אותו ולהסתיר פרטים מזהים. אנחנו רשאים לא לפרסם או להסיר תוכן לפי שיקול דעתנו. האחריות לתוכן היא של מי שכתב אותו.</p>
+        <h2 id="t8">8. שימוש אסור</h2><ul><li>שליחת בקשות, שיחות או חוות דעת כוזבות, בשם אחר או כדי להטריד מארחים.</li><li>איסוף מידע מהאתר באופן אוטומטי (סריקה, רובוטים, העתקת מאגר המתחמים) או שימוש בפרטי המארחים לדיוור.</li><li>ניסיון לפרוץ, לעקוף הרשאות, להעמיס על האתר או לשבש את פעולתו.</li><li>העתקה של עיצוב האתר, הקוד, הטקסטים או התמונות בלי רשות.</li></ul>
+        <h2 id="t9">9. הגבלת אחריות</h2><p>השירות ניתן כפי שהוא (AS IS) וכפי שהוא זמין. ככל שהדין מאפשר, ${esc(s.site_name)} והפועלים מטעמו לא יהיו אחראים לכל נזק, הפסד או הוצאה שנובעים מהאירוח עצמו, ממעשה או מחדל של מארח או של אורח, ממידע שמסר מארח, מביטול או מאי-זמינות, מתאונה, מפגיעה ברכוש או בגוף במתחם, מתקלה או הפסקה באתר, או מנזק עקיף ותוצאתי. האמור לא חל על נזק שנגרם בזדון או ברשלנות רבתי שלנו. אתם מתחייבים לשפות אותנו על נזק והוצאה סבירה (כולל שכר טרחת עורך דין) שנגרמו לנו בגלל הפרה של התנאים האלה או בגלל תוכן ששלחתם.</p>
+        <h2 id="t10">10. קניין רוחני וקישורים</h2><p>העיצוב, הקוד, המבנה, הטקסטים והסימנים של האתר שייכים ל${esc(s.legal_name || s.site_name)}. התוכן של כל מתחם שייך למארח שפרסם אותו. קישורים לשירותים חיצוניים (מפות, ניווט, וואטסאפ, יומנים) כפופים לתנאים של אותם שירותים, ואיננו אחראים להם.</p>
+        <h2 id="t11">11. פרטיות</h2><p>${esc(s.legal_name || s.site_name)} הוא בעל מאגר המידע שנאסף באתר. כששולחים בקשת הזמנה, בקשת ״מצא לי צימר״, חוות דעת, דיווח, הרשמה לדיוור, הרשמת מארח או מתקשרים למספר וירטואלי, אנחנו שומרים את מה שמילאתם או את פרטי השיחה: שם, טלפון, אימייל (אם נמסר) ופרטי הבקשה.</p>
+        <ul><li><b>למה:</b> כדי להעביר את הבקשה או השיחה למארחי המתחם שבחרתם ושיחזרו אליכם, לשלוח לכם אישור ועדכונים על הבקשה, להפיק דוחות וחיוב למארחים, ולמנוע ספאם והונאות.</li>
+          <li><b>מי מקבל:</b> המארחים של המתחם שפניתם אליו, צוות האתר, וספקי שירות שמפעילים את האתר בשבילנו (אחסון ומסד נתונים, שליחת מיילים, תמונות, טלפוניה). חלקם שומרים מידע בשרתים מחוץ לישראל. איננו מוכרים מידע לאף אחד. המארח שמקבל את הפרטים אחראי לשימוש שהוא עושה בהם.</li>
+          <li><b>כמה זמן:</b> פניות, שיחות וחוות דעת נשמרים כל עוד הם נחוצים לשירות, לחיוב ולטיפול בבירורים. הרשמה לדיוור שלא אושרה במייל נמחקת אחרי 30 יום, ויומן הפעולות נשמר שנה.</li>
           <li><b>דיוור:</b> נשלח רק למי שנרשם ואישר את הכתובת במייל. כל מייל שיווקי מסומן ״פרסומת״ ויש בו קישור להסרה בלחיצה אחת.</li>
           <li><b>אבטחה:</b> החיבור לאתר מוצפן, הגישה למידע מוגבלת לפי הרשאות, וצוות הניהול נכנס עם סיסמה ואפשרות לאימות דו-שלבי.</li>
           <li><b>הזכויות שלכם:</b> לעיין במידע עליכם, לתקן אותו או לבקש למחוק אותו, לפי חוק הגנת הפרטיות. אין חובה חוקית למסור את הפרטים, אבל בלי שם וטלפון לא נוכל להעביר בקשה למארחים.</li></ul>
-        <h2>עוגיות ואחסון בדפדפן</h2><p>האתר שומר בדפדפן שלכם בלבד את המועדפים, המקומות שצפיתם בהם, החיפושים האחרונים והגדרות הנגישות, וגם את הפרטים שביקשתם שנזכור בטופס. אנחנו סופרים צפיות ולחיצות על כל מתחם בלי לזהות אתכם, כדי להציג למארחים דוח. אפשר למחוק את כל אלה דרך הגדרות הדפדפן.</p>
-        <p>לבקשת עיון, תיקון או מחיקה של פרטים: ${contact}</p>
-        <p class="muted">מארחים: <a href="#terms-hosts">תנאי הפרסום למארחים</a>.</p>`,
-      "terms-hosts": `<span class="eyebrow">למארחים</span><h1>תנאי פרסום למארחים</h1>
-        <p class="muted">גרסה ${esc(T.HOST_TERMS_VERSION)}. התנאים חלים על מי שפותח חשבון מארח ב${esc(s.site_name)} ומפרסם בו מתחם.</p>
-        <h2>החשבון</h2><p>החשבון אישי ונפתח עם אימייל וסיסמה. האחריות לשמור על הסיסמה היא עליכם, ואם יש חשד שמישהו אחר נכנס לחשבון, מחליפים סיסמה ומודיעים לנו. הפרטים שמסרתם (שם, טלפון, שם העסק ומספר עוסק) צריכים להיות נכונים ומעודכנים.</p>
-        <h2>התוכן במתחם</h2><p>אתם אחראים לכך שהתיאור, המחירים, היומן, מדיניות הביטול והמאפיינים מדויקים, ושיש לכם זכות להשתמש בתמונות שאתם מעלים. אנחנו רשאים לבדוק כל שינוי לפני פרסום, לבקש תיקונים, ולהסיר תוכן מטעה, פוגעני או מפר זכויות.</p>
-        <h2>פניות מאורחים</h2><p>בקשות הזמנה מגיעות אליכם במייל ובממשק המארחים. ההזמנה, התשלום והביטול נסגרים ישירות ביניכם לבין האורחים ולפי חוק הגנת הצרכן. את פרטי האורחים מותר להשתמש בהם רק כדי לטפל בבקשה שלהם, ולא לשלוח להם דיוור בלי הסכמה.</p>
-        <h2>מנוי ותשלום</h2><p>הפרסום הוא לפי החבילה שבחרתם (מנוי חודשי, תשלום לפי פנייה או שילוב). מארחים חדשים מקבלים תקופת ניסיון כשהיא מוצעת. לפני סוף המנוי נשלחת תזכורת במייל. אם המנוי לא חודש, המתחם ממשיך להופיע כמה ימים (ימי חסד) ואז מוסתר מהאתר. הנתונים, התמונות והפניות נשמרים, ובחידוש המתחם חוזר לאוויר מיד.</p>
-        <h2>סיום ההתקשרות</h2><p>אפשר להפסיק לפרסם בכל עת בהודעה לצוות האתר. לבקשתכם נמחק את המתחם ואת פרטי החשבון, חוץ ממידע שחובה לשמור לפי דין (למשל לצורכי חשבונאות).</p>
-        <h2>אחריות</h2><p>האתר מספק פלטפורמת פרסום ואינו צד להזמנה. איננו מתחייבים למספר פניות מסוים, ואחראים רק לנזק שנגרם ברשלנות שלנו, עד גובה התשלום ששילמתם בשלושת החודשים האחרונים.</p>
-        <h2>שינויים</h2><p>אם התנאים ישתנו, נעדכן במייל ובממשק המארחים לפחות 14 יום מראש. המשך פרסום אחרי המועד הזה הוא הסכמה לתנאים החדשים.</p>
+        <h2 id="t12">12. עוגיות ואחסון בדפדפן</h2><p>האתר שומר בדפדפן שלכם בלבד את המועדפים, המקומות שצפיתם בהם, החיפושים האחרונים והגדרות הנגישות, וגם את הפרטים שביקשתם שנזכור בטופס. אנחנו סופרים צפיות ולחיצות על כל מתחם בלי לזהות אתכם, כדי להציג למארחים דוח. אפשר למחוק את כל אלה דרך הגדרות הדפדפן.</p>
+        <h2 id="t13">13. שינויים, דין וסמכות שיפוט</h2><p>אנחנו רשאים לשנות את האתר, להפסיק שירות או לעדכן את התנאים. הגרסה המחייבת היא זו שמופיעה בעמוד ביום השימוש. על התנאים חלים דיני מדינת ישראל, וסמכות השיפוט הבלעדית נתונה ל${court}.</p>
+        <p>לבקשת עיון, תיקון או מחיקה של פרטים, ולכל שאלה: ${contact}</p>
+        <p class="muted">מארחים: <a href="#terms-hosts">הסכם הפרסום למארחים</a>.</p>`,
+      "terms-hosts": `<span class="eyebrow">למארחים</span><h1>הסכם פרסום למארחים</h1>
+        <p class="muted">גרסה ${esc(T.HOST_TERMS_VERSION)}. ההסכם הוא בין ${esc(s.legal_name || s.site_name)}${s.legal_id ? ` (${esc(s.legal_id)})` : ""} (״המפעיל״) לבין מי שפותח חשבון מארח ומפרסם מתחם באתר (״המארח״). סימון ההסכמה בהרשמה או בממשק המארחים נשמר עם התאריך והגרסה, ודינו כחתימה על ההסכם.</p>
+        <nav class="toc" aria-label="תוכן העניינים"><a href="#terms-hosts" data-act="jump" data-to="h2">מהות ההתקשרות</a><a href="#terms-hosts" data-act="jump" data-to="h4">הצהרות המארח</a><a href="#terms-hosts" data-act="jump" data-to="h7">שיחות</a><a href="#terms-hosts" data-act="jump" data-to="h9">תשלום</a><a href="#terms-hosts" data-act="jump" data-to="h13">אחריות ושיפוי</a></nav>
+        <h2 id="h1">1. החשבון</h2><p>החשבון אישי ונפתח עם אימייל וסיסמה, ואפשר לנהל בו מתחם אחד או כמה מתחמים. המארח אחראי לשמירת הסיסמה ולכל פעולה שנעשית בחשבון, ומתחייב להחליף סיסמה ולהודיע לנו מיד אם יש חשד לשימוש לא מורשה. הפרטים בכרטיס הלקוח (שם, טלפון, שם העסק, מספר עוסק וכתובת) צריכים להיות נכונים ומעודכנים.</p>
+        <h2 id="h2">2. מהות ההתקשרות</h2><p>המפעיל נותן למארח שירות פרסום בלבד: הצגת המתחם באתר והעברת פניות ושיחות של אורחים. <b>המפעיל אינו צד להזמנה, לתשלום או לאירוח, אינו סוכן או שלוח של המארח, ואינו מתחייב למספר פניות, הזמנות, צפיות או מיקום מסוים בתוצאות</b>. אין בין הצדדים יחסי שותפות, עובד ומעביד או סוכנות. המארח הוא היחיד שמספק את שירותי האירוח ואחראי להם כלפי האורחים.</p>
+        <h2 id="h3">3. התוכן במתחם</h2><p>המארח אחראי לכך שהתיאור, התמונות, המחירים, היומן, מדיניות הביטול, המאפיינים, יכולת האירוח והצהרת הרעש מדויקים, מלאים ומעודכנים, ולכך שהמחירים המוצגים כוללים מע״מ כנדרש בדין. המפעיל רשאי לבדוק כל שינוי לפני פרסום, לבקש תיקונים, לערוך תוכן לצורך אחידות וקריאות, לתקן או לנעול סימון שגוי (כגון תגית רעש), ולהסיר תוכן מטעה, פוגעני, לא חוקי או מפר זכויות.</p>
+        <p>המארח מצהיר שיש לו את כל הזכויות בתמונות, בסרטונים ובטקסטים שהוא מעלה, ונותן למפעיל רישיון לא בלעדי, ללא תמורה ובכל העולם, להשתמש בהם, להתאים אותם (חיתוך, הקטנה, תרגום) ולהציג אותם באתר, בניוזלטר, ברשתות החברתיות ובפרסום של האתר, במשך תקופת ההתקשרות ועד 90 יום אחריה.</p>
+        <h2 id="h4">4. הצהרות והתחייבויות המארח</h2><ul>
+          <li>הוא הבעלים של המתחם או מורשה כדין להשכיר ולפרסם אותו.</li>
+          <li>יש בידיו כל רישיון, היתר ואישור שנדרשים לפי דין להפעלת המתחם ולשימוש בו לאירוח (לרבות רישוי עסקים, היתרי בנייה ושימוש, כבאות ובטיחות), והוא עומד בדרישות הבטיחות לבריכות, לג׳קוזי, לקמינים, לחשמל ולגז.</li>
+          <li>יש לו ביטוח בתוקף שמכסה אחריות כלפי צד שלישי ונזקי רכוש במתחם, בהיקף סביר לפעילות.</li>
+          <li>הוא מקיים את חוק הגנת הצרכן (כולל גילוי מחיר מלא ומדיניות ביטול), את דיני המס (כולל מסירת קבלה או חשבונית לאורחים), את חוק איסור הפליה במוצרים ובשירותים ואת דיני הנגישות ככל שהם חלים עליו.</li>
+          <li>הצהרת הרעש שלו נכונה. אם סימן שמותר להרעיש במתחם, הוא אחראי לכך שהפעילות שמותרת בו עומדת בחוק למניעת מפגעים ובחוקי העזר המקומיים, ושיש לו את ההסכמות הדרושות.</li>
+          <li>היומן והמחירים מעודכנים, והוא לא יאשר הזמנה כפולה ולא יבטל הזמנה מאושרת בלי סיבה מוצדקת.</li></ul>
+        <h2 id="h5">5. פניות מאורחים</h2><p>בקשות הזמנה מגיעות במייל ובממשק המארחים, והמארח מתחייב לחזור אליהן בזמן סביר. ההזמנה, התשלום והביטול נסגרים ישירות בין המארח לאורח. את פרטי האורחים מותר להשתמש בהם רק לטיפול בבקשה ובאירוח, לשמור עליהם באבטחה סבירה ולא להעביר אותם לאחרים. אסור לשלוח לאורחים דבר פרסומת בלי הסכמה מפורשת, כנדרש בסעיף 30א לחוק התקשורת. לגבי המידע שקיבל, המארח אחראי עצמאי לפי חוק הגנת הפרטיות.</p>
+        <h2 id="h6">6. חוות דעת</h2><p>חוות דעת נכתבות רק על ידי אורחים שהבקשה שלהם אושרה, ועוברות בדיקה שלנו לפני פרסום. המארח רשאי להגיב לחוות דעת ולבקש בדיקה של חוות דעת שנראית לו כוזבת. אסור למארח לכתוב חוות דעת על המתחם שלו או על מתחם מתחרה, להציע הטבה תמורת חוות דעת חיובית, או ללחוץ על אורחים להסיר חוות דעת.</p>
+        <h2 id="h7">7. מספרים וירטואליים ונתוני שיחות</h2><p>המפעיל רשאי להציג באתר, במקום הטלפון של המארח, מספר וירטואלי שמעביר את השיחות אליו. המארח מסכים שהמפעיל וספק הטלפוניה שלו יקבלו וישמרו את נתוני השיחות: מספר המתקשר, המועד, משך השיחה, אם נענתה, ובחבילות שבהן הוגדר גם הקלטה (עם הודעה למתקשר). הנתונים משמשים לדוחות למארח, להתראה על שיחות שלא נענו, לחיוב לפי החבילה, לבקרת איכות ולבירור תלונות. רישומי המפעיל הם ראיה לכאורה למספר הפניות והשיחות לצורך חיוב, וזכותו של המארח להשיג עליהם בתוך 14 יום מקבלת החשבון.</p>
+        <h2 id="h8">8. הוגנות ואיסור עקיפה</h2><p>אסור למארח לנסות לעקוף את מנגנוני הפרסום והמדידה: לשתול טלפון, אימייל או קישור חיצוני בתיאור או בתמונות במקום פרטי הקשר שהאתר מציג, לייצר פניות, שיחות או צפיות מלאכותיות, להשתמש במתחם שלא שלו, או לפרסם את אותו מתחם בכמה כרטיסים כדי לקבל חשיפה נוספת.</p>
+        <h2 id="h9">9. מחירים, תשלום וחשבוניות</h2><p>המארח משלם לפי החבילה שבחר ולפי המחירון שבתוקף (מנוי חודשי, תשלום לפי פנייה או שילוב), בתוספת מע״מ ככל שחל. מנוי משולם מראש. חיוב לפי פנייה מחושב לפי רישומי המפעיל ומשולם בסוף כל חודש. תשלום שלא שולם במועד מאפשר למפעיל להשהות את הפרסום עד להסדרתו. שינוי במחירון ייכנס לתוקף לגבי המארח רק מהחידוש הבא ובהודעה של 30 יום לפחות. תשלום על תקופה שהתחילה אינו מוחזר, אלא אם הדין מחייב אחרת או שהמפעיל הפסיק את הפרסום בלי שהמארח הפר את ההסכם, ואז יוחזר החלק היחסי.</p>
+        <h2 id="h10">10. ניסיון, חידוש וימי חסד</h2><p>מארחים חדשים מקבלים תקופת ניסיון כשהיא מוצעת. לפני סוף המנוי נשלחת תזכורת במייל. אם המנוי לא חודש, המתחם ממשיך להופיע כמה ימים (ימי חסד) ואז מוסתר מהאתר. הנתונים, התמונות והפניות נשמרים, ובחידוש המתחם חוזר לאוויר מיד.</p>
+        <h2 id="h11">11. השעיה והסרה</h2><p>המפעיל רשאי להסתיר מתחם או להשעות חשבון מיד, בלי הודעה מוקדמת, אם יש חשד סביר להפרת ההסכם, למידע כוזב, להונאה, לסכנה בטיחותית, לפגיעה באורחים או בשכנים, לתלונות חוזרות או לחוב שלא שולם. ההחלטה תימסר למארח עם הסיבה, ותינתן לו הזדמנות לתקן כשהדבר אפשרי.</p>
+        <h2 id="h12">12. סיום ההתקשרות</h2><p>המארח רשאי להפסיק לפרסם בכל עת בהודעה לצוות האתר. המפעיל רשאי לסיים את ההתקשרות בהודעה של 14 יום, או מיד אם המארח הפר את ההסכם. לבקשת המארח נמחק את המתחם ואת פרטי החשבון, חוץ ממידע שחובה או שמותר לשמור לפי דין (למשל לצורכי חשבונאות, בירור תלונות או הגנה מפני תביעות). הסעיפים על אחריות, שיפוי, תשלומים וסמכות שיפוט ממשיכים לחול גם אחרי הסיום.</p>
+        <h2 id="h13">13. הגבלת אחריות</h2><p>האתר ניתן כפי שהוא וכפי שהוא זמין, ולא מובטח שיפעל בלי תקלות או הפסקות. המפעיל לא יהיה אחראי לנזק עקיף או תוצאתי, לאובדן הכנסות או רווחים, למעשה או מחדל של אורחים (כולל נזק למתחם, אי-תשלום, ביטול או בקשה כוזבת), או לתקלות אצל ספקים חיצוניים (מייל, טלפוניה, אחסון, סנכרון יומנים). בכל מקרה, האחריות הכוללת של המפעיל כלפי המארח מוגבלת לסכום ששילם המארח בשלושת החודשים שלפני האירוע, למעט נזק שנגרם בזדון.</p>
+        <h2 id="h14">14. שיפוי</h2><p>המארח ישפה את המפעיל, את עובדיו ואת הפועלים מטעמו על כל תביעה, דרישה, קנס, נזק או הוצאה (כולל שכר טרחת עורך דין סביר) שנובעים מ: האירוח במתחם ומכל פגיעה בגוף או ברכוש שאירעה בו; מידע לא נכון או מטעה שמסר; הפרת זכויות יוצרים או פרטיות בתוכן שהעלה; הפרת דין (רישוי, מס, צרכנות, רעש, הפליה, נגישות, פרטיות); או מחלוקת בינו לבין אורח. המפעיל יודיע למארח על תביעה כזו בהקדם וייתן לו להתגונן בה.</p>
+        <h2 id="h15">15. פרטיות המארח</h2><p>הפרטים של המארח נשמרים ומעובדים לפי <a href="#terms">מדיניות הפרטיות</a>. שם המתחם, היישוב, פרטי הקשר שבחר להציג (או המספר הווירטואלי) והתוכן של המתחם מתפרסמים באתר באופן גלוי. נתוני הצפיות, הלחיצות, הפניות והשיחות משמשים להצגת דוחות למארח ולמפעיל, ובצורה מצטברת ובלי פרטים מזהים גם לשיפור האתר.</p>
+        <h2 id="h16">16. הודעות ושינויים</h2><p>הודעות נשלחות לאימייל של החשבון ובממשק המארחים, ונחשבות כמתקבלות יום עסקים אחד אחרי השליחה. אם ההסכם ישתנה, נעדכן לפחות 14 יום מראש. שינוי מהותי יוצג בממשק המארחים ויידרש לאשר אותו לפני המשך העבודה. המשך הפרסום אחרי מועד השינוי הוא הסכמה להסכם המעודכן.</p>
+        <h2 id="h17">17. כללי</h2><p>ההסכם הזה, יחד עם תנאי השימוש ומדיניות הפרטיות של האתר והחבילה שנבחרה, הוא כל ההסכמות בין הצדדים. המארח לא יעביר את זכויותיו לפי ההסכם בלי הסכמה בכתב של המפעיל. אם סעיף כלשהו ייקבע כבטל, שאר ההסכם ימשיך לחול. ויתור או שיהוי במימוש זכות אינו ויתור עליה. על ההסכם חלים דיני מדינת ישראל, וסמכות השיפוט הבלעדית נתונה ל${court}.</p>
         <p>שאלות: ${contact}</p>`
     };
     return `<div class="view wrap page"><article class="textpage">${pages[kind]}</article></div>`;
@@ -1359,7 +1414,7 @@
     else if (hash.startsWith("article-")) { html = viewArticle(hash.slice(8)); const a = S.articles.find((x) => x.id === hash.slice(8)); if (a) title = a.title + " | " + S.settings.site_name; }
     else if (hash.startsWith("review-")) html = await viewReview(hash.slice(7));
     else if (hash.startsWith("sub-confirm-") || hash.startsWith("unsubscribe-")) { html = await viewSubLink(hash); title = "דיוור | " + S.settings.site_name; }
-    else if (["about", "accessibility", "terms", "terms-hosts"].includes(hash)) { html = viewText(hash); if (hash === "terms-hosts") title = "תנאי פרסום למארחים | " + S.settings.site_name; }
+    else if (["about", "accessibility", "terms", "terms-hosts"].includes(hash)) { html = viewText(hash); if (hash === "terms-hosts") title = "הסכם פרסום למארחים | " + S.settings.site_name; }
     else if (hash === "main") return;
     else html = viewHome();
     $("#chrome").innerHTML = header();
@@ -1655,7 +1710,7 @@
         if (issues.length) return bad("#join-err", "הסיסמה צריכה " + issues.join(", "), "password");
         if (pw !== String(fd.get("password2") || "")) return bad("#join-err", "שתי הסיסמאות לא זהות", "password2");
       }
-      if (!fd.get("consent")) return bad("#join-err", acc ? "צריך לאשר את תנאי הפרסום ואת מדיניות הפרטיות" : "צריך לאשר שנחזור אליכם", "consent");
+      if (!fd.get("consent")) return bad("#join-err", acc ? "צריך לאשר את הסכם הפרסום ואת מדיניות הפרטיות" : "צריך לאשר שנחזור אליכם", "consent");
       const app = { name: fd.get("name").trim(), phone: fd.get("phone").trim(), email, business: fd.get("business").trim(), settlement: fd.get("settlement").trim(), region: fd.get("region"), type: fd.get("type"), units, message: (fd.get("message") || "").trim(), tax_id: taxId, marketing: !!fd.get("marketing") };
       const btn = form.querySelector('[type="submit"]');
       btn.disabled = true;

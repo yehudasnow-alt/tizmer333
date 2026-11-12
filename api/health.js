@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   if (url && secret) {
     try { await db("settings?select=id&limit=1"); add("db", "השרת מתחבר למסד הנתונים", true); }
     catch (e) { add("db", "השרת מתחבר למסד הנתונים", false, String(e.message || e).slice(0, 160)); }
-    try { const v = await rpc("schema_version", {}); add("schema", "גרסת מסד הנתונים (מצד השרת)", Number(v) >= 4, "גרסה " + v + (Number(v) < 4 ? ": צריך להריץ שוב את supabase/schema.sql" : "")); }
+    try { const v = await rpc("schema_version", {}); add("schema", "גרסת מסד הנתונים (מצד השרת)", Number(v) >= 5, "גרסה " + v + (Number(v) < 5 ? ": צריך להריץ שוב את supabase/schema.sql" : "")); }
     catch (e) { add("schema", "גרסת מסד הנתונים (מצד השרת)", false, "ישנה: צריך להריץ שוב את supabase/schema.sql"); }
     try { await db("mail_log?select=key&limit=1"); add("mail_log", "יומן מיילים אוטומטיים (תזכורות פעם אחת בלבד)", true); }
     catch (e) { add("mail_log", "יומן מיילים אוטומטיים (תזכורות פעם אחת בלבד)", false, "חסר: צריך להריץ שוב את supabase/schema.sql"); }
@@ -26,6 +26,8 @@ export default async function handler(req, res) {
   add("site_url", "כתובת האתר (SITE_URL)", env("SITE_URL"), env("SITE_URL") ? "" : "בלי זה הקישורים במיילים ובמפת האתר לא מלאים", true);
   const cl = ["CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"].filter((k) => env(k)).length;
   add("cloudinary", "תמונות ב-Cloudinary", cl === 0 || cl === 3, cl === 0 ? "לא מוגדר: התמונות נשמרות ב-Supabase Storage" : cl === 3 ? "" : "חסר חלק מהמשתנים", true);
+  const cw = env("CALL_WEBHOOK_SECRET");
+  add("calls", "מעקב שיחות ממספרים וירטואליים (CALL_WEBHOOK_SECRET)", cw.length >= 16, cw ? (cw.length < 16 ? "קצר מדי: לפחות 16 תווים" : "") : "לא מוגדר: אין קליטת שיחות מספק הטלפוניה", true);
   add("deploy_hook", "עדכון דפי גוגל (DEPLOY_HOOK_URL)", env("DEPLOY_HOOK_URL"), env("DEPLOY_HOOK_URL") ? "" : "בלי זה דפי גוגל מתעדכנים רק בכל העלאה", true);
   res.setHeader("Cache-Control", "no-store");
   send(res, 200, { ok: Object.values(checks).every((c) => c.ok || c.optional), checks });

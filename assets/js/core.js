@@ -237,11 +237,62 @@
   ];
 
   /* שדות תוכן שמארח משנה רק באישור מנהל (מחירים ויומן מתעדכנים מיד) */
-  T.MODERATED_FIELDS = [
-    ["name", "שם"], ["type", "סוג"], ["region", "אזור"], ["settlement", "יישוב"], ["tagline", "משפט פתיחה"],
-    ["description", "תיאור"], ["photos", "תמונות"], ["amenities", "מאפיינים"], ["audience", "מתאים ל"], ["video_url", "סרטון"],
-    ["details", "תיאור מפורט, כלול באירוח, חוקי הבית ושאלות"]
+  /* מה דורש אישור מנהל כשמארח משנה. נבחר ב"הגדרות → אישור שינויים". היומן תמיד מתעדכן מיד.
+     אותה חלוקה בדיוק נאכפת גם במסד הנתונים (protect_listing_columns) */
+  T.MOD_GROUPS = [
+    { key: "content", name: "תוכן ותמונות", sub: "שם, תיאור, תמונות, מאפיינים, תוכן הדף, מיקום ותגית רעש", def: true,
+      fields: [["name", "שם"], ["type", "סוג"], ["region", "אזור"], ["settlement", "יישוב"], ["tagline", "משפט פתיחה"], ["description", "תיאור"], ["photos", "תמונות"], ["amenities", "מאפיינים"], ["audience", "מתאים ל"], ["video_url", "סרטון"], ["details", "תיאור מפורט, כלול באירוח, חוקי הבית ושאלות"], ["noise", "רעש וסביבה"], ["lat", "מיקום במפה"], ["lng", "מיקום במפה"]] },
+    { key: "prices", name: "יחידות, קיבולת ומחירים", sub: "מחירים, עונות, תוספות, מבצעים, דקה 90, יחידות וקיבולת", def: false,
+      fields: [["price_weekday", "מחיר אמצ״ש"], ["price_weekend", "מחיר סופ״ש"], ["price_holiday", "מחיר חג"], ["guests_base", "אורחים במחיר"], ["extra_guest_price", "אורח נוסף"], ["guests_max", "קיבולת"], ["bedrooms", "חדרי שינה"], ["bathrooms", "חדרי רחצה"], ["units", "מספר יחידות"], ["seasons", "עונות"], ["extras", "תוספות"], ["deal_label", "כותרת מבצע"], ["deal_text", "פרטי מבצע"], ["lastminute_pct", "הנחת דקה 90"], ["rooms", "יחידות"]] },
+    { key: "policies", name: "מדיניות", sub: "ביטולים, כניסה ויציאה, מינימום לילות, חוקים", def: false,
+      fields: [["terms", "מדיניות"], ["min_nights", "מינימום לילות"]] },
+    { key: "contact", name: "פרטי קשר במתחם", sub: "טלפון, וואטסאפ ואימייל שמוצגים לאורחים", def: false,
+      fields: [["phone", "טלפון"], ["whatsapp", "וואטסאפ"], ["email", "אימייל"]] },
+    { key: "account", name: "פרטי החשבון", sub: "שם, טלפון, כתובת וח.פ בכרטיס הלקוח", def: false, fields: [] }
   ];
+  /* האם קבוצה דורשת אישור (תוכן: גם לפי המתג הישן "moderation") */
+  T.modOn = (s, key) => {
+    const m = (s && s.moderate) || {};
+    if (key === "content") return m.content !== undefined ? m.content !== false : !(s && s.moderation === false);
+    return m[key] === true;
+  };
+  /* כל השדות שדורשים אישור לפי ההגדרות */
+  T.moderatedKeys = (s) => T.MOD_GROUPS.filter((g) => T.modOn(s, g.key)).flatMap((g) => g.fields.map((f) => f[0]));
+  /* כל השדות שאפשר להעביר לאישור (להצגת הבדלים ולהחלה של שינוי ממתין) */
+  T.MODERATED_FIELDS = T.MOD_GROUPS.flatMap((g) => g.fields).filter((f, i, arr) => arr.findIndex((x) => x[0] === f[0]) === i);
+  /* יחידות: התוכן והמחירים מגרסה אחת, היומן (תאריכים חסומים וסנכרון) מהגרסה העדכנית */
+  T.CAL_KEYS = ["blocked_dates", "ical_url", "ical_blocked"];
+  T.roomsWithCalendar = (contentRooms, calRooms) => (contentRooms || []).map((r) => {
+    const c = (calRooms || []).find((x) => x.id === r.id);
+    const o = Object.assign({}, r);
+    T.CAL_KEYS.forEach((k) => { o[k] = c && c[k] !== undefined ? c[k] : r[k] !== undefined ? r[k] : k === "ical_url" ? "" : []; });
+    return o;
+  });
+
+  /* טלפון ישראלי: ספרות בלבד בפורמט 0XXXXXXXXX (להשוואה), ותצוגה עם מקף */
+  T.normPhone = (v) => {
+    let d = String(v || "").replace(/\D/g, "");
+    if (d.startsWith("00972")) d = d.slice(5); else if (d.startsWith("972")) d = d.slice(3);
+    if (d && !d.startsWith("0") && d.length >= 8 && d.length <= 9) d = "0" + d;
+    return d;
+  };
+  T.fmtPhone = (v) => { const d = T.normPhone(v); if (!d) return ""; if (/^1[5-9]00\d{6}$/.test(d)) return d.replace(/^1(\d{3})(\d{2})(\d{2})(\d{2})$/, "1-$1-$2-$3-$4"); return d.length === 10 ? d.replace(/^(\d{3})(\d{7})$/, "$1-$2") : d.length === 9 ? d.replace(/^(\d{2})(\d{7})$/, "$1-$2") : d; };
+
+  /* ---------------------------------------------------------------- רעש וסביבה */
+  T.NOISE_LEVELS = [
+    { key: "quiet", name: "סביבה שקטה", short: "שקט", tone: "ok" },
+    { key: "normal", name: "רעש רגיל של יישוב", short: "", tone: "muted" },
+    { key: "noisy", name: "ייתכנו רעשים בסביבה", short: "ייתכנו רעשים", tone: "warn" }
+  ];
+  T.NOISE_SOURCES = [["road", "כביש סמוך"], ["construction", "עבודות בנייה בסביבה"], ["events", "אולם או אירועים בסביבה"], ["neighbors", "שכנים קרובים"], ["farm", "חקלאות ובעלי חיים"], ["music", "מוזיקה מעסקים סמוכים"], ["prayer", "בית כנסת או מסגד סמוך"], ["planes", "טיסות"]];
+  T.PARTY_ALLOWED = [["music", "מוזיקה בקול רם"], ["karaoke", "קריוקי"], ["party", "מסיבות"], ["events", "אירועים פרטיים"], ["late", "עד שעה מאוחרת"]];
+  T.PARTY_REASONS = [["isolated", "מתחם מבודד"], ["no_neighbors", "אין שכנים קרובים"], ["soundproof", "בידוד אקוסטי"], ["neighbors_ok", "השכנים מודעים ומסכימים"]];
+  T.noiseOf = (l) => {
+    const n = (l && l.noise && typeof l.noise === "object") ? l.noise : {};
+    const lvl = T.NOISE_LEVELS.find((x) => x.key === n.level) || null;
+    const lab = (arr, keys) => (keys || []).map((k) => (arr.find((x) => x[0] === k) || [k, k])[1]);
+    return { level: lvl, sources: lab(T.NOISE_SOURCES, n.sources), party: !!n.party_ok, allowed: lab(T.PARTY_ALLOWED, n.allowed), reasons: lab(T.PARTY_REASONS, n.reasons), quiet_from: n.quiet_from || "", note: n.note || "", locked: !!n.locked, set: !!(lvl || n.party_ok) };
+  };
 
   /* חגים (לילות) לפי לוח השנה העברי, ישראל. חושב עם Hebcal; ניתן לעריכה בהגדרות. */
   T.HOLIDAYS = [
@@ -275,12 +326,18 @@
     holidays: T.HOLIDAYS,
     coupons: [],
     a11y_coordinator: "",
+    legal_name: "",
+    legal_id: "",
+    legal_address: "",
+    legal_court: "",
     social: { instagram: "", facebook: "", tiktok: "", youtube: "" },
     wa_float: true,
     cookie_banner: true,
     find_enabled: true,
     /* מארחים חדשים: פתיחה אוטומטית אחרי אימות המייל, ימי ניסיון, ימי חסד אחרי סוף המנוי */
     auto_open_hosts: true,
+    moderate: {},
+    calls_count_as_leads: true,
     trial_days: 30,
     grace_days: 3,
     reminder_days: [30, 7, 1],
@@ -810,6 +867,9 @@
     if (bs.length) out.push({ k: "benefit", t: `${bs[0].pct}% הנחה ${bs[0].short}`, icon: "percent" });
     if (l.best_price) out.push({ k: "best", t: "מחיר הכי טוב", icon: "badge" });
     if (t.couples_only) out.push({ k: "couples", t: "לזוגות בלבד", icon: "heart" });
+    const nz = T.noiseOf(l);
+    if (nz.party) out.push({ k: "party", t: "מותר להרעיש", icon: "mic" });
+    else if (nz.level && nz.level.key === "quiet") out.push({ k: "quiet", t: "סביבה שקטה", icon: "leaf" });
     if (T.isNewListing(l)) out.push({ k: "new", t: "חדש באתר", icon: "sparkle" });
     if (ctx.top && ctx.top.slice(0, 3).includes(l.id)) out.push({ k: "popular", t: "הכי נצפים", icon: "eye" });
     return out;
@@ -914,7 +974,8 @@
     return { key: trial ? "trial" : "active", label: `${trial ? "ניסיון · " : ""}עד ${T.fmtDate(a.end_date)}`, tone: "ok", visible: true, daysLeft: days, hideOn };
   };
   /* גרסת תנאי השימוש למפרסמים (נשמרת עם כל הרשמה) */
-  T.HOST_TERMS_VERSION = "2026-10";
+  T.HOST_TERMS_VERSION = "2026-11";
+  T.SITE_TERMS_VERSION = "2026-11";
 
   T.normalizeListing = (l) => {
     const n = (v) => (v === "" || v == null ? 0 : Number(v));
@@ -927,7 +988,8 @@
       ical_blocked: l.ical_blocked || [], rooms: l.rooms || [], extras: l.extras || [], seasons: l.seasons || [],
       sponsored_until: l.sponsored_until || null, video_url: l.video_url || "", pending: l.pending || null,
       details: l.details && typeof l.details === "object" ? l.details : {}, terms: l.terms && typeof l.terms === "object" ? l.terms : {},
-      exclusive: !!l.exclusive, best_price: !!l.best_price, owner_id: l.owner_id || null
+      exclusive: !!l.exclusive, best_price: !!l.best_price, owner_id: l.owner_id || null,
+      noise: l.noise && typeof l.noise === "object" ? l.noise : {}, tracking_phone: l.tracking_phone || ""
     });
   };
 })();
