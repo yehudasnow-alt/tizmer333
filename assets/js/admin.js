@@ -259,7 +259,45 @@
     "details.faq": () => ({ q: "", a: "" })
   };
   const UNIT_AMEN_GROUPS = ["safety", "water", "inside", "outside", "fun"];
-  const amenPicks = (sel, attr) => T.AMENITY_GROUPS.map((g) => { const items = T.AMENITIES.filter((a) => a.group === g.key); return `<p class="field-label" style="margin:14px 0 8px">${esc(g.name)}</p><div class="amen-picks chips">${items.map((a) => `<label><input type="checkbox" ${attr} value="${a.key}" ${sel.includes(a.key) ? "checked" : ""}>${I(a.icon)}${esc(a.name)}</label>`).join("")}</div>`; }).join("");
+  /* כרטיסיות לטפסים ארוכים (עורך המתחם, ההגדרות): כל הקטעים נשארים בטופס ונקראים בשמירה,
+     ורק הכרטיסייה הפעילה מוצגת. ״הכל״ מציג הכל ברצף. */
+  A.tabs = { editor: "ed-main", settings: "site" };
+  const tabAttr = (set, key) => `data-tab="${key}" ${A.tabs[set] !== "all" && A.tabs[set] !== key ? "hidden" : ""}`;
+  function tabsNav(set, tabs, label) {
+    const cur = A.tabs[set];
+    return `<nav class="tabbar" role="tablist" aria-label="${esc(label)}" data-tabset="${set}">${tabs.map(([k, name, icon, badge]) => `<button type="button" role="tab" class="tb" data-act="tab" data-set="${set}" data-to="${k}" aria-selected="${cur === k}">${icon ? I(icon) : ""}<span>${esc(name)}</span>${badge ? `<i class="tb-b" title="${esc(badge)}"></i>` : ""}</button>`).join("")}<button type="button" role="tab" class="tb tb-all" data-act="tab" data-set="${set}" data-to="all" aria-selected="${cur === "all"}">${I("list")}<span>הכל ברצף</span></button></nav>`;
+  }
+  function applyTabs(set, to) {
+    if (to) A.tabs[set] = to;
+    const cur = A.tabs[set];
+    $$(`[data-tabpanel="${set}"]`).forEach((p) => p.classList.toggle("tabs-all", cur === "all"));
+    $$(`[data-tabpanel="${set}"] [data-tab]`).forEach((sec) => { const show = cur === "all" || sec.dataset.tab === cur; if (show && sec.hidden) { sec.hidden = false; sec.classList.remove("tab-in"); void sec.offsetWidth; sec.classList.add("tab-in"); } else if (!show) sec.hidden = true; });
+    $$(`[data-tabset="${set}"] [data-to]`).forEach((b) => b.setAttribute("aria-selected", String(b.dataset.to === cur)));
+    const nav = $(`[data-tabset="${set}"]`); const on = nav && nav.querySelector('[aria-selected="true"]'); if (on && on.scrollIntoView) on.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+  /* מעבר לכרטיסייה שמכילה שדה מסוים (למשל שדה חובה שחסר) */
+  function revealField(el) {
+    const sec = el && el.closest("[data-tab]"); const panel = sec && sec.closest("[data-tabpanel]");
+    if (sec && panel && sec.hidden) applyTabs(panel.dataset.tabpanel, sec.dataset.tab);
+    if (el && el.focus) setTimeout(() => el.focus(), 30);
+  }
+  /* מאפיינים: לשונית לכל קטגוריה, וי ברור על מה שמסומן, ומונה בכל לשונית */
+  const amenChosen = (sel) => sel.length ? sel.map((k) => `<button type="button" class="am-chip" data-act="am-off" data-k="${esc(k)}" aria-label="הסרת ${esc(T.amenityOf(k).name)}">${esc(T.amenityOf(k).name)}${I("x")}</button>`).join("") : `<span class="hint">עוד לא סומן כלום. בוחרים קטגוריה ומסמנים מה יש.</span>`;
+  const amenPicks = (sel, attr) => {
+    const groups = T.AMENITY_GROUPS.map((g) => ({ g, items: T.AMENITIES.filter((a) => a.group === g.key) })).filter((x) => x.items.length);
+    const cur = groups.some((x) => x.g.key === A.amenTab) ? A.amenTab : groups[0].g.key;
+    return `<div class="am-wrap"><div class="am-tabs" role="tablist" aria-label="קטגוריות מאפיינים">${groups.map(({ g, items }) => { const n = items.filter((a) => sel.includes(a.key)).length; return `<button type="button" role="tab" class="am-tab" data-act="am-tab" data-g="${g.key}" aria-selected="${g.key === cur}"><span>${esc(g.name)}</span><b class="am-n" data-g="${g.key}" ${n ? "" : "hidden"}>${n}</b><small>${items.length}</small></button>`; }).join("")}</div>
+      <div class="am-panes">${groups.map(({ g, items }) => `<div class="am-pane" role="tabpanel" data-g="${g.key}" ${g.key === cur ? "" : "hidden"}><p class="am-pane-h">${esc(g.name)}</p><div class="amen-picks ticks">${items.map((a) => `<label><input type="checkbox" ${attr} value="${a.key}" data-g="${g.key}" ${sel.includes(a.key) ? "checked" : ""}><span class="tk" aria-hidden="true">${I("check")}</span>${I(a.icon)}<span class="nm">${esc(a.name)}</span></label>`).join("")}</div>
+        <div class="am-bulk"><button type="button" class="link-btn" data-act="am-all" data-g="${g.key}">סימון הכל בקטגוריה</button><button type="button" class="link-btn" data-act="am-none" data-g="${g.key}">ניקוי הקטגוריה</button></div></div>`).join("")}</div>
+      <div class="am-sum"><span class="am-total"><b id="am-total">${sel.length}</b> מאפיינים מסומנים</span><div class="am-chosen" id="am-chosen">${amenChosen(sel)}</div></div></div>`;
+  };
+  function amenRefresh() {
+    const box = $("#editor .am-wrap"); if (!box) return;
+    const sel = $$('#editor input[name="amenities"]:checked').map((x) => x.value);
+    $$(".am-n", box).forEach((b) => { const n = $$(`input[name="amenities"][data-g="${b.dataset.g}"]:checked`, box).length; b.textContent = n; b.hidden = !n; });
+    const t = $("#am-total"); if (t) t.textContent = sel.length;
+    const c = $("#am-chosen"); if (c) c.innerHTML = amenChosen(sel);
+  }
   function roomCard(d, r, i) {
     const n = (k, label, extra) => `<label class="field"><span>${label}</span><input class="input num" type="number" min="0" data-room="${i}" data-k="${k}" value="${esc(Number(r[k]) ? r[k] : "")}" ${extra || ""}></label>`;
     const pool = [...new Set([...(d.photos || []), ...(r.photos || [])])];
@@ -283,7 +321,7 @@
     const lockedForMe = !IS_ADMIN && !!n.locked;
     const dis = lockedForMe ? "disabled" : "";
     const chips = (name, arr, sel) => `<div class="amen-picks chips">${arr.map(([k, t]) => `<label><input type="checkbox" name="${name}" value="${k}" ${(sel || []).includes(k) ? "checked" : ""} ${dis}>${esc(t)}</label>`).join("")}</div>`;
-    return `<section class="panel" id="ed-noise"><h2>רעש וסביבה <span class="hint">מוצג לאורחים בדף המתחם, כתגית בכרטיס ובסינון באתר</span></h2>
+    return `<section class="panel" id="ed-noise" ${tabAttr("editor", "ed-noise")}><h2>רעש וסביבה <span class="hint">מוצג לאורחים בדף המתחם, כתגית בכרטיס ובסינון באתר</span></h2>
       ${lockedForMe ? `<p class="note note-info" style="margin-bottom:12px">${I("shield")}<span>סימון הרעש של המתחם נקבע על ידי צוות האתר אחרי בדיקה. לשינוי פונים לצוות.</span></p>` : ""}
       <input type="hidden" name="noise_on" value="1" ${dis}>
       <fieldset class="radio-row" ${dis}><legend class="field-label">איך הסביבה בדרך כלל</legend>
@@ -302,6 +340,11 @@
       <p class="hint" style="margin-top:10px">הסימון הוא הצהרה של המארח. גם במתחם שמותר בו להרעיש חלים חוקי הרעש וחוקי העזר המקומיים.</p>
     </section>`;
   }
+  function edTabs(d) {
+    const miss = {};
+    completenessItems(d).forEach(([n, ok, to]) => { if (!ok) miss[to] = (miss[to] ? miss[to] + ", " : "חסר: ") + n; });
+    return [["ed-main", "פרטים", "edit"], ["ed-photos", `תמונות${(d.photos || []).length ? " · " + d.photos.length : ""}`, "image"], ["ed-content", "תוכן ושאלות", "book"], ["ed-units", "יחידות ומחירים", "bed"], ["ed-deals", "מבצעים", "percent"], ["ed-amen", `מאפיינים${(d.amenities || []).length ? " · " + d.amenities.length : ""}`, "check"], ["ed-noise", "רעש וסביבה", "mic"], ["ed-policy", "מדיניות", "shield"], ["ed-calendar", "יומן", "calendar"], ["ed-contact", "מיקום וקשר", "pin"]].map((t) => t.concat(miss[t[0]] || ""));
+  }
   function viewEditor(id) {
     const d = draftFor(id);
     if (!d) return ph("המתחם לא נמצא", "") + `<a class="btn btn-line" href="#${IS_ADMIN ? "listings" : "my"}">חזרה</a>`;
@@ -318,10 +361,10 @@
     const secs = [["location", "לוקיישן", "איפה בדיוק, איך מגיעים, חניה"], ["vibe", "אווירה", "שקט, נוף, סגנון"], ["facilities", "מתקנים", "ג׳קוזי, בריכה, מטבח"], ["area", "מה עושים באזור", "מסלולים, מסעדות, יקבים (עם זמני נסיעה)"]];
     return ph(id === "new" ? "מתחם חדש" : esc(d.name || "עריכת מתחם"), id === "new" ? "ממלאים, שומרים, ומפעילים כשהכרטיס מוכן." : `עודכן ${T.fmtStamp(d.updated_at)}`, id === "new" ? "" : `<a class="btn btn-line" href="${siteURL("stay-" + d.id)}" target="_blank" rel="noopener">${I("external")}צפייה באתר</a>`) + `
       ${!IS_ADMIN && orig && contentPending(orig) ? `<p class="note note-info" style="margin-bottom:14px">${I("shield")}<span>שינויים ששלחתם ממתינים לאישור צוות האתר (${T.fmtStamp(orig.pending._at)}). ${instant}</span></p>` : moderated ? `<p class="note note-info" style="margin-bottom:14px">${I("info")}<span>שינויים ב${onG.map((g) => g.name).join(", ")} מתפרסמים באתר אחרי אישור צוות האתר. ${instant}</span></p>` : ""}
-      <nav class="ed-jump" aria-label="קפיצה לחלק בטופס">${[["ed-main", "פרטים"], ["ed-photos", "תמונות"], ["ed-content", "תוכן הדף"], ["ed-units", "יחידות ומחירים"], ["ed-deals", "מבצעים והטבות"], ["ed-amen", "מאפיינים"], ["ed-noise", "רעש וסביבה"], ["ed-policy", "מדיניות"], ["ed-calendar", "יומן"], ["ed-contact", "מיקום וקשר"]].map(([k, n]) => `<a href="#" data-act="ed-jump" data-to="${k}">${n}</a>`).join("")}</nav>
+      ${tabsNav("editor", edTabs(d), "חלקי הכרטיס")}
       <form class="editor" id="editor" data-form="listing" novalidate>
-        <div>
-          <section class="panel" id="ed-main"><h2>פרטי המתחם</h2><div class="form-grid">
+        <div data-tabpanel="editor" class="${A.tabs.editor === "all" ? "tabs-all" : ""}">
+          <section class="panel" id="ed-main" ${tabAttr("editor", "ed-main")}><h2>פרטי המתחם</h2><div class="form-grid">
             ${txt(d, "name", "שם המתחם", 'required maxlength="60"')}${txt(d, "settlement", "יישוב", 'required maxlength="40"')}
             <label class="field"><span>סוג אירוח</span><select class="select" name="type">${T.TYPES.map((x) => `<option value="${x.key}" ${d.type === x.key ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></label>
             <label class="field"><span>אזור</span><select class="select" name="region">${T.REGIONS.map((r) => `<option value="${r.key}" ${d.region === r.key ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select></label>
@@ -332,12 +375,12 @@
             <label class="field span2"><span>קישור לסרטון (YouTube או Vimeo, לא חובה)</span><input class="input" name="video_url" dir="ltr" value="${esc(d.video_url)}" placeholder="https://youtu.be/..."></label>
           </div></section>
 
-          <section class="panel" id="ed-photos"><h2>תמונות <span class="hint">גוררים כדי לסדר · הראשונה היא תמונת השער · לכל תמונה קטגוריה לגלריה · עד 24</span></h2>
+          <section class="panel" id="ed-photos" ${tabAttr("editor", "ed-photos")}><h2>תמונות <span class="hint">גוררים כדי לסדר · הראשונה היא תמונת השער · לכל תמונה קטגוריה לגלריה · עד 24</span></h2>
             <div class="photos" id="photos">${photosHTML(d)}</div>
             <p class="hint" style="margin-top:10px">${T.isLive ? (T.config.CLOUDINARY_CLOUD_NAME ? "התמונות עולות ל-Cloudinary ומוגשות בגודל המתאים לכל מסך." : "התמונות מוקטנות אוטומטית לפני ההעלאה.") : "במצב הדגמה התמונות נשמרות בדפדפן ויש מקום לכמה תמונות בלבד."}</p>
           </section>
 
-          <section class="panel" id="ed-content"><h2>תוכן לדף המתחם <span class="hint">מופיע בכרטיסיות ״על המקום״ ובשאלות הנפוצות</span></h2>
+          <section class="panel" id="ed-content" ${tabAttr("editor", "ed-content")}><h2>תוכן לדף המתחם <span class="hint">מופיע בכרטיסיות ״על המקום״ ובשאלות הנפוצות</span></h2>
             <div class="form-grid">${secs.map(([k, n, phx]) => pArea(d, "details.sections." + k, n, phx, 2)).join("")}
               ${pArea(d, "details.sections.good", "טוב לדעת (שורה לכל פריט)", "בחורף יורד שלג, כדאי רכב גבוה\nארוחת הבוקר מוגשת בין 8:00 ל־11:00", 3)}
               ${pArea(d, "details.included", "מה כלול באירוח (שורה לכל פריט)", "בקבוק יין\nקפה, תה וחלב\nחלוקים ונעלי בית", 4, true)}
@@ -346,7 +389,7 @@
             ${arrRows(d, "details.faq", [{ k: "q", label: "שאלה", w: "100%" }, { k: "a", label: "תשובה", area: true }], "שאלה")}
           </section>
 
-          <section class="panel" id="ed-units"><h2>יחידות ומחירים</h2>
+          <section class="panel" id="ed-units" ${tabAttr("editor", "ed-units")}><h2>יחידות ומחירים</h2>
             <div class="toggle-row" style="border:0;padding-top:0"><span>המתחם כולל כמה יחידות נפרדות<small>לכל יחידה מחיר, קיבולת, תמונות ויומן משלה. האורחים יכולים להזמין כמה יחידות יחד.</small></span><button class="switch" type="button" role="switch" aria-checked="${d.rooms.length > 0}" data-act="rooms-toggle" aria-label="כמה יחידות במתחם"></button></div>
             ${d.rooms.length ? `<div class="rows-edit" id="rooms">${d.rooms.map((r, i) => roomCard(d, r, i)).join("")}
               <button class="btn btn-line btn-sm" type="button" data-act="room-add" style="justify-self:start">${I("plus")}יחידה נוספת</button></div>`
@@ -371,7 +414,7 @@
               <button class="btn btn-line btn-sm" type="button" data-act="season-add" style="justify-self:start">${I("plus")}עונה</button></div>
           </section>
 
-          <section class="panel" id="ed-deals"><h2>מבצעים, חבילות והטבות</h2><div class="form-grid">
+          <section class="panel" id="ed-deals" ${tabAttr("editor", "ed-deals")}><h2>מבצעים, חבילות והטבות</h2><div class="form-grid">
             ${txt(d, "deal_label", "תווית דיל", 'maxlength="22" placeholder="למשל: אמצע שבוע"')}${txt(d, "deal_text", "פירוט ההטבה", 'maxlength="90" placeholder="לילה שלישי בחצי מחיר בימים א׳–ד׳"')}
             <label class="field"><span>דקה 90: הנחה לסופ״ש הקרוב (%)</span><input class="input num" type="number" min="0" max="60" name="lastminute_pct" value="${esc(d.lastminute_pct || "")}" placeholder="0 = כבוי"></label>
             ${IS_ADMIN ? `<label class="field"><span>מיקום ממומן עד</span><input class="input" type="date" name="sponsored_until" value="${esc(d.sponsored_until || "")}"></label>` : ""}
@@ -389,7 +432,7 @@
               <button class="btn btn-line btn-sm" type="button" data-act="extra-add" style="justify-self:start">${I("plus")}תוספת</button></div>
           </section>
 
-          <section class="panel" id="ed-amen"><h2>מה יש במתחם</h2>
+          <section class="panel" id="ed-amen" ${tabAttr("editor", "ed-amen")}><h2>מה יש במתחם</h2>
             ${amenPicks(d.amenities, 'name="amenities"')}
             <p class="field-label" style="margin:16px 0 8px">מתאים ל</p>
             <div class="amen-picks chips">${T.AUDIENCE.map((a) => `<label><input type="checkbox" name="audience" value="${a.key}" ${d.audience.includes(a.key) ? "checked" : ""}>${a.name}</label>`).join("")}</div>
@@ -397,7 +440,7 @@
 
           ${noiseSection(d)}
 
-          <section class="panel" id="ed-policy"><h2>שעות, מדיניות וחוקי הבית</h2>
+          <section class="panel" id="ed-policy" ${tabAttr("editor", "ed-policy")}><h2>שעות, מדיניות וחוקי הבית</h2>
             <div class="g-auto">${pTxt(d, "terms.checkin", "כניסה", 'placeholder="15:00" maxlength="16"')}${pTxt(d, "terms.checkout", "יציאה", 'placeholder="11:00" maxlength="16"')}${pTxt(d, "terms.checkin_sat", "כניסה בשבת", 'placeholder="18:00" maxlength="16"')}${pTxt(d, "terms.checkout_sat", "יציאה בשבת", 'placeholder="מוצאי שבת" maxlength="20"')}</div>
             <div class="g-auto" style="margin-top:10px">${pSel(d, "terms.kids", "ילדים", T.KIDS_POLICY)}${pNum(d, "terms.kids_age", "מגיל (אם רלוונטי)", 'max="18"')}${pSel(d, "terms.smoking", "עישון", T.SMOKING_POLICY)}</div>
             <div style="margin-top:12px">${pChk(d, "terms.couples_only", "לזוגות בלבד", "מסומן בכרטיס ובסינון ״לזוגות בלבד״")}</div>
@@ -408,9 +451,9 @@
             <div class="form-grid" style="margin-top:14px">${pArea(d, "details.rules", "חוקי הבית (שורה לכל כלל)", "שקט אחרי 23:00\nאין מנגל בשבת\nאין מערכות הגברה", 4, true)}</div>
           </section>
 
-          <section class="panel" id="ed-calendar"><h2>יומן זמינות <span class="hint">לחיצה על יום מסמנת אותו כתפוס</span></h2><div id="ed-cal">${editCal(d)}</div></section>
+          <section class="panel" id="ed-calendar" ${tabAttr("editor", "ed-calendar")}><h2>יומן זמינות <span class="hint">לחיצה על יום מסמנת אותו כתפוס</span></h2><div id="ed-cal">${editCal(d)}</div></section>
 
-          <section class="panel"><h2>סנכרון יומן (iCal)</h2>
+          <section class="panel" ${tabAttr("editor", "ed-calendar")}><h2>סנכרון יומן (iCal)</h2>
             <p class="hint" style="margin-bottom:12px">מדביקים את קישור ה-iCal מ-Booking, Airbnb או אתר אחר, והתאריכים התפוסים שם נחסמים כאן אוטומטית. את קישור הייצוא מדביקים באתרים האחרים כדי שיחסמו תאריכים שנתפסו כאן.</p>
             <div class="rows-edit">${T.unitsOf(d).map((u, i) => `<div class="row-edit" style="flex-direction:column;align-items:stretch">
               <b style="font-weight:500">${esc(u.single ? "המתחם" : u.name || "יחידה")}</b>
@@ -420,7 +463,7 @@
             ${T.isLive && d.id ? `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn-line btn-sm" type="button" data-act="ical-sync-now">${I("sync")} סנכרון עכשיו</button><span class="hint">${d.ical_synced_at ? "סנכרון אחרון: " + new Date(d.ical_synced_at).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) : "שמרו את הקישור ואז סנכרנו. הסנכרון רץ גם אוטומטית כל שעה."}</span></div>` : ""}
           </section>
 
-          <section class="panel" id="ed-contact"><h2>מיקום ופרטי קשר</h2><div class="form-grid">
+          <section class="panel" id="ed-contact" ${tabAttr("editor", "ed-contact")}><h2>מיקום ופרטי קשר</h2><div class="form-grid">
             <label class="field"><span>קו רוחב (lat)</span><input class="input num" dir="ltr" name="lat" value="${esc(d.lat == null ? "" : d.lat)}"></label>
             <label class="field"><span>קו אורך (lng)</span><input class="input num" dir="ltr" name="lng" value="${esc(d.lng == null ? "" : d.lng)}"></label>
             <div class="span2"><div class="mini-map" id="ed-map" style="margin-top:0;height:240px"></div><p class="hint" style="margin-top:6px">לחיצה על המפה מעדכנת את המיקום. הכתובת המדויקת לא מוצגת לאורחים, והמרחק לאטרקציות באזור מחושב מהנקודה הזו.</p></div>
@@ -453,9 +496,9 @@
       </form>`;
   }
   /* רשימת בדיקה: מה עוד חסר כדי שהכרטיס יהיה מלא כמו אצל המתחרים */
-  function completeness(d) {
+  function completenessItems(d) {
     const det = d.details || {}, t = d.terms || {}, sec = det.sections || {};
-    const items = [
+    return [
       ["תמונות (לפחות 6)", (d.photos || []).length >= 6, "ed-photos"],
       ["תיאור מלא", String(d.description || "").length > 120, "ed-main"],
       ["תוכן לפי נושאים", Object.values(sec).filter(Boolean).length >= 2, "ed-content"],
@@ -466,6 +509,9 @@
       ["מדיניות ביטול", (t.cancel || []).length > 0, "ed-policy"],
       ["מיקום על המפה", d.lat != null && d.lng != null, "ed-contact"]
     ];
+  }
+  function completeness(d) {
+    const items = completenessItems(d);
     const done = items.filter((x) => x[1]).length;
     return `<div class="meter"><i style="width:${Math.round((done / items.length) * 100)}%"></i></div><p class="hint" style="margin:6px 0 8px">${done} מתוך ${items.length}</p><ul class="todo">${items.map(([n, ok, to]) => `<li class="${ok ? "ok" : ""}">${I(ok ? "check" : "info")}${ok ? esc(n) : `<a href="#" data-act="ed-jump" data-to="${to}">${esc(n)}</a>`}</li>`).join("")}</ul>`;
   }
@@ -495,6 +541,8 @@
       <div class="card-body"><div class="card-head"><h3>${esc(l.name || "שם המתחם")}</h3><span class="card-place">${esc(T.regionOf(l.region).name)}</span></div><p class="card-tag">${esc(l.tagline || "משפט פתיחה")}</p>
       <div class="card-foot"><span class="price"><b>${T.money(T.fromPrice(l)) || "₪—"}</b>ללילה</span></div></div></div>`;
   }
+  /* יומן המתחם בעורך: שלושה חודשים, לילות תפוסים כפס רציף (ידני בכחול, מסונכרן בתכלת).
+     לחיצה מחליפה לילה, גרירה מסמנת או משחררת טווח שלם. */
   function editCal(d) {
     const units = T.unitsOf(d);
     if (!units.some((u) => u.id === A.calUnit)) A.calUnit = units[0].id;
@@ -502,26 +550,70 @@
     const start = A.calStart || new Date(T.today().getFullYear(), T.today().getMonth(), 1);
     const manual = new Set(unit.blocked_dates || []);
     const synced = new Set(unit.ical_blocked || []);
+    const orig = A.listings.find((x) => x.id === d.id);
+    const savedU = orig ? T.unitsOf(IS_ADMIN ? orig : T.withPending(orig)).find((u) => u.id === unit.id) : null;
+    const was = new Set((savedU && savedU.blocked_dates) || []);
     const today = T.iso(T.today());
     const dows = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
+    const kind = (iso) => (manual.has(iso) ? "m" : synced.has(iso) ? "s" : "");
     const month = (o) => {
       const m = new Date(start.getFullYear(), start.getMonth() + o, 1);
-      let h = `<div class="cal"><h4>${T.fmtMonth(m)}</h4><div class="cal-grid">${dows.map((x) => `<span class="dow">${x}</span>`).join("")}`;
-      for (let i = 0; i < m.getDay(); i++) h += "<span></span>";
+      let h = `<div class="ec-month"><div class="ec-title">${T.fmtMonth(m)}</div><div class="ec-grid">${dows.map((x) => `<span class="ec-dow">${x}</span>`).join("")}`;
+      for (let i = 0; i < m.getDay(); i++) h += `<span class="ec-c ec-pad"></span>`;
       const n = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
       for (let k = 1; k <= n; k++) {
         const dt = new Date(m.getFullYear(), m.getMonth(), k), iso = T.iso(dt);
-        const past = iso < today, isSync = synced.has(iso) && !manual.has(iso), hol = T.holidayOf(iso, A.settings);
-        h += `<button type="button" class="${past ? "past" : ""} ${manual.has(iso) ? "blocked" : isSync ? "blocked synced" : ""} ${T.isWeekendNight(dt) ? "wknd" : ""} ${hol ? "hol" : ""} ${iso === today ? "today" : ""}" data-act="ed-day" data-d="${iso}" ${past || isSync ? "disabled" : ""} aria-pressed="${manual.has(iso)}" aria-label="${T.fmtLong(iso)}${manual.has(iso) ? ", תפוס" : isSync ? ", תפוס מסנכרון" : ", פנוי"}${hol ? ", " + hol.label : ""}">${k}</button>`;
+        const kd = kind(iso), prev = kind(T.iso(T.addDays(dt, -1))), next = kind(T.iso(T.addDays(dt, 1)));
+        const past = iso < today, isSync = kd === "s", hol = T.holidayOf(iso, A.settings);
+        const cls = ["ec-c"];
+        if (kd) cls.push("k-" + kd, prev === kd && dt.getDay() !== 0 ? "join-s" : "cap-s", next === kd && dt.getDay() !== 6 && k !== n ? "join-e" : "cap-e");
+        if (past) cls.push("past");
+        if (T.isWeekendNight(dt)) cls.push("wknd");
+        if (hol) cls.push("hol");
+        if (iso === today) cls.push("today");
+        if (manual.has(iso) !== was.has(iso)) cls.push("chg");
+        h += `<span class="${cls.join(" ")}"><button type="button" class="ec-d" data-act="ed-day" data-d="${iso}" ${past || isSync ? "disabled" : ""} aria-pressed="${manual.has(iso)}" aria-label="${T.fmtLong(iso)}${manual.has(iso) ? ", תפוס" : isSync ? ", תפוס מסנכרון" : ", פנוי"}${hol ? ", " + esc(hol.label) : ""}">${k}</button></span>`;
       }
       return h + "</div></div>";
     };
     const upcoming = [...manual].filter((x) => x >= today).length;
+    const syncN = [...synced].filter((x) => x >= today).length;
+    const in90 = Array.from({ length: 90 }, (_, i) => T.iso(T.addDays(T.today(), i)));
+    const occ = Math.round((in90.filter((x) => manual.has(x) || synced.has(x)).length / 90) * 100);
     return `${units.length > 1 ? `<div class="unit-tabs seg-tabs" role="group" aria-label="יחידה">${units.map((u) => `<button type="button" data-act="cal-unit" data-id="${esc(u.id)}" aria-pressed="${u.id === unit.id}">${esc(u.name || "יחידה")}</button>`).join("")}</div>` : ""}
-      <div class="cal-wrap"><div class="cal-nav"><button class="icon-btn" type="button" data-act="ed-cal" data-d="-1" aria-label="החודש הקודם">${I("chev-r")}</button><span class="hint">${upcoming ? `${upcoming} לילות מסומנים ידנית` : "אין חסימות ידניות"}${synced.size ? ` · ${synced.size} מסונכרנים` : ""}</span><button class="icon-btn" type="button" data-act="ed-cal" data-d="1" aria-label="החודש הבא">${I("chev-l")}</button></div>
-      <div class="cal-months">${month(0)}${month(1)}${month(2)}</div>
-      <div class="cal-legend"><span><i class="l-free"></i>פנוי</span><span><i class="l-blocked"></i>תפוס (ידני)</span><span><i class="l-synced"></i>תפוס מסנכרון iCal</span><span><i class="l-hol"></i>חג</span></div></div>`;
+      <div class="ec">
+        <div class="ec-top"><div class="ec-stats"><span class="bd-stat"><b>${occ}%</b><small>תפוסה ב־90 יום</small></span><span class="bd-stat"><b>${upcoming}</b><small>לילות שסימנתם</small></span><span class="bd-stat"><b>${syncN}</b><small>מסונכרנים (iCal)</small></span></div>
+          <div class="ec-nav"><button class="dp-arrow" type="button" data-act="ed-cal" data-d="-1" aria-label="החודש הקודם">${I("chev-r")}</button><button class="btn btn-ghost btn-sm" type="button" data-act="ed-cal" data-d="0">היום</button><button class="dp-arrow" type="button" data-act="ed-cal" data-d="1" aria-label="החודש הבא">${I("chev-l")}</button></div></div>
+        <div class="ec-months">${month(0)}${month(1)}${month(2)}</div>
+        <div class="bd-legend"><span><i class="lg-m"></i>תפוס (סימון שלכם)</span><span><i class="lg-s"></i>תפוס מסנכרון iCal</span><span><i class="lg-chg"></i>שינוי שעוד לא נשמר</span><span><i class="lg-hol"></i>חג</span><span class="bd-tip">${I("info")}לחיצה על יום מחליפה מצב · גרירה מסמנת טווח</span></div>
+      </div>`;
   }
+  /* גרירה ביומן של העורך */
+  (function editDrag() {
+    let drag = null;
+    const cellOf = (t) => t && t.closest && t.closest("#ed-cal .ec-d");
+    const paint = () => { if (!drag) return; const [a, b] = [drag.from, drag.to].sort(); $$("#ed-cal .ec-d").forEach((c) => c.parentElement.classList.toggle("drag", c.dataset.d >= a && c.dataset.d <= b)); };
+    document.addEventListener("pointerdown", (e) => { const c = cellOf(e.target); if (!c || c.disabled || e.button !== 0) return; drag = { from: c.dataset.d, to: c.dataset.d, block: c.getAttribute("aria-pressed") !== "true", moved: false }; paint(); });
+    document.addEventListener("pointerover", (e) => { if (!drag) return; const c = cellOf(e.target); if (!c || c.dataset.d === drag.to) return; drag.to = c.dataset.d; drag.moved = true; paint(); });
+    document.addEventListener("pointerup", () => {
+      if (!drag) return;
+      const g = drag; drag = null;
+      if (!g.moved) { $$("#ed-cal .drag").forEach((c) => c.classList.remove("drag")); return; }
+      A.edSkipClick = true; setTimeout(() => { A.edSkipClick = false; }, 50);
+      readEditor();
+      const d = A.drafts[A.editId];
+      const target = d.rooms.length ? d.rooms.find((r) => r.id === A.calUnit) || d.rooms[0] : d;
+      const syn = new Set(target.ical_blocked || []), today = T.iso(T.today());
+      const cur = new Set(target.blocked_dates || []);
+      const [a, b] = [g.from, g.to].sort();
+      let n = 0;
+      for (let x = T.parseISO(a); T.iso(x) <= b; x = T.addDays(x, 1)) { const iso = T.iso(x); if (iso < today || syn.has(iso)) continue; n++; if (g.block) cur.add(iso); else cur.delete(iso); }
+      target.blocked_dates = [...cur].sort();
+      $("#ed-cal").innerHTML = editCal(d);
+      markDirty();
+      T.toast(`${g.block ? "סומנו" : "שוחררו"} ${n === 1 ? "לילה אחד" : n + " לילות"}`);
+    });
+  })();
   function readEditor() {
     const form = $("#editor");
     if (!form) return;
@@ -633,6 +725,7 @@
     }
   }
   async function saveEditor() {
+    if (isFrozen()) { T.toast("החשבון קפוא עד חידוש המנוי, ולכן אי אפשר לשמור שינויים.", "err"); return; }
     readEditor();
     const d = A.drafts[A.editId];
     const errs = [];
@@ -640,7 +733,12 @@
     if (!String(d.settlement).trim()) errs.push("יישוב");
     if (!(T.fromPrice(T.normalizeListing(d)) > 0)) errs.push("מחיר ללילה");
     if (d.rooms.some((r) => !String(r.name).trim())) errs.push("שם לכל יחידה");
-    if (errs.length) { T.toast("חסר: " + errs.join(", "), "err"); return; }
+    if (errs.length) {
+      T.toast("חסר: " + errs.join(", "), "err");
+      const f = !String(d.name).trim() ? $('#editor [name="name"]') : !String(d.settlement).trim() ? $('#editor [name="settlement"]') : d.rooms.some((r) => !String(r.name).trim()) ? $('#editor [data-k="name"][data-room]') : $('#editor [name="price_weekday"], #editor [data-k="price_weekday"]');
+      if (f) revealField(f);
+      return;
+    }
     if (IS_ADMIN && d.tracking_phone) {
       if (!/^0\d{8,9}$|^1\d{9}$/.test(d.tracking_phone)) { T.toast("מספר המעקב לא נראה תקין", "err"); return; }
       const dup = A.listings.find((l) => l.id !== d.id && T.normPhone(l.tracking_phone) === d.tracking_phone);
@@ -957,13 +1055,15 @@
           <label class="field"><span>כותרת</span><input class="input" name="title" value="${esc(ed.title || "")}" maxlength="110" required></label>
           <label class="field"><span>תקציר (מופיע בכרטיס ובגוגל)</span><textarea class="textarea" name="excerpt" rows="2" style="min-height:70px" maxlength="220">${esc(ed.excerpt || "")}</textarea></label>
           <div class="field"><span>תמונה ראשית</span><div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">${ed.cover ? `<img src="${esc(T.img(ed.cover, 400))}" alt="" style="width:180px;aspect-ratio:16/10;object-fit:cover;border-radius:10px">` : ""}<label class="btn btn-line">${I("upload")}העלאת תמונה<input type="file" accept="image/*" class="sr" id="art-cover"></label></div></div>
+          <div class="field"><span>שייכות לאזורים <span class="hint">הכתבה תופיע בלשונית ״מהמגזין״ בדף של כל מתחם באזורים שסימנתם. בלי סימון: כתבה כללית.</span></span>
+            <div class="amen-picks chips art-regions">${Object.entries(T.AREAS).map(([k, n]) => `<label><input type="checkbox" name="regions" value="area:${k}" ${(ed.regions || []).includes("area:" + k) ? "checked" : ""}>כל ה${esc(n)}</label>`).join("")}${T.REGIONS.map((r) => `<label><input type="checkbox" name="regions" value="${r.key}" ${(ed.regions || []).includes(r.key) ? "checked" : ""}>${esc(r.name)}</label>`).join("")}</div></div>
           <label class="field"><span>תוכן</span><textarea class="textarea" name="body" rows="16">${esc(ed.body || "")}</textarea></label>
           <label class="check"><input type="checkbox" name="published" ${ed.published ? "checked" : ""}>פרסום באתר</label>
           <div style="display:flex;gap:8px"><button class="btn btn-primary" type="submit">${I("check")}שמירה</button>${ed.id ? `<a class="btn btn-line" href="${siteURL("article-" + ed.id)}" target="_blank" rel="noopener">${I("external")}צפייה</a>` : ""}</div>
         </form>`;
     }
     return ph("מגזין", "כתבות עוזרות לקידום בגוגל ומביאות אורחים שמחפשים רעיונות.", `<button class="btn btn-primary" type="button" data-act="art-new">${I("plus")}כתבה חדשה</button>`) + `
-      <div class="panel">${A.articles.length ? `<div class="table-wrap"><table class="tbl"><tbody>${A.articles.map((a) => `<tr><td style="width:90px">${a.cover ? `<img class="thumb" src="${esc(T.img(a.cover, 200))}" alt="">` : ""}</td><td><a class="name" href="#" data-act="art-edit" data-id="${esc(a.id)}">${esc(a.title)}</a><div class="sub">${esc(a.excerpt)}</div></td><td>${a.published ? '<span class="pill pill-ok">מפורסם</span>' : '<span class="pill pill-muted">טיוטה</span>'}</td>
+      <div class="panel">${A.articles.length ? `<div class="table-wrap"><table class="tbl"><tbody>${A.articles.map((a) => `<tr><td style="width:90px">${a.cover ? `<img class="thumb" src="${esc(T.img(a.cover, 200))}" alt="">` : ""}</td><td><a class="name" href="#" data-act="art-edit" data-id="${esc(a.id)}">${esc(a.title)}</a><div class="sub">${esc(a.excerpt)}</div>${(a.regions || []).length ? `<div class="sub">${I("pin")} ${a.regions.map((r) => (r.startsWith("area:") ? "כל ה" + T.AREAS[r.slice(5)] : T.regionOf(r).name)).map(esc).join(", ")}</div>` : ""}</td><td>${a.published ? '<span class="pill pill-ok">מפורסם</span>' : '<span class="pill pill-muted">טיוטה</span>'}</td>
         <td><div class="acts"><button class="mini-btn" type="button" data-act="art-edit" data-id="${esc(a.id)}" aria-label="עריכה">${I("edit")}</button><button class="mini-btn" type="button" data-act="ask-del" data-kind="article" data-id="${esc(a.id)}" aria-label="מחיקה">${I("trash")}</button></div></td></tr>`).join("")}</tbody></table></div>` : `<div class="empty"><h3>עוד אין כתבות</h3></div>`}</div>`;
   }
 
@@ -975,7 +1075,8 @@
     if (f.kind) list = list.filter((p) => p.kind === f.kind);
     const kind = (k) => T.PLACE_KINDS.find((x) => x.key === k) || { one: k, icon: "pin" };
     const nearest = (p) => { if (p.lat == null || p.lng == null) return null; const c = { lat: Number(p.lat), lng: Number(p.lng) }; return A.listings.filter((l) => l.active).map((l) => ({ l, km: T.distKm(c, T.coordsOf(l)) })).filter((x) => x.km != null).sort((a, b) => a.km - b.km)[0] || null; };
-    return ph("מה עושים באזור", "מסעדות, אטרקציות, ספא, יקבים ומסלולים. מופיעים בעמוד ״מה עושים באזור״ ובדף של כל מתחם קרוב, עם מרחק ו-Waze.", `<button class="btn btn-primary" type="button" data-act="place-edit" data-id="">${I("plus")}מקום חדש</button>`) + `
+    const missing = (T.CURATED_PLACES || []).filter((c) => !A.places.some((p) => p.id === c.id));
+    return ph("מה עושים באזור", "טבע, מעיינות, תצפיות, אטרקציות, מורשת, יקבים ומסעדות. מופיעים בדף של כל מתחם קרוב (בלשונית ״מה עושים באזור״), עם מרחק, זמן נסיעה משוער, Waze ו־Google Maps.", `${missing.length ? `<button class="btn btn-line" type="button" data-act="places-import">${I("download")}טעינת ${missing.length} אתרים פופולריים</button>` : ""}<button class="btn btn-primary" type="button" data-act="place-edit" data-id="">${I("plus")}מקום חדש</button>`) + `
       <div class="panel"><div class="toolbar">
         <select class="select" id="pf-region" aria-label="אזור" style="width:auto"><option value="">כל האזורים</option>${T.REGIONS.map((r) => `<option value="${r.key}" ${f.region === r.key ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select>
         <span class="seg-tabs" role="group" aria-label="סוג"><button type="button" data-act="pf-kind" data-v="" aria-pressed="${!f.kind}">הכל · ${A.places.length}</button>${T.PLACE_KINDS.map((k) => `<button type="button" data-act="pf-kind" data-v="${k.key}" aria-pressed="${f.kind === k.key}">${esc(k.name)} · ${A.places.filter((p) => p.kind === k.key).length}</button>`).join("")}</span></div>
@@ -1005,6 +1106,7 @@
         <label class="field"><span>קו אורך (lng)</span><input class="input num" dir="ltr" name="lng" value="${esc(p.lng == null ? "" : p.lng)}" placeholder="35.7"></label>
         <label class="field span2"><span>אתר או עמוד (לא חובה)</span><input class="input" name="url" dir="ltr" value="${esc(p.url || "")}" placeholder="https://"></label>
         <label class="field span2"><span>משפט קצר</span><textarea class="textarea" name="blurb" rows="2" style="min-height:64px" maxlength="160">${esc(p.blurb || "")}</textarea></label>
+        <label class="field span2"><span>קרדיט לתמונה <span class="hint">חובה אם התמונה לא שלכם (למשל ״ויקישיתוף / שם הצלם, CC BY-SA״). תמונות מגוגל אסור להעתיק: האתר מקשר לתמונות ולביקורות בגוגל.</span></span><input class="input" name="photo_credit" value="${esc(p.photo_credit || "")}" maxlength="80"></label>
         <div class="field span2"><span>תמונה (לא חובה)</span><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${p.photo ? `<img src="${esc(T.img(p.photo, 300))}" alt="" style="width:120px;aspect-ratio:4/3;object-fit:cover;border-radius:10px">` : ""}<label class="btn btn-line btn-sm">${I("upload")}העלאה<input type="file" accept="image/*" class="sr" id="place-photo"></label></div></div>
         <label class="check span2"><input type="checkbox" name="active" ${p.active !== false ? "checked" : ""}>מוצג באתר</label>
       </div>
@@ -1057,11 +1159,10 @@
   function viewSettings() {
     const s = A.settings;
     const p = s.plan_prices || {};
-    return ph("הגדרות האתר", "") + `
-      <form data-form="settings" id="settings-form" novalidate>
-        <div class="cols2">
-          <div>
-            <section class="panel"><h2>שם ויצירת קשר</h2><div class="form-grid">
+    return ph("הגדרות האתר", "") + tabsNav("settings", [["site", "האתר ועמוד הבית", "home"], ["prices", "מחירים, חגים וקופונים", "tag"], ["hosts", "מארחים ואישורים", "users"], ["calls", "מעקב שיחות", "phone"], ["mail", "מיילים", "mail"], ["legal", "פרטים משפטיים", "shield"], ["system", "תחזוקה וגיבוי", "sliders"]], "קטגוריות הגדרות") + `
+      <div class="set-grid ${A.tabs.settings === "all" ? "tabs-all" : ""}" data-tabpanel="settings">
+      <form data-form="settings" id="settings-form" class="set-form" novalidate>
+            <section class="panel" ${tabAttr("settings", "site")}><h2>שם ויצירת קשר</h2><div class="form-grid">
               <label class="field"><span>שם האתר</span><input class="input" name="site_name" value="${esc(s.site_name)}"></label>
               <label class="field"><span>תיאור קצר</span><input class="input" name="site_tagline" value="${esc(s.site_tagline)}"></label>
               <label class="field"><span>טלפון ראשי</span><input class="input" name="phone" type="tel" dir="ltr" style="text-align:right" value="${esc(s.phone)}"></label>
@@ -1070,31 +1171,29 @@
               <label class="field"><span>אימייל להתראות (פניות והצטרפות)</span><input class="input" name="notify_email" type="email" dir="ltr" style="text-align:right" value="${esc(s.notify_email)}"></label>
               <label class="field"><span>רכז/ת נגישות (שם)</span><input class="input" name="a11y_coordinator" value="${esc(s.a11y_coordinator)}"></label>
             </div></section>
-            <section class="panel"><h2>פרטי המפעיל לחוזים <span class="hint">מופיעים בתנאי השימוש ובהסכם הפרסום למארחים</span></h2><div class="form-grid">
+            <section class="panel" ${tabAttr("settings", "legal")}><h2>פרטי המפעיל לחוזים <span class="hint">מופיעים בתנאי השימוש ובהסכם הפרסום למארחים</span></h2><div class="form-grid">
               <label class="field"><span>שם החברה / העוסק</span><input class="input" name="legal_name" value="${esc(s.legal_name || "")}" maxlength="80" placeholder="תמרה צימרים בע״מ"></label>
               <label class="field"><span>ח.פ / ע.מ</span><input class="input" name="legal_id" value="${esc(s.legal_id || "")}" maxlength="20" dir="ltr" style="text-align:right"></label>
               <label class="field"><span>כתובת רשומה</span><input class="input" name="legal_address" value="${esc(s.legal_address || "")}" maxlength="120"></label>
               <label class="field"><span>סמכות שיפוט (עיר)</span><input class="input" name="legal_court" value="${esc(s.legal_court || "")}" maxlength="40" placeholder="תל אביב-יפו"></label></div>
               <p class="hint" style="margin-top:8px">לקריאה: <a href="${siteURL("terms")}" target="_blank" rel="noopener">תנאי שימוש ופרטיות</a> · <a href="${siteURL("terms-hosts")}" target="_blank" rel="noopener">הסכם פרסום למארחים</a> (גרסה ${esc(T.HOST_TERMS_VERSION)}). הנוסח הוא בסיס מקצועי, ומומלץ שעורך דין יעבור עליו לפני שמתחילים לגבות תשלום. כשמשנים את גרסת ההסכם בקוד, כל המארחים מתבקשים לאשר אותו שוב בכניסה הבאה.</p></section>
-            <section class="panel"><h2>עמוד הבית</h2><div class="form-grid">
+            <section class="panel" ${tabAttr("settings", "site")}><h2>עמוד הבית</h2><div class="form-grid">
               <label class="field span2"><span>כותרת ראשית</span><input class="input" name="hero_title" value="${esc(s.hero_title)}" maxlength="70"></label>
               <label class="field span2"><span>משפט משנה</span><textarea class="textarea" name="hero_subtitle" rows="2" style="min-height:70px" maxlength="200">${esc(s.hero_subtitle)}</textarea></label></div>
               <p class="field-label" style="margin:16px 0 8px">תמונת באנר</p>
               <div style="display:grid;grid-template-columns:minmax(0,240px) 1fr;gap:14px;align-items:center">
                 <div class="photo" style="aspect-ratio:16/9;cursor:default"><img src="${esc(s.hero_image || T.HERO_DEFAULT)}" alt="הבאנר הנוכחי"></div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap"><label class="btn btn-line">${I("upload")}העלאת תמונה<input type="file" accept="image/*" class="sr" id="hero-input"></label>${s.hero_image ? `<button class="btn btn-ghost" type="button" data-act="hero-clear">חזרה לתמונת ברירת המחדל</button>` : ""}<span class="hint" style="width:100%">מומלץ צילום רוחבי, לפחות 2000 פיקסלים ברוחב.</span></div></div></section>
-            <section class="panel"><h2>חגים (לילות במחיר חג)</h2><div class="rows-edit">${(s.holidays || []).map((h, i) => `<div class="row-edit"><label class="field"><span>חג</span><input class="input" data-hol="${i}" data-k="label" value="${esc(h.label)}"></label><label class="field"><span>מהלילה של</span><input class="input" type="date" data-hol="${i}" data-k="from" value="${esc(h.from)}"></label><label class="field"><span>עד הלילה של</span><input class="input" type="date" data-hol="${i}" data-k="to" value="${esc(h.to)}"></label><button class="mini-btn" type="button" data-act="hol-del" data-i="${i}" aria-label="הסרה">${I("trash")}</button></div>`).join("")}
+            <section class="panel" ${tabAttr("settings", "prices")}><h2>חגים (לילות במחיר חג)</h2><div class="rows-edit">${(s.holidays || []).map((h, i) => `<div class="row-edit"><label class="field"><span>חג</span><input class="input" data-hol="${i}" data-k="label" value="${esc(h.label)}"></label><label class="field"><span>מהלילה של</span><input class="input" type="date" data-hol="${i}" data-k="from" value="${esc(h.from)}"></label><label class="field"><span>עד הלילה של</span><input class="input" type="date" data-hol="${i}" data-k="to" value="${esc(h.to)}"></label><button class="mini-btn" type="button" data-act="hol-del" data-i="${i}" aria-label="הסרה">${I("trash")}</button></div>`).join("")}
               <button class="btn btn-line btn-sm" type="button" data-act="hol-add" style="justify-self:start">${I("plus")}חג</button></div><p class="hint" style="margin-top:8px">התאריכים חושבו לפי הלוח העברי (ישראל). אפשר להוסיף גם ימי שיא משלכם.</p></section>
-            <section class="panel"><h2>אוספים בעמוד הבית <span class="hint">שורת מתחמים עם כותרת, למשל ״חופשה רומנטית בחורף״. אוסף מופיע כשיש בו לפחות 2 מתחמים פעילים.</span></h2><div class="rows-edit">${(s.collections || []).map((c, i) => `<div class="row-edit" style="flex-direction:column;align-items:stretch">
+            <section class="panel" ${tabAttr("settings", "site")}><h2>אוספים בעמוד הבית <span class="hint">שורת מתחמים עם כותרת, למשל ״חופשה רומנטית בחורף״. אוסף מופיע כשיש בו לפחות 2 מתחמים פעילים.</span></h2><div class="rows-edit">${(s.collections || []).map((c, i) => `<div class="row-edit" style="flex-direction:column;align-items:stretch">
                 <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap"><label class="field" style="flex:1 1 200px"><span>כותרת</span><input class="input" data-col="${i}" data-k="title" value="${esc(c.title || "")}" maxlength="50"></label><label class="field" style="flex:2 1 240px"><span>משפט משנה</span><input class="input" data-col="${i}" data-k="sub" value="${esc(c.sub || "")}" maxlength="110"></label><button class="mini-btn" type="button" data-act="col-del" data-i="${i}" aria-label="הסרת אוסף">${I("trash")}</button></div>
                 <details${(c.ids || []).length ? "" : " open"}><summary class="hint" style="cursor:pointer;margin-top:8px">${(c.ids || []).length} מתחמים באוסף · בחירה</summary><div class="amen-picks" style="margin-top:8px">${A.listings.map((l) => `<label><input type="checkbox" data-colid="${i}" value="${esc(l.id)}" ${(c.ids || []).includes(l.id) ? "checked" : ""}>${esc(l.name)}</label>`).join("")}</div></details></div>`).join("")}
               <button class="btn btn-line btn-sm" type="button" data-act="col-add" style="justify-self:start">${I("plus")}אוסף</button></div></section>
-          </div>
-          <div>
-            <section class="panel"><h2>אישור שינויים של מארחים</h2>
+            <section class="panel" ${tabAttr("settings", "hosts")}><h2>אישור שינויים של מארחים</h2>
               <p class="muted" style="font-size:var(--t-s);margin-bottom:6px">מה שמסומן נשמר אצל המארח כ״ממתין לאישור״ ומתפרסם רק אחרי אישור שלכם ב״אישורים״. מה שלא מסומן מתעדכן באתר מיד. יומן הזמינות תמיד מתעדכן מיד.</p>
               ${T.MOD_GROUPS.map((g) => `<div class="toggle-row"><span>${esc(g.name)}<small>${esc(g.sub || [...new Set(g.fields.map((f) => f[1]))].slice(0, 7).join(", "))}</small></span><button class="switch" type="button" role="switch" aria-checked="${T.modOn(s, g.key)}" data-act="set-modg" data-k="${g.key}" aria-label="אישור לפני פרסום: ${esc(g.name)}"></button></div>`).join("")}</section>
-            <section class="panel"><h2>מעקב שיחות (מספרים וירטואליים)</h2>
+            <section class="panel" ${tabAttr("settings", "calls")}><h2>מעקב שיחות (מספרים וירטואליים)</h2>
               <div class="toggle-row" style="border:0;padding-top:0"><span>שיחה שנענתה נספרת כפנייה בחיוב<small>ללקוחות שמשלמים לפי פנייה. נספרת שיחה של 15 שניות ומעלה, ומתקשר אחד פעם ביום לכל מתחם.</small></span><button class="switch" type="button" role="switch" aria-checked="${s.calls_count_as_leads !== false}" data-act="set-flag" data-k="calls_count_as_leads" aria-label="שיחה נספרת כפנייה"></button></div>
               <ol class="steps-list" style="margin-top:10px">
                 <li>פותחים חשבון אצל ספק מספרים וירטואליים (למשל Voicenter, או Twilio) ומזמינים מספר לכל מתחם, עם העברה לטלפון של המארח.</li>
@@ -1102,41 +1201,43 @@
                 <li>אצל הספק מגדירים דיווח בסוף כל שיחה (CDR / Status Callback, בשיטת POST) לכתובת הזו, ומוסיפים בסוף את הסוד:<span class="copy-field" style="margin-top:6px"><input class="input" readonly dir="ltr" value="${esc(new URL("api/call-webhook?key=", location.href).href)}" aria-label="כתובת לדיווח שיחות"><button class="mini-btn" type="button" data-act="copy" data-text="${esc(new URL("api/call-webhook?key=", location.href).href)}" aria-label="העתקה">${I("copy")}</button></span></li>
                 <li>בעורך של כל מתחם מזינים את המספר הווירטואלי ב״מספר מעקב שיחות״. מעכשיו הוא מוצג באתר, והשיחות מופיעות ב״שיחות״, בכרטיס הלקוח ואצל המארח.</li></ol>
               <p class="hint" style="margin-top:8px">שיחה שלא נענתה נשלחת למארח גם במייל עם מספר המתקשר. הקלטת שיחות מחייבת הודעה למתקשר בתחילת השיחה (מגדירים אצל הספק).</p></section>
-            <section class="panel"><h2>מארחים חדשים ומנויים</h2>
+            <section class="panel" ${tabAttr("settings", "hosts")}><h2>מארחים חדשים ומנויים</h2>
               <div class="toggle-row"><span>פתיחת חשבון אוטומטית אחרי אימות המייל<small>המארח נרשם באתר, מאשר את המייל ומקבל מיד חשבון בתקופת ניסיון ומתחם מוסתר להשלמה. כבוי: ההרשמה מחכה לאישור שלכם ב״בקשות הצטרפות״.</small></span><button class="switch" type="button" role="switch" aria-checked="${s.auto_open_hosts !== false}" data-act="set-flag" data-k="auto_open_hosts" aria-label="פתיחה אוטומטית"></button></div>
               <div class="form-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:12px">
                 <label class="field"><span>ימי ניסיון</span><input class="input num" type="number" min="0" max="365" name="trial_days" value="${esc(s.trial_days)}"></label>
                 <label class="field"><span>ימי חסד אחרי הסיום</span><input class="input num" type="number" min="0" max="60" name="grace_days" value="${esc(s.grace_days)}"></label>
                 <label class="field"><span>תזכורות (ימים לפני)</span><input class="input" dir="ltr" name="reminder_days" value="${esc((s.reminder_days || []).join(", "))}" placeholder="30, 7, 1"></label></div>
               <p class="hint" style="margin-top:8px">ללקוח נשלח מייל לפני סוף המנוי, ביום הסיום וכשהמתחם מוסתר. אחרי ימי החסד המתחמים שלו מוסתרים מהאתר אוטומטית, וחוזרים מיד כשמאריכים את המנוי.</p></section>
-            <section class="panel"><h2>מיילים אוטומטיים</h2>
+            <section class="panel" ${tabAttr("settings", "mail")}><h2>מיילים אוטומטיים</h2>
               ${[["guest_confirmation_email", "אישור לאורח על בקשה שנשלחה", "עם פרטי הבקשה, ואיך ממשיכים"], ["auto_review_requests", "בקשת חוות דעת אחרי העזיבה", "לאורחים שההזמנה שלהם סומנה ״נסגרה״ והשאירו מייל"], ["admin_digest", "סיכום יומי למנהל", "פניות, הרשמות, אישורים ומנויים שמסתיימים. נשלח רק כשיש מה לדווח"]].map(([k, n, sub]) => `<div class="toggle-row"><span>${n}<small>${sub}</small></span><button class="switch" type="button" role="switch" aria-checked="${s[k] !== false}" data-act="set-flag" data-k="${k}" aria-label="${n}"></button></div>`).join("")}
               <div class="form-grid" style="grid-template-columns:minmax(0,220px);margin-top:12px"><label class="field"><span>בקשת חוות דעת: ימים אחרי העזיבה</span><input class="input num" type="number" min="0" max="30" name="review_delay_days" value="${esc(s.review_delay_days)}"></label></div>
               <div class="btn-row" style="margin-top:12px"><button class="btn btn-line btn-sm" type="button" data-act="mail-test">${I("mail")}שליחת מייל בדיקה אליי</button><button class="btn btn-line btn-sm" type="button" data-act="daily-preview">${I("history")}מה יישלח היום?</button></div>
               <div id="daily-box">${dailyBox()}</div>
               <p class="hint" style="margin-top:8px">המשימה היומית רצה אוטומטית כל בוקר (Vercel Cron), וכל מייל נשלח פעם אחת בלבד.</p></section>
-            <section class="panel"><h2>תחזוקת תמונות</h2><p class="muted" style="font-size:var(--t-s)">תמונות שהועלו ולא נשמרו באף מתחם, יחידה, כתבה או באנר (למשל טופס שנסגר בלי שמירה). תמונות מהיומיים האחרונים לא נספרות.</p>
+            <section class="panel" ${tabAttr("settings", "system")}><h2>תחזוקת תמונות</h2><p class="muted" style="font-size:var(--t-s)">תמונות שהועלו ולא נשמרו באף מתחם, יחידה, כתבה או באנר (למשל טופס שנסגר בלי שמירה). תמונות מהיומיים האחרונים לא נספרות.</p>
               <div class="btn-row" style="margin-top:10px"><button class="btn btn-line btn-sm" type="button" data-act="cleanup-dry">${I("search")}בדיקה</button></div><div id="cleanup-box">${cleanupBox()}</div></section>
-            <section class="panel"><h2>רכיבים באתר</h2>
-              ${[["find_enabled", "שירות ״מצא לי צימר״", "כפתור בתפריט וטופס בקשה אישית"], ["wa_float", "כפתור וואטסאפ צף", "מופיע אם הוזן וואטסאפ ראשי"], ["cookie_banner", "הודעת עוגיות", "פס תחתון עם הסבר על מה שנשמר בדפדפן"]].map(([k, n, sub]) => `<div class="toggle-row"><span>${n}<small>${sub}</small></span><button class="switch" type="button" role="switch" aria-checked="${s[k] !== false}" data-act="set-flag" data-k="${k}" aria-label="${n}"></button></div>`).join("")}</section>
-            <section class="panel"><h2>רשתות חברתיות <span class="hint">מופיעות בתחתית האתר</span></h2><div class="form-grid">
+            <section class="panel" ${tabAttr("settings", "site")}><h2>רכיבים באתר</h2>
+              ${[["wa_float", "כפתור וואטסאפ צף", "מופיע אם הוזן וואטסאפ ראשי"], ["cookie_banner", "הודעת עוגיות", "פס תחתון עם הסבר על מה שנשמר בדפדפן"]].map(([k, n, sub]) => `<div class="toggle-row"><span>${n}<small>${sub}</small></span><button class="switch" type="button" role="switch" aria-checked="${s[k] !== false}" data-act="set-flag" data-k="${k}" aria-label="${n}"></button></div>`).join("")}</section>
+            <section class="panel" ${tabAttr("settings", "site")}><h2>רשתות חברתיות <span class="hint">מופיעות בתחתית האתר</span></h2><div class="form-grid">
               ${[["instagram", "Instagram"], ["facebook", "Facebook"], ["tiktok", "TikTok"], ["youtube", "YouTube"]].map(([k, n]) => `<label class="field"><span>${n}</span><input class="input" dir="ltr" name="social_${k}" value="${esc((s.social || {})[k] || "")}" placeholder="https://"></label>`).join("")}</div></section>
-            <section class="panel"><h2>מחירים למפרסמים</h2><div class="form-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+            <section class="panel" ${tabAttr("settings", "prices")}><h2>מחירים למפרסמים</h2><div class="form-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
               ${T.PLANS.map((pl) => `<label class="field"><span>${pl.name} (לחודש)</span><input class="input num" type="number" min="0" data-cur name="price_${pl.key}" value="${esc(p[pl.key])}"></label>`).join("")}
               <label class="field"><span>מחיר לפנייה</span><input class="input num" type="number" min="0" data-cur name="lead_price_default" value="${esc(s.lead_price_default)}"></label>
               <label class="field"><span>מיקום ממומן (לחודש)</span><input class="input num" type="number" min="0" data-cur name="sponsored_price" value="${esc(s.sponsored_price)}"></label></div></section>
-            <section class="panel"><h2>קופונים</h2><div class="rows-edit">${(s.coupons || []).map((c, i) => `<div class="row-edit"><label class="field"><span>קוד</span><input class="input" dir="ltr" data-cpn="${i}" data-k="code" value="${esc(c.code)}"></label><label class="field"><span>% הנחה</span><input class="input num" type="number" min="1" max="90" data-cpn="${i}" data-k="pct" value="${esc(c.pct)}"></label><label class="field"><span>בתוקף עד</span><input class="input" type="date" data-cpn="${i}" data-k="until" value="${esc(c.until || "")}"></label><button class="mini-btn" type="button" data-act="cpn-del" data-i="${i}" aria-label="הסרה">${I("trash")}</button></div>`).join("")}
+            <section class="panel" ${tabAttr("settings", "prices")}><h2>קופונים</h2><div class="rows-edit">${(s.coupons || []).map((c, i) => `<div class="row-edit"><label class="field"><span>קוד</span><input class="input" dir="ltr" data-cpn="${i}" data-k="code" value="${esc(c.code)}"></label><label class="field"><span>% הנחה</span><input class="input num" type="number" min="1" max="90" data-cpn="${i}" data-k="pct" value="${esc(c.pct)}"></label><label class="field"><span>בתוקף עד</span><input class="input" type="date" data-cpn="${i}" data-k="until" value="${esc(c.until || "")}"></label><button class="mini-btn" type="button" data-act="cpn-del" data-i="${i}" aria-label="הסרה">${I("trash")}</button></div>`).join("")}
               <button class="btn btn-line btn-sm" type="button" data-act="cpn-add" style="justify-self:start">${I("plus")}קופון</button></div><p class="hint" style="margin-top:8px">הקופון מופיע בבקשת ההזמנה, והמארח מכבד את ההנחה. כדאי לתאם איתם מראש.</p></section>
-            <section class="panel"><h2>חיבור והפצה</h2>
+            <section class="panel" ${tabAttr("settings", "system")}><h2>חיבור והפצה</h2>
               ${T.isLive ? `<p class="note note-ok">${I("check")}<span>האתר מחובר למסד הנתונים.</span></p><button class="btn btn-line" type="button" data-act="rebuild" style="margin-top:10px">${I("refresh")}עדכון דפי גוגל ומפת האתר עכשיו</button><p class="hint" style="margin-top:6px">דפי המתחמים לגוגל נבנים מחדש גם אוטומטית כל לילה.</p>` : `<p class="note note-warn">${I("info")}<span>מצב הדגמה: הנתונים נשמרים רק בדפדפן הזה. להעלאה לאוויר עקבו אחרי README.md.</span></p>`}</section>
-          </div>
-        </div>
         <div class="savebar"><span class="state">שינויים נכנסים לאתר מיד אחרי השמירה</span><button class="btn btn-primary" type="submit">${I("check")}שמירת ההגדרות</button></div>
       </form>
-      <section class="panel" style="margin-top:16px"><h2>גיבוי והעברת נתונים</h2>
+      ${T.isLive ? `<section class="panel" ${tabAttr("settings", "system")}><h2>מתחמי הדגמה באתר</h2>
+        <p class="muted" style="font-size:var(--t-s);margin-bottom:12px">20 מתחמים מלאים (תמונות, יחידות, מחירים, מדיניות ויומן) שנכנסים לאתר החי, כדי לראות את העיצוב על תוכן אמיתי. הם לא משויכים לאף לקוח, והמזהה שלהם מתחיל ב־demo. כרגע באתר: <b>${A.listings.filter((l) => String(l.id).startsWith("demo-")).length}</b>.</p>
+        <div class="btn-row"><button class="btn btn-line" type="button" data-act="demo-import">${I("download")}טעינת מתחמי ההדגמה</button>${A.listings.some((l) => String(l.id).startsWith("demo-")) ? `<button class="btn btn-ghost" type="button" data-act="demo-delete">${I("trash")}מחיקת כל מתחמי ההדגמה</button>` : ""}</div></section>` : ""}
+      <section class="panel" ${tabAttr("settings", "system")}><h2>גיבוי והעברת נתונים</h2>
         <p class="muted" style="font-size:var(--t-s);margin-bottom:12px">ייצוא יוצר טקסט JSON עם המתחמים, הלקוחות, הכתבות וההגדרות. כך מעבירים עבודה ממצב ההדגמה לאתר החי.</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn btn-line" type="button" data-act="export">${I("download")}ייצוא</button>${A.exportText ? `<button class="btn btn-line" type="button" data-act="copy-export">${I("copy")}העתקה</button>` : ""}<button class="btn btn-line" type="button" data-act="import">${I("upload")}ייבוא מהתיבה</button>${T.isLive ? "" : `<button class="btn btn-ghost" type="button" data-act="clear-demo">הסרת נתוני הדוגמה</button><button class="btn btn-ghost" type="button" data-act="reset-demo">איפוס ההדגמה</button>`}</div>
-        <textarea class="textarea codebox" id="io-box" aria-label="נתוני JSON לייצוא או ייבוא" placeholder="הדביקו כאן JSON לייבוא">${esc(A.exportText)}</textarea><div id="io-confirm"></div></section>`;
+        <textarea class="textarea codebox" id="io-box" aria-label="נתוני JSON לייצוא או ייבוא" placeholder="הדביקו כאן JSON לייבוא">${esc(A.exportText)}</textarea><div id="io-confirm"></div></section>
+      </div>`;
   }
 
   /* ================================================================ host home */
@@ -1238,26 +1339,109 @@
     if (IS_ADMIN) ls = A.board.client ? ls.filter((l) => l.owner_id === A.board.client) : ls.filter((l) => l.active);
     return ls.sort((a, b) => String(a.name).localeCompare(String(b.name), "he"));
   }
+  /* פסים רציפים כמו ביומני ערוצים: לילה תפוס נצבע מאמצע יום ההגעה עד אמצע יום העזיבה,
+     ידני בכחול כהה ומסונכרן בתכלת. שינוי שעוד לא נשמר מסומן במסגרת מקווקוות. */
+  const nightsLbl = (n) => (n === 1 ? "לילה" : n + " לילות");
   function boardHTML() {
     const start = A.board.start ? T.parseISO(A.board.start) : T.today();
     const days = Array.from({ length: BOARD_DAYS }, (_, i) => T.addDays(start, i));
     const today = T.iso(T.today());
     const rows = [];
-    boardListings().forEach((l0) => { const l = A.boardEdits[l0.id] || (IS_ADMIN ? l0 : T.withPending(l0)); const units = T.unitsOf(l); units.forEach((u, ui) => rows.push({ l, u, ui, n: units.length })); });
+    boardListings().forEach((l0) => { const base = IS_ADMIN ? l0 : T.withPending(l0); const l = A.boardEdits[l0.id] || base; const units = T.unitsOf(l); const bUnits = T.unitsOf(base); units.forEach((u, ui) => rows.push({ l, u, ui, n: units.length, saved: bUnits[ui] || u })); });
     if (!rows.length) return `<div class="empty"><h3>אין מתחמים להצגה</h3>${IS_ADMIN ? "<p>בוחרים לקוח, או מציגים מתחמים באתר.</p>" : ""}</div>`;
-    const head = `<tr><th class="bd-name" scope="col"><span class="sr">מתחם ויחידה</span></th>${days.map((d, i) => { const iso = T.iso(d); const hol = T.holidayOf(iso, A.settings); const m1 = i === 0 || d.getDate() === 1; return `<th scope="col" class="${T.isWeekendNight(d) ? "wknd" : ""}${hol ? " hol" : ""}${m1 ? " m1" : ""}" title="${esc(T.fmtLong(iso))}${hol ? " · " + esc(hol.label) : ""}">${m1 ? `<span class="bd-month">${esc(T.fmtMonth(d))}</span>` : ""}<span class="bd-dow">${"אבגדהוש"[d.getDay()]}</span><b>${d.getDate()}</b></th>`; }).join("")}</tr>`;
-    const freeRow = rows.length > 1 ? `<tr class="bd-free"><th class="bd-name" scope="row">פנויים</th>${days.map((d) => { const iso = T.iso(d); const n = rows.filter((r) => !(r.u.blocked_dates || []).includes(iso) && !(r.u.ical_blocked || []).includes(iso)).length; return `<td class="${n === 0 ? "full" : ""}">${n}/${rows.length}</td>`; }).join("")}</tr>` : "";
-    const body = rows.map(({ l, u, ui, n }) => {
-      const man = new Set(u.blocked_dates || []), syn = new Set(u.ical_blocked || []);
+    const head = `<tr><th class="bd-name" scope="col"><span class="bd-corner">${I("home")}מתחם ויחידה</span></th>${days.map((d, i) => { const iso = T.iso(d); const hol = T.holidayOf(iso, A.settings); const m1 = i === 0 || d.getDate() === 1; return `<th scope="col" class="${T.isWeekendNight(d) ? "wknd" : ""}${hol ? " hol" : ""}${m1 ? " m1" : ""}${iso === today ? " is-today" : ""}" title="${esc(T.fmtLong(iso))}${hol ? " · " + esc(hol.label) : ""}">${m1 ? `<span class="bd-month">${esc(T.fmtMonth(d))}</span>` : ""}<span class="bd-dow">${iso === today ? "היום" : "אבגדהוש"[d.getDay()] + "׳"}</span><b>${d.getDate()}</b></th>`; }).join("")}</tr>`;
+    const freeRow = rows.length > 1 ? `<tr class="bd-free"><th class="bd-name" scope="row"><span class="bd-corner">${I("check")}יחידות פנויות</span></th>${days.map((d) => { const iso = T.iso(d); const n = rows.filter((r) => !(r.u.blocked_dates || []).includes(iso) && !(r.u.ical_blocked || []).includes(iso)).length; const pct = n / rows.length; return `<td class="${n === 0 ? "full" : pct <= 0.34 ? "low" : ""}${iso === today ? " is-today" : ""}" title="${n} מתוך ${rows.length} פנויות"><span>${n}</span></td>`; }).join("")}</tr>` : "";
+    const body = rows.map(({ l, u, ui, n, saved }) => {
+      const man = new Set(u.blocked_dates || []), syn = new Set(u.ical_blocked || []), was = new Set(saved.blocked_dates || []);
+      const kind = (iso) => (man.has(iso) ? "m" : syn.has(iso) ? "s" : "");
       const who = l.name + (n > 1 ? " · " + (u.name || "יחידה") : "");
-      return `<tr class="${ui === 0 ? "bd-first" : ""}"><th class="bd-name" scope="row">${ui === 0 ? `<a href="#edit-${esc(l.id)}">${esc(l.name)}</a>${l.active ? "" : ' <span class="pill pill-muted">מוסתר</span>'}` : ""}${n > 1 ? `<span class="bd-unit">${esc(u.name || "יחידה")}</span>` : ""}</th>${days.map((d) => { const iso = T.iso(d); const b = man.has(iso), sy = syn.has(iso) && !b, past = iso < today; return `<td><button type="button" class="bd-cell${b ? " blocked" : sy ? " synced" : ""}${T.isWeekendNight(d) ? " wknd" : ""}" data-act="bd-day" data-l="${esc(l.id)}" data-u="${esc(u.id)}" data-d="${iso}" ${past || sy ? "disabled" : ""} aria-pressed="${b}" aria-label="${esc(who)}, ${esc(T.fmtLong(iso))}${b ? ", תפוס" : sy ? ", תפוס מסנכרון" : ", פנוי"}"></button></td>`; }).join("")}</tr>`;
+      const thumb = ui === 0 ? T.thumbOf(l) : "";
+      const cells = days.map((d, i) => {
+        const iso = T.iso(d), prev = T.iso(T.addDays(d, -1));
+        const late = kind(iso), early = kind(prev);
+        const startsHere = late && (early !== late || i === 0);
+        let run = 0;
+        if (startsHere) { run = 1; while (i + run < days.length && kind(T.iso(days[i + run])) === late) run++; }
+        const chg = man.has(iso) !== was.has(iso);
+        const past = iso < today, sy = late === "s";
+        const cls = ["bd-cell"];
+        if (T.isWeekendNight(d)) cls.push("wknd");
+        if (iso === today) cls.push("is-today");
+        if (late) cls.push("on-" + late);
+        if (chg) cls.push("chg");
+        return `<td><button type="button" class="${cls.join(" ")}" data-act="bd-day" data-l="${esc(l.id)}" data-u="${esc(u.id)}" data-d="${iso}" ${past || sy ? "disabled" : ""} aria-pressed="${man.has(iso)}" aria-label="${esc(who)}, ${esc(T.fmtLong(iso))}${late === "m" ? ", תפוס" : sy ? ", תפוס מסנכרון" : ", פנוי"}">${early ? `<i class="bh bh-e k-${early}${late !== early ? " cap" : ""}"></i>` : ""}${late ? `<i class="bh bh-l k-${late}${early !== late || i === 0 ? " cap" : ""}${chg ? " chg" : ""}"></i>` : ""}${startsHere && run ? `<span class="bd-lbl k-${late}" style="--n:${run}">${late === "s" ? `${I("sync")}${run > 1 ? nightsLbl(run) : ""}` : run > 1 ? nightsLbl(run) : ""}</span>` : ""}</button></td>`;
+      }).join("");
+      return `<tr class="${ui === 0 ? "bd-first" : ""}"><th class="bd-name" scope="row"><span class="bd-who">${thumb ? `<img src="${esc(T.img(thumb, 120))}" alt="" loading="lazy">` : `<span class="bd-thumb-sp"></span>`}<span>${ui === 0 ? `<a href="#edit-${esc(l.id)}">${esc(l.name)}</a>${l.active ? "" : ' <span class="pill pill-muted">מוסתר</span>'}` : ""}${n > 1 ? `<span class="bd-unit">${esc(u.name || "יחידה")}</span>` : ""}</span></span></th>${cells}</tr>`;
     }).join("");
-    return `<div class="board-wrap"><table class="board"><thead>${head}</thead><tbody>${freeRow}${body}</tbody></table></div>`;
+    return `<div class="board-wrap" style="--cw:${A.board.zoom === "s" ? 30 : 42}px"><table class="board"><thead>${head}</thead><tbody>${freeRow}${body}</tbody></table></div>`;
+  }
+  /* תפוסה בתקופה המוצגת: לילות תפוסים מתוך כל הלילות של כל היחידות */
+  function boardStats(start) {
+    const days = Array.from({ length: BOARD_DAYS }, (_, i) => T.iso(T.addDays(start, i)));
+    let total = 0, busy = 0, units = 0;
+    boardListings().forEach((l0) => { const l = A.boardEdits[l0.id] || (IS_ADMIN ? l0 : T.withPending(l0)); T.unitsOf(l).forEach((u) => { units++; const b = T.blockedSet(u); days.forEach((d) => { total++; if (b.has(d)) busy++; }); }); });
+    const pct = total ? Math.round((busy / total) * 100) : 0;
+    return `<span class="bd-stat"><b>${pct}%</b><small>תפוסה בתקופה</small></span><span class="bd-stat"><b>${T.num(busy)}</b><small>לילות תפוסים</small></span><span class="bd-stat"><b>${units}</b><small>יחידות</small></span>`;
   }
   function boardBar() {
     const n = Object.keys(A.boardEdits).length;
     return n ? `<span class="state" aria-live="polite">שינויים ב${n === 1 ? "מתחם אחד" : `־${n} מתחמים`} שעוד לא נשמרו</span><span style="display:flex;gap:8px"><button class="btn btn-ghost" type="button" data-act="bd-discard">ביטול</button><button class="btn btn-primary" type="button" data-act="bd-save">${I("check")}שמירת היומן</button></span>` : "";
   }
+  /* סימון או שחרור של לילות ביחידה אחת. block=null מחליף מצב לפי הלילה הראשון */
+  function boardApply(lid, uid, isos, block) {
+    const l0 = A.listings.find((x) => x.id === lid);
+    if (!l0) return;
+    const base = IS_ADMIN ? l0 : T.withPending(l0);
+    const ed = A.boardEdits[l0.id] || T.clone(base);
+    const target = uid ? (ed.rooms || []).find((r) => r.id === uid) : ed;
+    if (!target) return;
+    const syn = new Set(target.ical_blocked || []);
+    const today = T.iso(T.today());
+    const cur = new Set(target.blocked_dates || []);
+    if (block === null) block = !cur.has(isos[0]);
+    isos.filter((d) => d >= today && !syn.has(d)).forEach((d) => (block ? cur.add(d) : cur.delete(d)));
+    target.blocked_dates = [...cur].sort();
+    /* חזר למצב השמור: אין מה לשמור במתחם הזה */
+    const same = JSON.stringify(base.blocked_dates || []) === JSON.stringify(ed.blocked_dates || []) && (ed.rooms || []).every((r) => { const o = (base.rooms || []).find((x) => x.id === r.id); return JSON.stringify((o && o.blocked_dates) || []) === JSON.stringify(r.blocked_dates || []); });
+    if (same) delete A.boardEdits[l0.id]; else A.boardEdits[l0.id] = ed;
+    const wrap = $("#board .board-wrap"), sx = wrap ? wrap.scrollLeft : 0, sy = wrap ? wrap.scrollTop : 0;
+    $("#board").innerHTML = boardHTML();
+    const w2 = $("#board .board-wrap"); if (w2) { w2.scrollLeft = sx; w2.scrollTop = sy; }
+    const st = $("#bd-stats"); if (st) st.innerHTML = boardStats(A.board.start ? T.parseISO(A.board.start) : T.today());
+    const bar = $("#bd-bar"); if (bar) { bar.innerHTML = boardBar(); bar.hidden = !boardDirty(); }
+  }
+  /* גרירה על כמה משבצות באותה שורה: מסמנת (או משחררת, אם התחלתם על לילה תפוס) את כל הטווח */
+  (function boardDrag() {
+    let drag = null;
+    const cellOf = (t) => t && t.closest && t.closest("#board .bd-cell");
+    const paint = () => {
+      if (!drag) return;
+      const [a, b] = [drag.from, drag.to].sort();
+      $$(`#board .bd-cell[data-l="${CSS.escape(drag.l)}"][data-u="${CSS.escape(drag.u)}"]`).forEach((c) => c.classList.toggle("drag", c.dataset.d >= a && c.dataset.d <= b));
+    };
+    document.addEventListener("pointerdown", (e) => {
+      const c = cellOf(e.target);
+      if (!c || c.disabled || e.button !== 0) return;
+      drag = { l: c.dataset.l, u: c.dataset.u, from: c.dataset.d, to: c.dataset.d, block: !c.classList.contains("on-m"), moved: false };
+      paint();
+    });
+    document.addEventListener("pointerover", (e) => {
+      if (!drag) return;
+      const c = cellOf(e.target);
+      if (!c || c.dataset.l !== drag.l || c.dataset.u !== drag.u || c.dataset.d === drag.to) return;
+      drag.to = c.dataset.d; drag.moved = true; paint();
+    });
+    document.addEventListener("pointerup", () => {
+      if (!drag) return;
+      const d = drag; drag = null;
+      if (!d.moved) { $$("#board .bd-cell.drag").forEach((c) => c.classList.remove("drag")); return; }
+      const [a, b] = [d.from, d.to].sort();
+      const isos = []; for (let x = T.parseISO(a); T.iso(x) <= b; x = T.addDays(x, 1)) isos.push(T.iso(x));
+      A.bdSkipClick = true; setTimeout(() => { A.bdSkipClick = false; }, 50);
+      boardApply(d.l, d.u, isos, d.block);
+      T.toast(`${d.block ? "סומנו" : "שוחררו"} ${isos.length === 1 ? "לילה אחד" : isos.length + " לילות"} · לא לשכוח לשמור`);
+    });
+  })();
   function viewBoard() {
     const start = A.board.start ? T.parseISO(A.board.start) : T.today();
     const end = T.addDays(start, BOARD_DAYS - 1);
@@ -1267,9 +1451,11 @@
         <div class="toolbar">
           ${IS_ADMIN ? `<select class="select" id="bd-client" aria-label="לקוח" style="width:auto"><option value="">כל המתחמים המוצגים באתר</option>${A.advertisers.filter((a) => A.listings.some((l) => l.owner_id === a.id)).map((a) => `<option value="${esc(a.id)}" ${A.board.client === a.id ? "selected" : ""}>${esc(a.business || a.name)}</option>`).join("")}</select>` : ""}
           <span class="bd-nav"><button class="icon-btn" type="button" data-act="bd-nav" data-d="-28" aria-label="ארבעה שבועות אחורה" ${atToday ? "disabled" : ""}>${I("chev-r")}</button><button class="btn btn-ghost btn-sm" type="button" data-act="bd-nav" data-d="0" ${atToday ? "disabled" : ""}>היום</button><button class="icon-btn" type="button" data-act="bd-nav" data-d="28" aria-label="ארבעה שבועות קדימה">${I("chev-l")}</button><span class="hint">${T.fmtDate(T.iso(start))} – ${T.fmtDate(T.iso(end))}</span></span>
+          <span class="bd-stats" id="bd-stats">${boardStats(start)}</span>
+          <span class="seg-tabs bd-zoom" role="group" aria-label="גודל תצוגה"><button type="button" data-act="bd-zoom" data-v="" aria-pressed="${A.board.zoom !== "s"}">רגיל</button><button type="button" data-act="bd-zoom" data-v="s" aria-pressed="${A.board.zoom === "s"}">צפוף</button></span>
         </div>
         <div id="board">${boardHTML()}</div>
-        <div class="cal-legend"><span><i class="l-free"></i>פנוי</span><span><i class="l-blocked"></i>תפוס (ידני)</span><span><i class="l-synced"></i>תפוס מסנכרון iCal</span><span><i class="l-hol"></i>חג</span><span><i class="l-wknd"></i>סופ״ש</span></div>
+        <div class="bd-legend"><span><i class="lg-m"></i>תפוס (סימון שלכם)</span><span><i class="lg-s"></i>תפוס מסנכרון (Booking / Airbnb)</span><span><i class="lg-chg"></i>שינוי שעוד לא נשמר</span><span><i class="lg-w"></i>סופ״ש</span><span><i class="lg-t"></i>היום</span><span class="bd-tip">${I("info")}גוררים על כמה ימים בשורה כדי לסמן או לשחרר טווח בבת אחת</span></div>
       </div>
       <div class="savebar" id="bd-bar" ${boardDirty() ? "" : "hidden"}>${boardBar()}</div>`;
   }
@@ -1313,14 +1499,15 @@
       <form data-form="resend" class="auth-form" novalidate>${email}<button class="btn btn-primary btn-lg btn-block" type="submit">${I("send")}שליחת מייל אימות</button></form>${back("login", "חזרה לכניסה")}`;
     if (m === "link") return `<h1>כניסה עם קישור</h1><p>נשלח קישור כניסה לאימייל. פותחים אותו במכשיר הזה ונכנסים בלי סיסמה.</p>
       <form data-form="owner-login" class="auth-form" novalidate>${email}<button class="btn btn-primary btn-lg btn-block" type="submit">${I("mail")}שליחת קישור כניסה</button></form>${back("login", "כניסה עם סיסמה")}`;
-    return `<h1>${IS_ADMIN ? "כניסה לניהול" : "כניסת מארחים"}</h1>${IS_ADMIN ? "" : "<p>נכנסים עם האימייל והסיסמה של החשבון.</p>"}
+    return `<h1>${IS_ADMIN ? "כניסה לניהול" : "כניסת מארחים"}</h1><p>${IS_ADMIN ? "הכי פשוט ובטוח: חשבון Google של האימייל שמוגדר כמנהל." : "נכנסים עם חשבון Google. האבטחה, הסיסמה והאימות נשארים אצל Google."}</p>
+      <button class="btn btn-google btn-lg btn-block" type="button" data-act="google">${I("user")}המשך עם Google</button>
+      <div class="auth-or"><span>או עם אימייל וסיסמה</span></div>
       <form data-form="login" class="auth-form" novalidate>${email}
         <label class="field"><span>סיסמה</span><input class="input" name="password" type="password" dir="ltr" autocomplete="current-password" required></label>
         <button class="link-btn auth-forgot" type="button" data-act="login-mode" data-v="forgot">שכחתי סיסמה</button>
         <button class="btn btn-primary btn-lg btn-block" type="submit">כניסה</button></form>
-      ${IS_ADMIN ? "" : `<div class="auth-or"><span>או</span></div>
-        <button class="btn btn-line btn-block" type="button" data-act="login-mode" data-v="link">${I("mail")}קישור כניסה למייל, בלי סיסמה</button>
-        <p class="auth-foot">עוד אין לכם חשבון? <a href="${siteURL("join")}">הרשמה לפרסום מתחם</a></p>`}`;
+      ${IS_ADMIN ? "" : `<button class="btn btn-ghost btn-block" type="button" data-act="login-mode" data-v="link">${I("mail")}קישור כניסה למייל, בלי סיסמה</button>
+        <p class="auth-foot">מארחים חדשים? נכנסים עם Google וממלאים טופס קצר, או <a href="${siteURL("join")}">נרשמים באתר</a>.</p>`}`;
   }
 
   /* מסכי ביניים אחרי כניסה: בחירת סיסמה, קוד דו-שלבי, הרשמה בבדיקה */
@@ -1337,7 +1524,20 @@
       const a = A.app || {};
       body = `<h1>ההרשמה התקבלה</h1><p>האימייל אומת. צוות האתר עובר על הפרטים${a.business ? ` של <b>${esc(a.business)}</b>` : ""} ופותח לכם חשבון בהקדם. נעדכן אתכם במייל, ואז הכניסה כאן תפתח את ממשק המארחים.</p>
         ${a.id ? `<ul class="list-plain">${[["שם", a.name], ["טלפון", a.phone], ["יישוב", a.settlement], ["יחידות", a.units], ["נשלחה", T.fmtStamp(a.created_at)]].filter((x) => x[1]).map(([k, v]) => `<li><span class="muted">${k}</span><b>${esc(v)}</b></li>`).join("")}</ul>` : ""}`;
-    } else if (g === "rejected") body = `<h1>ההרשמה לא אושרה</h1><p>כרגע לא נוכל לפרסם את המתחם באתר. לשאלות: ${esc(A.settings.phone || A.settings.email || "צוות האתר")}.</p>`;
+    } else if (g === "onboard") body = `<h1>הצטרפות כמארחים</h1><p>מחוברים בתור <b dir="ltr">${esc(A.email)}</b>. עוד כמה פרטים על המתחם, ואפשר להתחיל.</p>
+      <form data-form="onboard" class="auth-form" novalidate>
+        <label class="field"><span>שם מלא</span><input class="input" name="name" autocomplete="name" required value="${esc(A.onboardName || "")}"></label>
+        <label class="field"><span>שם המתחם או העסק</span><input class="input" name="business" required maxlength="60" placeholder="צימרי הגליל"></label>
+        <label class="field"><span>טלפון נייד</span><input class="input" name="phone" type="tel" dir="ltr" style="text-align:right" autocomplete="tel" required placeholder="050-0000000"></label>
+        <div class="form-grid"><label class="field"><span>יישוב</span><input class="input" name="settlement" maxlength="40"></label>
+          <label class="field"><span>אזור</span><select class="select" name="region">${T.REGIONS.map((r) => `<option value="${r.key}">${esc(r.name)}</option>`).join("")}</select></label>
+          <label class="field"><span>סוג אירוח</span><select class="select" name="type">${T.TYPES.map((x) => `<option value="${x.key}">${esc(x.name)}</option>`).join("")}</select></label>
+          <label class="field"><span>כמה יחידות</span><select class="select" name="units">${[1, 2, 3, 4, 5, 6, 8, 10, 15, 20].map((n) => `<option value="${n}">${n}</option>`).join("")}</select></label></div>
+        <label class="check"><input type="checkbox" name="terms" required><span>קראתי ואני מסכים/ה ל<a href="${siteURL("terms-hosts")}" target="_blank" rel="noopener">הסכם הפרסום למארחים</a> (גרסה ${esc(T.HOST_TERMS_VERSION)})</span></label>
+        <label class="check"><input type="checkbox" name="marketing"><span>אשמח לקבל עדכונים וטיפים למארחים במייל</span></label>
+        <p class="err" id="ob-err" role="alert"></p>
+        <button class="btn btn-primary btn-lg btn-block" type="submit">${I("check")}פתיחת החשבון</button></form>`;
+    else if (g === "rejected") body = `<h1>ההרשמה לא אושרה</h1><p>כרגע לא נוכל לפרסם את המתחם באתר. לשאלות: ${esc(A.settings.phone || A.settings.email || "צוות האתר")}.</p>`;
     return `<div class="login"><div class="login-card"><img class="logo" src="${LOGO_S}" alt="${esc(A.settings.site_name)}">${body}${loginNote()}
       <button class="btn btn-ghost btn-block" type="button" data-act="logout">יציאה מהחשבון${A.email ? " " + esc(A.email) : ""}</button><a class="link-more" style="justify-self:center" href="${siteURL()}">${I("back")} חזרה לאתר</a></div></div>`;
   }
@@ -1381,6 +1581,18 @@
         ${sent ? `<span class="pill pill-warn">נשלח לבדיקה ${T.fmtStamp(l.pending._at)}</span>` : `<button class="btn btn-primary" type="button" data-act="publish-request" data-id="${esc(l.id)}" ${ready ? "" : "disabled"}>${I("send")}שליחה לבדיקה ופרסום</button>`}</div>
       ${ready || sent ? "" : `<p class="hint" style="margin-top:8px">כשכל הסעיפים מסומנים אפשר לשלוח לבדיקה.</p>`}</div>`;
   }
+  function deletionPanel(a) {
+    return `<div class="panel danger-zone"><h2><span class="h-ic">${I("trash")}מחיקת החשבון</span></h2>
+      ${a.delete_requested_at ? `<p class="note note-info">${I("check")}<span>ביקשתם למחוק את החשבון ב־${T.fmtStamp(a.delete_requested_at)}. צוות האתר יחזור אליכם לפני שהכרטיס והמתחמים יימחקו. התחרטתם? פנו לצוות.</span></p>`
+        : A.askDeletion ? `<p class="muted" style="font-size:var(--t-s)">המתחמים יוסרו מהאתר, והחשבון והנתונים יימחקו אחרי בדיקה של צוות האתר. מנוי ששולם לא מוחזר על החלק שנותר.</p><div class="btn-row" style="margin-top:10px"><button class="btn btn-danger" type="button" data-act="deletion-send">${I("send")}כן, לבקש מחיקה</button><button class="btn btn-ghost" type="button" data-act="deletion-cancel">ביטול</button></div>`
+        : `<p class="muted" style="font-size:var(--t-s)">רוצים להפסיק לפרסם ולמחוק את הכרטיס? שולחים בקשה, וצוות האתר מטפל בה.</p><button class="btn btn-line" type="button" data-act="ask-deletion" style="margin-top:10px">בקשה למחיקת החשבון</button>`}</div>`;
+  }
+  /* מארח שהמנוי שלו פג (אחרי ימי החסד): הכרטיס "קפוא" – מוסתר מהאתר והעריכה נעולה עד החידוש */
+  const isFrozen = () => !IS_ADMIN && !!A.advertisers[0] && !T.subState(A.advertisers[0], A.settings).visible;
+  function frozenBanner() {
+    const a = A.advertisers[0];
+    return `<div class="frozen-bar" role="status">${I("key")}<div><b>החשבון קפוא כרגע</b><span>${a.status === "paused" ? "המנוי הושהה." : `המנוי הסתיים${a.end_date ? " ב־" + T.fmtDate(a.end_date) : ""}.`} המתחמים מוסתרים מהאתר והעריכה נעולה. אחרי החידוש הכל חוזר בדיוק כמו שהיה.</span></div>${a.renewal_requested_at ? `<span class="pill pill-info">בקשת חידוש נשלחה</span>` : `<button class="btn btn-sky btn-sm" type="button" data-act="renew-request">${I("refresh")}בקשת חידוש</button>`}</div>`;
+  }
   function viewOwnerAccount() {
     const a = A.advertisers[0];
     if (!a) return ph("החשבון שלי", "") + `<div class="panel"><p class="muted">לא נמצא כרטיס לקוח לחשבון הזה.</p></div>`;
@@ -1403,7 +1615,7 @@
         <p class="hint" style="margin-top:10px">${T.modOn(A.settings, "account") ? "שינוי בשם, בטלפון, בכתובת או במספר העוסק מתעדכן אחרי אישור צוות האתר. " : ""}לשינוי שם העסק או האימייל פונים לצוות האתר.</p>
         <div style="margin-top:12px"><button class="btn btn-primary" type="submit">${I("check")}שמירה</button></div></form>
       ${passwordPanel()}</div>
-      <div>${subPanel(a)}<div class="panel"><h2>אבטחה</h2><p class="muted" style="font-size:var(--t-s)">שכחתם להתנתק במחשב אחר? מנתקים את החשבון בכל המכשירים, ונכנסים מחדש איפה שצריך.</p><button class="btn btn-line" type="button" data-act="logout-all" style="margin-top:10px">${I("logout")}יציאה מכל המכשירים</button></div></div></div>`;
+      <div>${subPanel(a)}${deletionPanel(a)}<div class="panel"><h2>אבטחה</h2><p class="muted" style="font-size:var(--t-s)">שכחתם להתנתק במחשב אחר? מנתקים את החשבון בכל המכשירים, ונכנסים מחדש איפה שצריך.</p><button class="btn btn-line" type="button" data-act="logout-all" style="margin-top:10px">${I("logout")}יציאה מכל המכשירים</button></div></div></div>`;
   }
   async function loadAccount() {
     const [factors, st, admins] = await Promise.all([T.store.mfaFactors().catch(() => []), T.store.adminStatus().catch(() => ({})), T.store.listAdmins().catch(() => [])]);
@@ -1516,7 +1728,9 @@
             <label class="field"><span>סכום</span><input class="input num" data-cur name="amount" type="number" min="1" inputmode="numeric" required value="${esc(due.total || "")}"></label>
             <label class="field"><span>אמצעי</span><select class="select" name="method">${PAY_METHODS.map(([k, n]) => `<option value="${k}">${n}</option>`).join("")}</select></label>
             <label class="field"><span>הערה / מס׳ קבלה</span><input class="input" name="note" maxlength="80"></label>
-            <button class="btn btn-line" type="submit">${I("plus")}רישום תשלום</button></form></div>
+            <label class="field"><span>הארכת המנוי בעקבות התשלום</span><select class="select" name="extend">${[[0, "בלי הארכה"], [1, "חודש"], [2, "חודשיים"], [3, "3 חודשים"], [6, "חצי שנה"], [12, "שנה"]].map(([v, n]) => `<option value="${v}" ${v === 1 ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+            <button class="btn btn-line" type="submit">${I("plus")}רישום תשלום</button></form>
+          <p class="hint" style="margin-top:8px">תשלום עם הארכה פותח את החשבון מיד (גם אם היה קפוא), ומאריך מתאריך הסיום או מהיום.</p></div>
         <div class="panel"><h2>מתחמים</h2>${ls.length ? `<ul class="list-plain">${ls.map((l) => `<li><span><a class="name" href="#edit-${esc(l.id)}">${esc(l.name)}</a> <span class="muted">· ${esc(l.settlement || "")}</span></span><span>${l.active ? (st.visible ? '<span class="pill pill-ok">מוצג</span>' : '<span class="pill pill-danger">מוסתר (מנוי)</span>') : '<span class="pill pill-muted">מוסתר</span>'} ${pendingPill(l)}</span></li>`).join("")}</ul>` : `<p class="muted" style="font-size:var(--t-s)">עוד אין מתחמים משויכים ללקוח, ולכן ממשק המארחים שלו ריק.</p>`}
           <div class="btn-row"><button class="btn btn-primary btn-sm" type="button" data-act="client-new-listing" data-id="${esc(a.id)}">${I("plus")}מתחם חדש ללקוח</button>
             ${A.listings.some((l) => l.owner_id !== a.id) ? `<label class="field" style="flex:1 1 220px"><span class="sr">שיוך מתחם קיים</span><select class="select" data-act-change="assign-listing" data-id="${esc(a.id)}"><option value="">שיוך מתחם קיים ללקוח…</option>${A.listings.filter((l) => l.owner_id !== a.id).map((l) => `<option value="${esc(l.id)}">${esc(l.name)}${l.owner_id ? " (כרגע: " + esc(advName(l.owner_id)) + ")" : " (לא משויך)"}</option>`).join("")}</select></label>` : ""}</div></div>
@@ -1530,6 +1744,12 @@
             ${A.linkFor && A.linkFor.id === a.id ? `<div class="link-box"><span class="copy-field"><input class="input" readonly value="${esc(A.linkFor.link)}" aria-label="קישור כניסה"><button class="mini-btn" type="button" data-act="copy" data-text="${esc(A.linkFor.link)}" aria-label="העתקה">${I("copy")}</button></span>${a.phone ? `<a class="btn btn-primary btn-sm" href="${esc(T.waLink(a.phone, `שלום ${a.name}, זה הקישור האישי לכניסה לממשק המארחים של ${A.settings.site_name} (בכניסה בוחרים סיסמה): ${A.linkFor.link}`))}" target="_blank" rel="noopener">${I("chat")}שליחה בוואטסאפ</a>` : ""}<p class="hint">הקישור אישי, חד-פעמי ובתוקף לזמן קצר. שולחים אותו רק ללקוח.</p></div>` : ""}
             <p class="hint" style="margin-top:8px">ההזמנה שולחת ללקוח מייל לבחירת סיסמה. אם המייל לא מגיע, הקישור לוואטסאפ עושה את אותו הדבר.</p>` : T.isLive ? `<p class="hint">כדי שהלקוח ייכנס, מוסיפים לו אימייל (״עריכה״).</p>` : `<p class="hint">במצב הדגמה נכנסים לממשק המארחים בבחירת הלקוח מהרשימה.</p>`}</div>
         <div class="panel"><h2><span class="h-ic">${I("history")}יומן פעולות</span></h2>${au === null ? `<p class="muted">טוען…</p>` : au.length ? `<ul class="audit">${au.slice(0, 30).map(auditLine).join("")}</ul>` : `<p class="muted">אין פעולות רשומות${T.isLive ? "" : " (היומן פעיל באתר המחובר)"}.</p>`}</div>
+        <div class="panel danger-zone" id="purge-zone"><h2><span class="h-ic">${I("trash")}מחיקה לצמיתות</span>${a.delete_requested_at ? ` <span class="pill pill-danger">הלקוח ביקש מחיקה · ${T.fmtStamp(a.delete_requested_at)}</span>` : ""}</h2>
+          <p class="muted" style="font-size:var(--t-s)">מוחק את הלקוח ואת ${ls.length === 1 ? "המתחם שלו" : `${ls.length} המתחמים שלו`} מהאתר. פניות ושיחות נשמרות בדוחות בלי שיוך. אי אפשר לבטל.</p>
+          ${A.purge === a.id ? `<div class="confirm" style="margin-top:12px;flex-wrap:wrap"><label class="check" style="flex-basis:100%"><input type="checkbox" id="purge-login" checked><span>למחוק גם את חשבון הכניסה (${esc(a.email || "אין אימייל")})</span></label>
+            <label class="field" style="flex:1;min-width:200px"><span>להקליד את שם העסק לאישור</span><input class="input" id="purge-name" autocomplete="off" placeholder="${esc(a.business || a.name)}"></label>
+            <button class="btn btn-danger" type="button" data-act="purge-do" data-id="${esc(a.id)}">${I("trash")}מחיקה סופית</button><button class="btn btn-ghost" type="button" data-act="purge-cancel">ביטול</button></div>`
+            : `<button class="btn btn-danger" type="button" data-act="purge-ask" data-id="${esc(a.id)}" style="margin-top:12px">${I("trash")}מחיקת הלקוח לצמיתות</button>`}</div>
       </div></div>`;
   }
 
@@ -1617,6 +1837,7 @@
       else if (h === "reviews") html = viewReviews();
       else if (h === "account") html = viewOwnerAccount();
       else html = viewMy();
+      if (isFrozen()) html = frozenBanner() + html.replace('<form class="editor" id="editor"', '<form class="editor is-frozen" id="editor" inert');
     }
     app.innerHTML = shell(html);
     if ($("#editor")) bindEditor();
@@ -1688,6 +1909,8 @@
     }
     if (c.status === "pending") { A.app = await T.store.myApplication().catch(() => null); A.gate = "pending"; T.store.mail("welcome").catch(() => {}); return false; }
     if (c.status === "rejected") { A.gate = "rejected"; return false; }
+    /* נכנסו (למשל עם Google) בלי הרשמה קודמת: טופס הצטרפות קצר במקום הודעת שגיאה */
+    if (c.status === "none" || c.status === "unverified") { A.gate = "onboard"; A.onboardName = (user.user_metadata && (user.user_metadata.full_name || user.user_metadata.name)) || ""; return false; }
     A.signedInAs = user.email || "";
     A.loginMsg = { tone: "warn", text: `לא מצאנו לקוח עם האימייל ${user.email}. מארחים חדשים נרשמים בעמוד ״פרסום מתחם״ באתר. אם כבר מפרסמים אצלנו, פנו לצוות כדי שיעדכנו את האימייל, או היכנסו עם אימייל אחר.` };
     return false;
@@ -1723,7 +1946,7 @@
     const save = async (fn, msg) => { try { await fn(); await reload(); rerenderKeepScroll(); if (msg) T.toast(msg); } catch (ex) { fail("הפעולה נכשלה", ex); } };
     if (act === "demo-admin") { await T.store.signInAdmin(); A.authed = true; await reload(); render(); }
     else if (act === "demo-owner") { await T.store.signInOwnerDemo($("#demo-owner").value); A.authed = true; await reload(); location.hash = "my"; render(); }
-    else if (act === "google") { try { await T.store.signInGoogle(); } catch (ex) { A.loginMsg = { tone: "warn", text: "הכניסה עם Google לא הוגדרה עדיין: " + ex.message }; render(); } }
+    else if (act === "google") { el.disabled = true; try { await T.store.signInGoogle(); } catch (ex) { el.disabled = false; A.loginMsg = { tone: "warn", text: ex.code === "google_off" ? ex.message : "הכניסה עם Google נכשלה: " + ex.message }; render(); } }
     else if (act === "deny-close") $("#deny").remove();
     /* כניסה וחשבון */
     else if (act === "login-mode") { const em = $('.login-card input[name="email"]'); if (em && em.value.trim()) A.lastEmail = em.value.trim(); A.loginMode = el.dataset.v; A.loginMsg = null; render(); const i = $(".login-card input"); if (i) i.focus(); }
@@ -1782,6 +2005,16 @@
     else if (act === "subs-csv") downloadCSV(`subscribers-${T.iso(T.today())}.csv`, ["email", "name", "regions", "confirmed_at", "unsubscribe_link"], activeSubs().map((x) => [x.email, x.name, (x.regions || []).map((k) => T.regionOf(k).name).join(" / "), x.confirmed_at || x.created_at, x.token ? siteAbs("unsubscribe-" + x.token) : ""]));
     else if (act === "sf-status") { A.sf.status = el.dataset.v; rerenderKeepScroll(); }
     else if (act === "place-edit") { const pl = id ? A.places.find((x) => x.id === id) : { kind: "restaurant", region: A.pf.region || "golan", active: true }; document.body.insertAdjacentHTML("beforeend", placeModal(pl)); $("#modal input:not([type=hidden])").focus(); }
+    else if (act === "demo-import") { el.disabled = true; try { const n = await T.store.importDemoListings(); await reload(); rerenderKeepScroll(); T.toast(`נטענו ${n} מתחמי הדגמה. הם כבר מוצגים באתר.`); } catch (ex) { el.disabled = false; fail("הטעינה נכשלה", ex); } }
+    else if (act === "demo-delete") { if (!el.dataset.sure) { el.dataset.sure = "1"; el.innerHTML = I("trash") + "לחיצה נוספת למחיקה סופית"; el.classList.add("btn-danger"); return; } el.disabled = true; try { const n = await T.store.deleteDemoListings(); await reload(); rerenderKeepScroll(); T.toast(`נמחקו ${n} מתחמי הדגמה.`); } catch (ex) { el.disabled = false; fail("המחיקה נכשלה", ex); } }
+    else if (act === "places-import") {
+      const missing = (T.CURATED_PLACES || []).filter((c) => !A.places.some((p) => p.id === c.id));
+      el.disabled = true; el.textContent = "טוען…";
+      let ok = 0;
+      try { ok = await T.store.importPlaces(missing.map((c) => { const row = Object.assign({}, c); delete row.curated; return row; })); }
+      catch (ex) { fail("הטעינה נכשלה. אם מופיעה שגיאה על עמודה חסרה, הריצו שוב את supabase/schema.sql", ex); el.disabled = false; return; }
+      await reload(); rerenderKeepScroll(); T.toast(`נוספו ${ok} אתרים. אפשר לערוך, להסתיר או למחוק כל אחד.`);
+    }
     else if (act === "place-toggle") { const pl = A.places.find((x) => x.id === id); save(() => T.store.savePlace(Object.assign({}, pl, { active: pl.active === false })), pl.active === false ? "המקום מוצג" : "המקום הוסתר"); }
     else if (act === "set-flag") { const k = el.dataset.k; A.settings[k] = A.settings[k] === false; el.setAttribute("aria-checked", A.settings[k] !== false); }
     else if (act === "col-add") settingsRows("collections", (rows) => rows.push({ id: T.uid("c"), title: "", sub: "", ids: [] }));
@@ -1792,6 +2025,24 @@
       if (k === "active" && !l.active && !(T.fromPrice(l) > 0)) { T.toast("אי אפשר להציג באתר מתחם בלי מחיר ללילה. פותחים את העורך, מוסיפים מחיר ושומרים.", "err"); return; }
       save(() => T.store.saveListing(Object.assign({}, l, { [k]: !l[k] })), k === "active" ? (!l.active ? "המתחם מוצג באתר" : "המתחם הוסתר") : !l.featured ? "נוסף לנבחרי העונה" : "הוסר מנבחרי העונה"); }
     else if (act === "sponsor") { const l = A.listings.find((x) => x.id === id); const on = T.isSponsored(l); save(() => T.store.saveListing(Object.assign({}, l, { sponsored_until: on ? null : T.iso(T.addDays(T.today(), 30)) })), on ? "המיקום הממומן בוטל" : "ממומן ל־30 יום"); }
+    else if (act === "purge-ask") { A.purge = id; rerenderKeepScroll(); const n = $("#purge-name"); if (n) n.focus(); }
+    else if (act === "purge-cancel") { A.purge = null; rerenderKeepScroll(); }
+    else if (act === "purge-do") {
+      const a = A.advertisers.find((x) => x.id === id);
+      if (!a) return;
+      const typed = String(($("#purge-name") || {}).value || "").trim();
+      if (typed !== String(a.business || a.name).trim()) { T.toast("השם שהוקלד לא תואם. כך מוודאים שלא מוחקים בטעות.", "err"); return; }
+      el.disabled = true;
+      try { const r = await T.store.adminDeleteClient(id, !!($("#purge-login") || {}).checked); A.purge = null; await reload(); location.hash = "advertisers"; T.toast(`הלקוח נמחק${r && r.listings ? ` עם ${r.listings} מתחמים` : ""}${r && r.login_deleted ? " וחשבון הכניסה שלו" : ""}.`); }
+      catch (ex) { el.disabled = false; fail("המחיקה נכשלה. אם מופיעה שגיאה על פונקציה חסרה, הריצו שוב את supabase/schema.sql", ex); }
+    }
+    else if (act === "ask-deletion") { A.askDeletion = true; rerenderKeepScroll(); }
+    else if (act === "deletion-cancel") { A.askDeletion = false; rerenderKeepScroll(); }
+    else if (act === "deletion-send") {
+      el.disabled = true;
+      try { await T.store.requestDeletion(); A.askDeletion = false; await reload(); rerenderKeepScroll(); T.toast("הבקשה נשלחה. צוות האתר יחזור אליכם לפני המחיקה."); }
+      catch (ex) { el.disabled = false; fail("השליחה נכשלה", ex); }
+    }
     else if (act === "ask-del") {
       const kind = el.dataset.kind;
       const names = { listing: "את המתחם", lead: "את הפנייה", advertiser: "את הלקוח", application: "את הבקשה", review: "את חוות הדעת", article: "את הכתבה", place: "את המקום", subscriber: "את המנוי מרשימת הדיוור" };
@@ -1849,7 +2100,11 @@
     else if (act === "arr-add") { const path = el.dataset.arr; readEditor(); const d = A.drafts[A.editId]; let a = getPath(d, path); if (!Array.isArray(a)) { a = []; setPath(d, path, a); } a.push(ARR_NEW[path] ? ARR_NEW[path](a) : {}); markDirty(); rerenderEditor(); }
     else if (act === "arr-del") { const path = el.dataset.arr; readEditor(); const a = getPath(A.drafts[A.editId], path); if (Array.isArray(a)) a.splice(Number(el.dataset.i), 1); markDirty(); rerenderEditor(); }
     else if (act === "cancel-preset") { readEditor(); const d = A.drafts[A.editId]; d.terms.cancel = T.clone(T.CANCEL_PRESETS.find((c) => c.key === el.dataset.k).tiers); markDirty(); rerenderEditor(); }
-    else if (act === "ed-jump") { e.preventDefault(); const sec = document.getElementById(el.dataset.to); if (sec) { sec.scrollIntoView({ behavior: "smooth", block: "start" }); const f = sec.querySelector("input,select,textarea,button"); if (f) setTimeout(() => f.focus({ preventScroll: true }), 350); } }
+    else if (act === "ed-jump") { e.preventDefault(); const sec = document.getElementById(el.dataset.to); if (sec) { const set = sec.closest("[data-tabpanel]"); if (set && sec.hidden) applyTabs(set.dataset.tabpanel, sec.dataset.tab); sec.scrollIntoView({ behavior: "smooth", block: "start" }); const f = sec.querySelector("input:not([type=hidden]),select,textarea"); if (f) setTimeout(() => f.focus({ preventScroll: true }), 350); } }
+    else if (act === "tab") { applyTabs(el.dataset.set, el.dataset.to); const top = $(`[data-tabset="${el.dataset.set}"]`); if (top && top.getBoundingClientRect().top < 0) top.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    else if (act === "am-tab") { A.amenTab = el.dataset.g; $$(".am-tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.g === A.amenTab))); $$(".am-pane").forEach((p) => { p.hidden = p.dataset.g !== A.amenTab; }); }
+    else if (act === "am-all" || act === "am-none") { $$(`#editor input[name="amenities"][data-g="${el.dataset.g}"]`).forEach((x) => { x.checked = act === "am-all"; }); amenRefresh(); markDirty(); }
+    else if (act === "am-off") { const x = $(`#editor input[name="amenities"][value="${CSS.escape(el.dataset.k)}"]`); if (x) { x.checked = false; amenRefresh(); markDirty(); } }
     else if (act === "room-del") editRows("rooms", (rows) => { if (rows.length > 1) rows.splice(Number(el.dataset.i), 1); });
     else if (act === "season-add") editRows("seasons", (rows) => rows.push({ label: "", from: "", to: "", pct: 10 }));
     else if (act === "season-del") editRows("seasons", (rows) => rows.splice(Number(el.dataset.i), 1));
@@ -1857,6 +2112,7 @@
     else if (act === "extra-del") editRows("extras", (rows) => rows.splice(Number(el.dataset.i), 1));
     else if (act === "cal-unit") { A.calUnit = id; $("#ed-cal").innerHTML = editCal(A.drafts[A.editId]); }
     else if (act === "ed-day") {
+      if (A.edSkipClick) { A.edSkipClick = false; return; }
       readEditor();
       const d = A.drafts[A.editId];
       const iso = el.dataset.d;
@@ -1867,7 +2123,7 @@
       markDirty();
     } else if (act === "ed-cal") {
       const base = A.calStart || new Date(T.today().getFullYear(), T.today().getMonth(), 1);
-      const next = new Date(base.getFullYear(), base.getMonth() + Number(el.dataset.d), 1);
+      const next = Number(el.dataset.d) === 0 ? new Date(T.today().getFullYear(), T.today().getMonth(), 1) : new Date(base.getFullYear(), base.getMonth() + Number(el.dataset.d), 1);
       if (next >= new Date(T.today().getFullYear(), T.today().getMonth(), 1)) A.calStart = next;
       $("#ed-cal").innerHTML = editCal(A.drafts[A.editId]);
     } else if (act === "ph-del" || act === "ph-move") {
@@ -1985,23 +2241,13 @@
       rerenderKeepScroll();
     }
     else if (act === "bd-day") {
-      const l0 = A.listings.find((x) => x.id === el.dataset.l);
-      if (!l0) return;
-      const ed = A.boardEdits[l0.id] || T.clone(IS_ADMIN ? l0 : T.withPending(l0));
-      const iso = el.dataset.d, uid = el.dataset.u;
-      const target = uid ? (ed.rooms || []).find((r) => r.id === uid) : ed;
-      if (!target) return;
-      const cur = target.blocked_dates || [];
-      target.blocked_dates = cur.includes(iso) ? cur.filter((x) => x !== iso) : cur.concat(iso).sort();
-      /* חזר למצב השמור: אין מה לשמור במתחם הזה */
-      const base = IS_ADMIN ? l0 : T.withPending(l0);
-      const same = JSON.stringify(base.blocked_dates || []) === JSON.stringify(ed.blocked_dates || []) && (ed.rooms || []).every((r) => { const o = (base.rooms || []).find((x) => x.id === r.id); return JSON.stringify((o && o.blocked_dates) || []) === JSON.stringify(r.blocked_dates || []); });
-      if (same) delete A.boardEdits[l0.id]; else A.boardEdits[l0.id] = ed;
-      $("#board").innerHTML = boardHTML();
-      const bar = $("#bd-bar"); if (bar) { bar.innerHTML = boardBar(); bar.hidden = !boardDirty(); }
-      const b = $(`#board [data-l="${CSS.escape(l0.id)}"][data-u="${CSS.escape(uid)}"][data-d="${iso}"]`); if (b) b.focus();
+      if (A.bdSkipClick) { A.bdSkipClick = false; return; }
+      boardApply(el.dataset.l, el.dataset.u, [el.dataset.d], null);
+      const b = $(`#board [data-l="${CSS.escape(el.dataset.l)}"][data-u="${CSS.escape(el.dataset.u)}"][data-d="${el.dataset.d}"]`); if (b) b.focus();
     }
+    else if (act === "bd-zoom") { A.board.zoom = el.dataset.v; rerenderKeepScroll(); }
     else if (act === "bd-discard") { A.boardEdits = {}; rerenderKeepScroll(); T.toast("השינויים ביומן בוטלו"); }
+    else if (act === "bd-save" && isFrozen()) { T.toast("החשבון קפוא עד חידוש המנוי, ולכן אי אפשר לשמור שינויים ביומן.", "err"); }
     else if (act === "bd-save") {
       el.disabled = true;
       const today = T.iso(T.today());
@@ -2052,6 +2298,7 @@
   const debouncedAdv = T.debounce(() => { rerenderKeepScroll(); refocus("#af-q"); }, 250);
   document.addEventListener("change", async (e) => {
     const t = e.target;
+    if (t.name === "amenities" && t.closest("#editor")) amenRefresh();
     if (t.id === "lf-region") { A.lf.region = t.value; rerenderKeepScroll(); }
     else if (t.id === "qf-listing") { A.qf.listing = t.value; rerenderKeepScroll(); }
     else if (t.id === "qf-source") { A.qf.source = t.value; rerenderKeepScroll(); }
@@ -2114,6 +2361,20 @@
       if (!T.validEmail(email)) { A.loginMsg = { tone: "warn", text: "כתובת האימייל לא נראית תקינה." }; render(); return; }
       busy(true);
     }
+    if (kind === "onboard") {
+      const err = (m, n) => { $("#ob-err").textContent = m; const f = n && form.elements[n]; if (f) f.focus(); };
+      if (!String(fd.get("name") || "").trim()) return err("כתבו שם מלא", "name");
+      if (!String(fd.get("business") || "").trim()) return err("כתבו את שם המתחם", "business");
+      if (!T.validPhone(fd.get("phone"))) return err("מספר הטלפון לא נראה תקין", "phone");
+      if (!fd.get("terms")) return err("צריך לאשר את הסכם הפרסום", "terms");
+      busy(true);
+      try {
+        const r = await T.store.hostOnboard({ name: fd.get("name").trim(), business: fd.get("business").trim(), phone: fd.get("phone").trim(), settlement: (fd.get("settlement") || "").trim(), region: fd.get("region"), type: fd.get("type"), units: String(fd.get("units") || 1), terms_version: T.HOST_TERMS_VERSION, marketing: fd.get("marketing") ? "true" : "" });
+        if (r && r.status === "opened") { A.welcome = true; T.store.mail("welcome").catch(() => {}); }
+        A.gate = ""; A.authed = await checkAuth(); if (A.authed) await reload(); render();
+      } catch (ex) { busy(false); err(ex.message || "הפתיחה נכשלה"); }
+      return;
+    }
     if (kind === "login") {
       if (!fd.get("password")) { busy(false); A.loginMsg = { tone: "warn", text: "חסרה סיסמה." }; render(); return; }
       try { await T.store.signInPassword(email, fd.get("password")); A.loginMsg = null; A.authed = await checkAuth(); if (A.authed) await reload(); render(); }
@@ -2175,8 +2436,11 @@
       const amount = Math.round(Number(fd.get("amount")));
       if (!a || !(amount > 0)) { T.toast("חסר סכום", "err"); return; }
       const payments = (a.payments || []).concat({ month: fd.get("month"), amount, method: fd.get("method") || "", note: String(fd.get("note") || "").trim().slice(0, 80), paid_at: new Date().toISOString() });
+      const ext = Number(fd.get("extend")) || 0;
+      const patch = { id: a.id, payments };
+      if (ext > 0) { const today = T.iso(T.today()); const from = a.end_date && a.end_date > today ? a.end_date : today; Object.assign(patch, { end_date: addMonths(from, ext), status: "active", renewal_requested_at: null }); }
       busy(true);
-      try { await T.store.saveAdvertiser({ id: a.id, payments }); await reload(); rerenderKeepScroll(); T.toast("התשלום נרשם"); } catch (ex) { busy(false); fail("השמירה נכשלה", ex); }
+      try { await T.store.saveAdvertiser(patch); await reload(); rerenderKeepScroll(); T.toast(ext > 0 ? `התשלום נרשם והמנוי הוארך עד ${T.fmtDate(patch.end_date)}` : "התשלום נרשם"); } catch (ex) { busy(false); fail("השמירה נכשלה", ex); }
     } else if (kind === "own-add") {
       const f = { name: String(fd.get("name") || "").trim(), settlement: String(fd.get("settlement") || "").trim(), region: fd.get("region") || "", type: fd.get("type") || "" };
       if (!f.name || !f.settlement) { T.toast("חסר שם מתחם או יישוב", "err"); return; }
@@ -2209,7 +2473,7 @@
       const pl = Object.fromEntries(fd.entries());
       if (!String(pl.name || "").trim()) { T.toast("חסר שם למקום", "err"); return; }
       const coord = (v) => { const n = Number(String(v || "").trim()); return v === "" || v == null || !Number.isFinite(n) ? null : n; };
-      const row = { name: pl.name.trim(), kind: pl.kind, region: pl.region, settlement: (pl.settlement || "").trim(), phone: (pl.phone || "").trim(), url: (pl.url || "").trim(), blurb: (pl.blurb || "").trim(), photo: pl.photo || "", lat: coord(pl.lat), lng: coord(pl.lng), active: !!fd.get("active") };
+      const row = { name: pl.name.trim(), kind: pl.kind, region: pl.region, settlement: (pl.settlement || "").trim(), phone: (pl.phone || "").trim(), url: (pl.url || "").trim(), blurb: (pl.blurb || "").trim(), photo: pl.photo || "", photo_credit: (pl.photo_credit || "").trim(), lat: coord(pl.lat), lng: coord(pl.lng), active: !!fd.get("active") };
       if (row.url && !/^https?:\/\//.test(row.url)) row.url = "https://" + row.url;
       if (pl.id) row.id = pl.id;
       try { await T.store.savePlace(row); $("#modal").remove(); await reload(); rerenderKeepScroll(); T.toast("נשמר"); }
@@ -2224,7 +2488,7 @@
       try { await T.store.saveSettings(s); await reload(); rerenderKeepScroll(); T.toast("ההגדרות נשמרו"); }
       catch (ex) { fail("השמירה נכשלה", ex); }
     } else if (kind === "article") {
-      const a = Object.assign({}, A.editArticle, { title: fd.get("title").trim(), excerpt: fd.get("excerpt").trim(), body: fd.get("body"), published: !!fd.get("published") });
+      const a = Object.assign({}, A.editArticle, { title: fd.get("title").trim(), excerpt: fd.get("excerpt").trim(), body: fd.get("body"), published: !!fd.get("published"), regions: fd.getAll("regions") });
       if (!a.title) { T.toast("חסרה כותרת", "err"); return; }
       try { const saved = await T.store.saveArticle(a); A.editArticle = T.clone(saved); await reload(); rerenderKeepScroll(); T.toast(a.published ? "נשמר ופורסם" : "נשמר כטיוטה"); }
       catch (ex) { fail("השמירה נכשלה", ex); }

@@ -433,7 +433,7 @@ grant execute on function public.set_ical_blocked(text, text, text[]) to service
 
 -- גרסת הסכמה: האתר בודק אותה ב"בדיקת מערכת" בפאנל הניהול. מעלים את המספר בכל שינוי מבני.
 create or replace function public.schema_version()
-returns integer language sql immutable as $$ select 5 $$;
+returns integer language sql immutable as $$ select 6 $$;
 grant execute on function public.schema_version() to anon, authenticated;
 
 grant execute on function public.is_admin() to anon, authenticated;
@@ -838,6 +838,104 @@ grant execute on function public.accept_host_terms(text) to authenticated;
 grant execute on function public.moderate_group(text) to anon, authenticated;
 grant execute on function public.track_event(text, text) to anon, authenticated;
 
+-- ===================================================================== גרסה 6
+-- כתבות לפי אזור, קרדיט לתמונת מקום, מועדפים לאורחים מחוברים (Google), הקפאת עריכה כשהמנוי פג,
+-- הרשמת מארח דרך Google, בקשת מחיקה ומחיקה מלאה של לקוח
+
+alter table public.articles add column if not exists regions text[] not null default '{}';
+alter table public.places add column if not exists photo_credit text not null default '';
+alter table public.advertisers add column if not exists delete_requested_at timestamptz;
+
+-- מועדפים של אורח מחובר: כל משתמש רואה ומשנה רק את שלו
+create table if not exists public.favorites (
+  user_id    uuid not null default auth.uid(),
+  listing_id text not null references public.listings (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, listing_id)
+);
+alter table public.favorites enable row level security;
+drop policy if exists favorites_own on public.favorites;
+create policy favorites_own on public.favorites for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- מארח יכול לערוך רק כשהמנוי פעיל או בניסיון, כולל ימי חסד. אחרי זה הכרטיס "קפוא" עד שמחדשים.
+create or replace function public.owner_can_edit(p_owner text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.advertisers a where a.id = p_owner and a.status in ('active', 'trial')
+    and (a.end_date is null or a.end_date + greatest(0, coalesce((select (data ->> 'grace_days')::int from public.settings where id = 1), 3)) >= public.today_il()));
+$$;
+
+-- הרשמת מארח שנכנס עם Google (או כל כניסה מאומתת בלי טופס הרשמה): שומר בקשת הצטרפות
+-- עם הפרטים מהטופס הקצר, ומשם ממשיך כמו הרשמה רגילה (פתיחה אוטומטית או בדיקה ידנית).
+create or replace function public.host_onboard(p jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  uid uuid := nullif(auth.jwt() ->> 'sub', '')::uuid;
+  em text := lower(coalesce(auth.jwt() ->> 'email', ''));
+  meta jsonb := coalesce(auth.jwt() -> 'user_metadata', '{}'::jsonb);
+begin
+  if uid is null or em = '' then raise exception 'צריך להתחבר' using errcode = '42501'; end if;
+  if exists (select 1 from public.advertisers where email <> '' and lower(email) = em) then return public.claim_host_signup(); end if;
+  if coalesce(trim(p ->> 'phone'), '') !~ '^[0-9+()\- ]{9,20}$' then raise exception 'מספר טלפון לא תקין' using errcode = '22023'; end if;
+  if coalesce(p ->> 'terms_version', '') = '' then raise exception 'צריך לאשר את הסכם הפרסום' using errcode = '22023'; end if;
+  if not exists (select 1 from public.applications where user_id = uid) then
+    insert into public.applications (user_id, name, business, phone, email, settlement, region, type, units, message,
+                                     tax_id, terms_version, terms_at, marketing, verified, status)
+    values (uid,
+      left(coalesce(nullif(trim(p ->> 'name'), ''), nullif(trim(meta ->> 'full_name'), ''), nullif(trim(meta ->> 'name'), ''), em), 120),
+      left(coalesce(trim(p ->> 'business'), ''), 120),
+      left(trim(p ->> 'phone'), 30), em,
+      left(coalesce(trim(p ->> 'settlement'), ''), 80),
+      case when coalesce(p ->> 'region', '') ~ '^[a-z-]{2,30}$' then p ->> 'region' else '' end,
+      case when coalesce(p ->> 'type', '') ~ '^[a-z]{2,20}$' then p ->> 'type' else 'zimmer' end,
+      case when coalesce(p ->> 'units', '') ~ '^[0-9]{1,3}$' then greatest(1, least(500, (p ->> 'units')::int)) else 1 end,
+      left(coalesce(p ->> 'message', ''), 2000),
+      left(coalesce(trim(p ->> 'tax_id'), ''), 20),
+      left(p ->> 'terms_version', 20), now(),
+      coalesce(p ->> 'marketing', '') = 'true', true, 'new');
+  end if;
+  return public.claim_host_signup();
+end $$;
+
+-- מארח מבקש למחוק את החשבון: מסומן לצוות, והמחיקה עצמה נעשית ע"י מנהל
+create or replace function public.request_account_deletion()
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  update public.advertisers set delete_requested_at = now()
+  where email <> '' and lower(email) = lower(coalesce(auth.jwt() ->> 'email', ''));
+  return found;
+end $$;
+
+-- מחיקה מלאה של לקוח: המתחמים שלו (פניות ושיחות נשמרות בלי שיוך), הלקוח, בקשות ההצטרפות,
+-- ואם ביקשו – גם חשבון הכניסה (רק אם האימייל לא משמש לקוח אחר או מנהל). מנהל בלבד.
+create or replace function public.admin_delete_client(p_id text, p_login boolean default false)
+returns jsonb language plpgsql security definer set search_path = public, auth as $$
+declare a public.advertisers; n int := 0; gone boolean := false;
+begin
+  if not public.is_admin() then raise exception 'מנהל בלבד' using errcode = '42501'; end if;
+  select * into a from public.advertisers where id = p_id;
+  if a.id is null then return jsonb_build_object('ok', false, 'error', 'not found'); end if;
+  delete from public.listings where owner_id = a.id;
+  get diagnostics n = row_count;
+  delete from public.applications where advertiser_id = a.id or (a.email <> '' and lower(email) = lower(a.email));
+  delete from public.advertisers where id = a.id;
+  if p_login and a.email <> ''
+     and not exists (select 1 from public.advertisers x where lower(x.email) = lower(a.email))
+     and not exists (select 1 from public.admins m where lower(m.email) = lower(a.email)) then
+    begin
+      delete from auth.users where lower(email) = lower(a.email);
+      gone := found;
+    exception when others then gone := false;
+    end;
+  end if;
+  return jsonb_build_object('ok', true, 'listings', n, 'login_deleted', gone);
+end $$;
+
+grant execute on function public.owner_can_edit(text) to anon, authenticated;
+grant execute on function public.host_onboard(jsonb) to authenticated;
+grant execute on function public.request_account_deletion() to authenticated;
+grant execute on function public.admin_delete_client(text, boolean) to authenticated;
+
 -- ------------------------------------------------------------ הרשאות (RLS)
 
 alter table public.admins        enable row level security;
@@ -861,8 +959,8 @@ drop policy if exists listings_insert on public.listings;
 create policy listings_insert on public.listings for insert to authenticated with check (public.is_admin());
 drop policy if exists listings_update on public.listings;
 create policy listings_update on public.listings for update to authenticated
-  using (public.is_admin() or owner_id in (select public.my_advertiser_ids()))
-  with check (public.is_admin() or owner_id in (select public.my_advertiser_ids()));
+  using (public.is_admin() or (owner_id in (select public.my_advertiser_ids()) and public.owner_can_edit(owner_id)))
+  with check (public.is_admin() or (owner_id in (select public.my_advertiser_ids()) and public.owner_can_edit(owner_id)));
 drop policy if exists listings_delete on public.listings;
 create policy listings_delete on public.listings for delete to authenticated using (public.is_admin());
 

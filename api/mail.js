@@ -7,6 +7,7 @@
  *   review_published חוות דעת פורסמה → מייל למארח
  *   review_request   בקשת חוות דעת מהאורח במייל (מנהל או מארח המתחם)
  *   renewal          מארח ביקש לחדש מנוי → מייל למנהל
+ *   deletion         מארח ביקש למחוק את החשבון → מייל למנהל
  *   test             מייל בדיקה לכתובת של המנהל (בדיקת מערכת)
  */
 import { env, send, requireEnv, db, settings, siteUrl, readJson, esc, getUser, requireAdmin, advertiserIdsOf } from "./_lib.js";
@@ -142,6 +143,18 @@ export default async function handler(req, res) {
       const day = new Date().toISOString().slice(0, 10);
       const r = await sendOnce(`renewal:${adv.id}:${day}`, { to: adminTo, replyTo: adv.email, subject: `בקשת חידוש מנוי: ${adv.business || adv.name}`,
         html: L({ title: "לקוח ביקש לחדש מנוי", body: table([row("עסק", esc(adv.business)), row("איש קשר", esc(adv.name)), row("טלפון", esc(adv.phone)), row("מייל", esc(adv.email)), row("חבילה", esc(adv.plan)), row("בתוקף עד", fmtDate(adv.end_date))].join("")), cta: base && { href: `${base}/admin.html#client-${adv.id}`, label: "לכרטיס הלקוח" } }) });
+      return send(res, 200, Object.assign({ ok: true }, r));
+    }
+
+    if (type === "deletion") {
+      /* מארח ביקש למחוק את החשבון: התראה לצוות. המחיקה עצמה נעשית בכרטיס הלקוח */
+      const ids = await advertiserIdsOf(user.email);
+      if (!ids.length) return send(res, 403, { error: "אין לקוח עם האימייל הזה" });
+      const adv = await first(`advertisers?select=*&id=eq.${enc(ids[0])}`);
+      if (!adminTo) return send(res, 200, { skipped: "no admin email" });
+      const day = new Date().toISOString().slice(0, 10);
+      const r = await sendOnce(`deletion:${adv.id}:${day}`, { to: adminTo, replyTo: adv.email, subject: `בקשה למחיקת חשבון: ${adv.business || adv.name}`,
+        html: L({ title: "לקוח ביקש למחוק את החשבון", body: table([row("עסק", esc(adv.business)), row("איש קשר", esc(adv.name)), row("טלפון", esc(adv.phone)), row("מייל", esc(adv.email))].join("")) + p("לפני המחיקה כדאי ליצור קשר ולוודא. המחיקה נעשית בכרטיס הלקוח → ״מחיקה לצמיתות״."), cta: base && { href: `${base}/admin.html#client-${adv.id}`, label: "לכרטיס הלקוח" } }) });
       return send(res, 200, Object.assign({ ok: true }, r));
     }
 

@@ -13,8 +13,8 @@
       "message", "status", "source", "admin_note", "review_token", "benefit", "package", "rooms_req", "flexible", "meta"],
     applications: ["id", "name", "phone", "email", "business", "settlement", "region", "type", "units", "message", "status", "tax_id", "advertiser_id", "marketing"],
     reviews: ["id", "listing_id", "name", "rating", "text", "status", "stay_month", "reply", "title", "scores", "unit_name"],
-    articles: ["id", "title", "excerpt", "body", "cover", "published"],
-    places: ["id", "name", "kind", "region", "settlement", "lat", "lng", "phone", "url", "blurb", "photo", "active"],
+    articles: ["id", "title", "excerpt", "body", "cover", "published", "regions"],
+    places: ["id", "name", "kind", "region", "settlement", "lat", "lng", "phone", "url", "blurb", "photo", "photo_credit", "active"],
     subscribers: ["id", "email", "name", "regions", "source"]
   };
   const pick = (o, cols) => {
@@ -27,7 +27,7 @@
   };
   const byNewest = (a, b) => (b.created_at || "").localeCompare(a.created_at || "");
   /* גרסת הסכמה שהקוד הזה מצפה לה (supabase/schema.sql → public.schema_version()) */
-  T.SCHEMA_VERSION = 5;
+  T.SCHEMA_VERSION = 6;
   /* מה חסר במסד (טבלאות/עמודות/פונקציות) לפי שגיאות שחזרו מהשרת */
   T.schemaIssues = T.schemaIssues || new Set();
   /* האם הדף הזה נפתח מקישור כניסה (הטוקן בכתובת)? רק לשונית כזו עוברת ליעד אחרי הכניסה */
@@ -97,7 +97,7 @@
     const load = () => {
       if (db) return db;
       try { const raw = localStorage.getItem(KEY); if (raw) db = JSON.parse(raw); } catch (e) { persistent = false; }
-      if (!db || db.version !== 3) { db = T.seedData(); persist(); }
+      if (!db || db.version !== 4) { db = T.seedData(); persist(); }
       db.settings = Object.assign(T.clone(T.DEFAULT_SETTINGS), db.settings || {});
       ["reviews", "articles", "leads", "applications", "advertisers", "places", "subscribers"].forEach((k) => (db[k] = db[k] || []));
       db.stats = db.stats || {};
@@ -191,6 +191,9 @@
       /* מקומות באזור (מסעדות, אטרקציות…) */
       async listPlaces(o) { load(); const p = T.clone(db.places).sort((a, b) => (a.name || "").localeCompare(b.name || "", "he")); return o && o.all ? p : p.filter((x) => x.active !== false); },
       async savePlace(p) { return upsert("places", p, "p-"); },
+      async importPlaces(rows) { rows.forEach((r) => upsert("places", r, "p-", true)); emit(); return rows.length; },
+      async importDemoListings() { return 0; },
+      async deleteDemoListings() { return 0; },
       async deletePlace(id) { remove("places", id); },
       /* מנויים לדילים במייל */
       async addSubscriber(x) {
@@ -265,6 +268,11 @@
         persist(); emit(); return a.pending ? "pending" : true;
       },
       async requestRenewal() { load(); const a = db.advertisers.find((x) => x.id === ownerId()); if (a) { a.renewal_requested_at = new Date().toISOString(); persist(); emit(); } return true; },
+      async requestDeletion() { load(); const a = db.advertisers.find((x) => x.id === ownerId()); if (a) { a.delete_requested_at = new Date().toISOString(); persist(); emit(); } return true; },
+      async adminDeleteClient(id) { load(); const n = db.listings.filter((l) => l.owner_id === id).length; db.listings = db.listings.filter((l) => l.owner_id !== id); db.advertisers = db.advertisers.filter((a) => a.id !== id); persist(); emit(); return { ok: true, listings: n, login_deleted: false }; },
+      async hostOnboard() { throw new Error("הרשמה עם Google זמינה באתר המחובר"); },
+      async listFavorites() { return []; },
+      async setFavorite() { return true; },
       async adminStatus() { return { admin: ss("tamara.demo.admin") === "1", mfa_required: false, aal: "aal1" }; },
       async mfaFactors() { return []; },
       async mfaEnroll() { throw new Error("אימות דו-שלבי זמין באתר המחובר"); },
@@ -456,6 +464,23 @@
         return soft(await q.order("name").limit(2000), [], "places");
       },
       async savePlace(p) { return save("places", p, COLS.places); },
+      /* מתחמי הדגמה לאתר החי: 20 מתחמים מלאים עם התמונות שבאתר (מזהה demo-*), כדי לראות את העיצוב על תוכן אמיתי.
+         נכנסים בלי לקוח, ומוחקים בלחיצה אחת (או ידנית, אחד אחד). */
+      async importDemoListings() {
+        /* כל השורות באותו מבנה (אחרת PostgREST ממלא null בעמודות שחסרות בחלק מהשורות) */
+        const src = T.demoListingsForLive().map((r) => T.normalizeListing(r));
+        const cols = COLS.listings.filter((c) => src.every((r) => r[c] !== undefined && r[c] !== null) || c === "pending" || c === "sponsored_until");
+        const rows = src.map((r) => Object.fromEntries(cols.map((c) => [c, r[c] === undefined ? null : r[c]])));
+        ok(await sb.from("listings").upsert(rows, { onConflict: "id", ignoreDuplicates: true }));
+        /* כתבות לפי אזור (אם עמודת regions קיימת, כלומר הסכמה בגרסה 6) */
+        const arts = T.seedData().articles.filter((a) => (a.regions || []).length).map((a) => ({ id: "demo-" + a.id, title: a.title, excerpt: a.excerpt, body: a.body, cover: a.cover, published: true, regions: a.regions }));
+        await sb.from("articles").upsert(arts, { onConflict: "id", ignoreDuplicates: true });
+        emit();
+        return rows.length;
+      },
+      async deleteDemoListings() { const r = ok(await sb.from("listings").delete().like("id", "demo-%").select("id")); await sb.from("articles").delete().like("id", "demo-%"); emit(); return (r || []).length; },
+      /* אתרים מוכנים מראש: נכנסים עם המזהה שלהם, ומה שכבר קיים לא נדרס */
+      async importPlaces(rows) { const data = rows.map((r) => Object.fromEntries(COLS.places.filter((c) => c in r).map((c) => [c, r[c]]))); ok(await sb.from("places").upsert(data, { onConflict: "id", ignoreDuplicates: true })); emit(); return data.length; },
       async deletePlace(id) { ok(await sb.from("places").delete().eq("id", id)); emit(); },
       /* הרשמה לדיוור בהסכמה כפולה: נשלח מייל אישור, ורק אחרי לחיצה המנוי פעיל */
       async addSubscriber(x) {
@@ -488,7 +513,7 @@
       async guestUser() { const u = await store.getUser(); return u ? { email: u.email } : null; },
       /* אחרי הכניסה Supabase מחזיר את הטוקן ב-# של הכתובת, לכן היעד (#me-leads) נשמר בצד ומופעל כשהכניסה מצליחה */
       async signInGuest(email) { afterLogin("me-leads"); ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname + "?after=me-leads" } })); return true; },
-      async signInGuestGoogle() { afterLogin("me-leads"); ok(await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname + "?after=me-leads" } })); },
+      async signInGuestGoogle() { const pr = await store.authProviders(); if (pr.google === false) throw new Error("עוד לא הופעלה באתר"); afterLogin("me-leads"); ok(await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname + "?after=me-leads", queryParams: { prompt: "select_account" } } })); },
       async listArticles(o) {
         let q = sb.from("articles").select("*");
         if (!(o && o.all)) q = q.eq("published", true);
@@ -608,6 +633,13 @@
       async myApplication() { const r = await sb.rpc("my_application"); if (r.error && isMissing(r.error, r.status)) return null; return ok(r) || null; },
       async updateMyProfile(p) { const r = ok(await sb.rpc("update_my_profile", { p_name: p.name || "", p_phone: p.phone || "", p_address: p.address || "", p_tax_id: p.tax_id || "", p_prefs: p.prefs || {} })); emit(); return r; },
       async requestRenewal() { const r = ok(await sb.rpc("request_renewal")); await store.mail("renewal").catch(() => {}); return !!r; },
+      /* v6: הרשמת מארח שנכנס עם Google, בקשת מחיקה, מחיקה מלאה ע"י מנהל */
+      async hostOnboard(p) { const r = await sb.rpc("host_onboard", { p }); if (r.error && isMissing(r.error, r.status)) { noteMissing(r.error); throw new Error("צריך להריץ שוב את supabase/schema.sql (גרסה 6) כדי לאפשר הרשמה עם Google"); } return ok(r) || { status: "none" }; },
+      async requestDeletion() { const r = ok(await sb.rpc("request_account_deletion")); await store.mail("deletion").catch(() => {}); return !!r; },
+      async adminDeleteClient(id, withLogin) { const r = ok(await sb.rpc("admin_delete_client", { p_id: id, p_login: !!withLogin })); emit(); return r; },
+      /* מועדפים של אורח מחובר (נשמרים בחשבון, ולכן מופיעים בכל מכשיר) */
+      async listFavorites() { const u = await store.getUser(); if (!u) return null; const r = await sb.from("favorites").select("listing_id"); if (r.error) return null; return (r.data || []).map((x) => x.listing_id); },
+      async setFavorite(id, on) { const u = await store.getUser(); if (!u) return false; const r = on ? await sb.from("favorites").upsert({ user_id: u.id, listing_id: id }, { onConflict: "user_id,listing_id", ignoreDuplicates: true }) : await sb.from("favorites").delete().eq("listing_id", id); return !r.error; },
       /* אימות דו-שלבי למנהלים */
       async adminStatus() { const r = await sb.rpc("admin_status"); if (r.error) return { admin: await store.isAdmin(), mfa_required: false, aal: "aal1" }; return r.data; },
       async mfaFactors() { const r = await sb.auth.mfa.listFactors(); return (r.data && r.data.totp) || []; },
@@ -636,7 +668,13 @@
       async runDaily(dry) { return api("/api/daily" + (dry ? "?dry=1" : ""), {}); },
       async cleanupPhotos(dry) { return api("/api/cleanup" + (dry ? "?dry=1" : ""), {}); },
       async signInOwnerLink(email) { ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } })); return true; },
-      async signInGoogle() { ok(await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } })); },
+      /* אילו ספקי כניסה מופעלים בפרויקט (Authentication → Providers). לא ידוע = לא חוסמים */
+      async authProviders() { try { const r = await fetch(cfg.SUPABASE_URL + "/auth/v1/settings", { headers: { apikey: cfg.SUPABASE_ANON_KEY } }); if (!r.ok) return {}; const j = await r.json(); return j.external || {}; } catch (e) { return {}; } },
+      async signInGoogle(path) {
+        const pr = await store.authProviders();
+        if (pr.google === false) throw Object.assign(new Error("הכניסה עם Google עוד לא הופעלה ב-Supabase (Authentication → Sign In / Providers → Google). ההוראות במדריך."), { code: "google_off" });
+        ok(await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + (path || location.pathname), queryParams: { prompt: "select_account" } } }));
+      },
       /* יציאה רק בדפדפן הזה (לא מנתקת מכשירים אחרים של אותו משתמש) */
       async signOut(everywhere) { await sb.auth.signOut({ scope: everywhere ? "global" : "local" }); adminCache = null; },
       async myAdvertisers() { const ids = await myIds(); if (!ids.length) return []; return ok(await sb.from("advertisers").select("*").in("id", ids)); },

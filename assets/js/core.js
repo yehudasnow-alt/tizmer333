@@ -133,11 +133,14 @@
   T.KIDS_POLICY = [{ key: "", name: "לא צוין" }, { key: "welcome", name: "ילדים מתקבלים בברכה" }, { key: "age", name: "מגיל מסוים" }, { key: "none", name: "מבוגרים בלבד" }];
   T.SMOKING_POLICY = [{ key: "", name: "לא צוין" }, { key: "no", name: "אסור לעשן" }, { key: "outside", name: "בחוץ בלבד" }, { key: "yes", name: "מותר" }];
   T.PLACE_KINDS = [
-    { key: "restaurant", name: "מסעדות", one: "מסעדה", icon: "utensils" },
+    { key: "nature", name: "טבע ומסלולים", one: "טבע ומסלול", icon: "mountain" },
+    { key: "water", name: "מעיינות ומים", one: "מים", icon: "drop" },
+    { key: "view", name: "תצפיות", one: "תצפית", icon: "sunset" },
     { key: "attraction", name: "אטרקציות", one: "אטרקציה", icon: "sparkle" },
-    { key: "spa", name: "ספא וטיפולים", one: "ספא", icon: "leaf" },
+    { key: "history", name: "היסטוריה ומורשת", one: "מורשת", icon: "landmark" },
     { key: "winery", name: "יקבים", one: "יקב", icon: "wine" },
-    { key: "nature", name: "טבע ומסלולים", one: "מסלול", icon: "mountain" }
+    { key: "restaurant", name: "מסעדות", one: "מסעדה", icon: "utensils" },
+    { key: "spa", name: "ספא וטיפולים", one: "ספא", icon: "leaf" }
   ];
   T.UNIT_COUNTS = [2, 3, 4, 6, 8, 10];
 
@@ -333,7 +336,6 @@
     social: { instagram: "", facebook: "", tiktok: "", youtube: "" },
     wa_float: true,
     cookie_banner: true,
-    find_enabled: true,
     /* מארחים חדשים: פתיחה אוטומטית אחרי אימות המייל, ימי ניסיון, ימי חסד אחרי סוף המנוי */
     auto_open_hosts: true,
     moderate: {},
@@ -593,6 +595,9 @@
     flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
     send: '<path d="M21 3 3 10.5l7 2.5 2.5 7z"/><path d="m10 13 4-4"/>',
     trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4.5v1.5A3 3 0 0 0 8 10.5M16 6h3.5v1.5a3 3 0 0 1-3.5 3M12 13v4M8.5 20.5h7M10 17h4"/>',
+    drop: '<path d="M12 3.5c3.4 4.1 6 7.5 6 10.5a6 6 0 0 1-12 0c0-3 2.6-6.4 6-10.5z"/><path d="M9.2 14.6a2.9 2.9 0 0 0 2.6 2.4"/>',
+    landmark: '<path d="M3.5 9.2 12 4.2l8.5 5M5.5 10v8M9.8 10v8M14.2 10v8M18.5 10v8M3.5 20.5h17"/>',
+    car2: '<path d="M5 16.5V12l2-4.6A2 2 0 0 1 8.8 6h6.4a2 2 0 0 1 1.8 1.4L19 12v4.5M5 16.5h14M5 16.5v2M19 16.5v2M7.5 13.5h.01M16.5 13.5h.01M5.5 12h13"/>',
     door2: '<path d="M14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14M10 8l4 4-4 4M14 12H4"/>'
   };
   T.icon = (name, cls) =>
@@ -976,6 +981,303 @@
   /* גרסת תנאי השימוש למפרסמים (נשמרת עם כל הרשמה) */
   T.HOST_TERMS_VERSION = "2026-11";
   T.SITE_TERMS_VERSION = "2026-11";
+
+  /* ---------------------------------------------------------------- בורר תאריכים (v6)
+     משדרג כל <input type="date"> באתר ובממשקים: הקלט המקורי נשאר (וממנו נקרא הערך), ומעליו כפתור
+     שפותח לוח כהה עם טווח מסומן מהגעה ועד עזיבה, ימים תפוסים, מקרא ומקלדת מלאה.
+     זוגות מזוהים לבד: ci/co, start_date/end_date, data-k="from"/"to" באותה שורה. */
+  (function () {
+    if (typeof document === "undefined" || typeof window === "undefined" || !window.document) return;
+    const DOW = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
+    const fmtBtn = new Intl.DateTimeFormat("he-IL", { weekday: "short", day: "numeric", month: "short" });
+    const fmtChip = new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "short" });
+    const parse = (v) => (v ? T.parseISO(v) : null);
+    const nightsTxt = (n) => (n === 1 ? "לילה אחד" : n === 2 ? "2 לילות" : n + " לילות");
+    const dp = (T.dp = { blockedFor: null, open: null });
+    const mq = () => window.matchMedia && window.matchMedia("(max-width: 640px)").matches;
+    let st = null, scrim = null, raf = 0;
+
+    function pairOf(inp) {
+      const root = inp.form || inp.closest("form, .modal, .panel, section") || document;
+      const swap = { ci: "co", co: "ci", start_date: "end_date", end_date: "start_date" };
+      if (swap[inp.name]) {
+        const o = root.querySelector(`input[type=date][name="${swap[inp.name]}"]`);
+        if (o) return /^(ci|start_date)$/.test(inp.name) ? { a: inp, b: o } : { a: o, b: inp };
+      }
+      const k = inp.dataset.k;
+      if (k === "from" || k === "to") {
+        for (let p = inp.parentElement; p && p !== document.body; p = p.parentElement) {
+          const o = p.querySelector(`input[type=date][data-k="${k === "from" ? "to" : "from"}"]`);
+          if (o) return k === "from" ? { a: inp, b: o } : { a: o, b: inp };
+        }
+      }
+      return null;
+    }
+    function labelOf(inp) {
+      const l = inp.closest("label"); const sp = l && l.querySelector(":scope > span");
+      return (sp && sp.textContent.trim()) || inp.getAttribute("aria-label") || "תאריך";
+    }
+    function paintField(inp) {
+      const btn = inp.previousElementSibling;
+      if (!btn || !btn.classList.contains("dp-field")) return;
+      const v = inp.value;
+      const narrow = btn.offsetWidth > 0 && btn.offsetWidth < 175;
+      btn.innerHTML = `<span class="dp-v">${v ? (narrow ? fmtChip : fmtBtn).format(parse(v)) : inp.dataset.placeholder || (narrow ? "תאריך" : "בחירת תאריך")}</span>${T.icon("calendar")}`;
+      btn.classList.toggle("is-empty", !v);
+      btn.disabled = inp.disabled;
+      btn.setAttribute("aria-label", `${labelOf(inp)}: ${v ? T.fmtLong(v) : "לא נבחר"}. פתיחת לוח שנה`);
+      btn.setAttribute("aria-expanded", st && st.inp === inp ? "true" : "false");
+    }
+    function enhance(inp) {
+      if (inp.dataset.dp || inp.type !== "date") return;
+      inp.dataset.dp = "1";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = (inp.className.replace(/\binput\b/, "").trim() + " input dp-field").trim();
+      btn.setAttribute("aria-haspopup", "dialog");
+      inp.classList.add("dp-native");
+      inp.tabIndex = -1;
+      inp.setAttribute("aria-hidden", "true");
+      inp.parentNode.insertBefore(btn, inp);
+      const sync = () => paintField(inp);
+      inp.addEventListener("input", sync);
+      inp.addEventListener("change", sync);
+      inp.addEventListener("click", (e) => { e.preventDefault(); openFor(inp); });
+      btn.addEventListener("click", (e) => { e.preventDefault(); if (st && st.inp === inp) close(true); else openFor(inp); });
+      sync();
+    }
+    dp.enhance = (root) => (root || document).querySelectorAll('input[type="date"]:not([data-dp])').forEach(enhance);
+    dp.refresh = (root) => (root || document).querySelectorAll('input[type="date"][data-dp]').forEach(paintField);
+
+    /* צביעת טווח על כל מכל עם תאים [data-iso] (גם הלוח הקבוע בעמוד המתחם) */
+    dp.paint = (box, a, b, hover) => {
+      const end = b || (a && hover && hover > a ? hover : "");
+      box.querySelectorAll(".dp-c[data-iso]").forEach((c) => {
+        const d = c.dataset.iso;
+        const isA = !!a && d === a, isB = !!end && d === end;
+        c.classList.toggle("s-start", isA);
+        c.classList.toggle("s-end", isB);
+        c.classList.toggle("s-in", !!(a && end && d > a && d < end));
+        c.classList.toggle("s-one", isA && !end);
+        c.classList.toggle("pv", !b && !!end && d > a && d <= end);
+      });
+    };
+
+    function limitAfter(start) {
+      if (!st.blocked || !start) return null;
+      return [...st.blocked].filter((d) => d >= start).sort()[0] || null;
+    }
+    function allowedEnd(iso) {
+      if (!st.a || iso <= st.a) return false;
+      const lim = limitAfter(st.a);
+      return !lim || iso <= lim;
+    }
+    function dayState(iso) {
+      const min = st.min || "", max = st.max || "";
+      const booked = !!(st.blocked && st.blocked.has(iso));
+      let off = (min && iso < min) || (max && iso > max);
+      const choosingEnd = st.pair && st.a && (!st.b || st.wantEnd);
+      if (!off && booked) off = !(choosingEnd && allowedEnd(iso));
+      return { off: !!off, booked };
+    }
+    function monthHTML(m, focusIso) {
+      const todayIso = T.iso(T.today());
+      let h = `<div class="dp-month"><div class="dp-mtitle">${T.fmtMonth(m)}</div><div class="dp-grid" role="grid" aria-label="${T.fmtMonth(m)}">${DOW.map((d) => `<span class="dp-dow" role="columnheader">${d}</span>`).join("")}`;
+      for (let i = 0; i < m.getDay(); i++) h += `<span class="dp-c dp-pad" aria-hidden="true"></span>`;
+      const days = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
+      for (let d = 1; d <= days; d++) {
+        const iso = T.iso(new Date(m.getFullYear(), m.getMonth(), d));
+        const s = dayState(iso);
+        const cls = ["dp-c"];
+        if (s.booked) cls.push("booked");
+        if (s.off) cls.push("off");
+        if (iso === todayIso) cls.push("today");
+        h += `<span class="${cls.join(" ")}" data-iso="${iso}" role="gridcell"><button type="button" class="dp-d" data-dp-day="${iso}" tabindex="${iso === focusIso ? 0 : -1}" ${s.off ? 'aria-disabled="true"' : ""} aria-label="${T.fmtLong(iso)}${s.booked ? ", תפוס" : ""}${iso === todayIso ? ", היום" : ""}">${d}</button></span>`;
+      }
+      return h + `</div></div>`;
+    }
+    function summaryHTML() {
+      if (!st.pair) return `<div class="dp-chips"><span class="dp-chip on"><small>${T.esc(labelOf(st.inp))}</small><b>${st.a ? fmtChip.format(parse(st.a)) : "—"}</b></span></div>`;
+      const n = st.a && st.b ? T.nightsBetween(st.a, st.b) : 0;
+      const onA = !st.a || (st.a && st.b && !st.wantEnd), onB = !onA;
+      return `<div class="dp-chips"><span class="dp-chip ${onA ? "on" : ""}"><small>${T.esc(labelOf(st.pair.a))}</small><b>${st.a ? fmtChip.format(parse(st.a)) : "בחרו יום"}</b></span><span class="dp-to" aria-hidden="true">${T.icon("fwd")}</span><span class="dp-chip ${onB ? "on" : ""}"><small>${T.esc(labelOf(st.pair.b))}</small><b>${st.b ? fmtChip.format(parse(st.b)) : "בחרו יום"}</b></span>${n ? `<em class="dp-n">${nightsTxt(n)}</em>` : ""}</div>`;
+    }
+    function render(dir, focusIso) {
+      const months = st.pair && !mq() ? 2 : 1;
+      focusIso = focusIso || st.focus || st.b || st.a || T.iso(st.view);
+      st.focus = focusIso;
+      const hint = st.pair ? (!st.a || (st.a && st.b && !st.wantEnd) ? "בחרו תאריך הגעה" : "עכשיו תאריך עזיבה") : "";
+      let h = `<div class="dp-top">${summaryHTML()}<div class="dp-nav"><button type="button" class="dp-arrow" data-dp="prev" aria-label="החודש הקודם">${T.icon("chev-r")}</button><button type="button" class="dp-arrow" data-dp="next" aria-label="החודש הבא">${T.icon("chev-l")}</button><button type="button" class="dp-arrow dp-x" data-dp="cancel" aria-label="סגירה">${T.icon("x")}</button></div></div>`;
+      h += `<div class="dp-months${dir ? " slide-" + dir : ""}" style="--n:${months}">`;
+      for (let i = 0; i < months; i++) h += monthHTML(new Date(st.view.getFullYear(), st.view.getMonth() + i, 1), focusIso);
+      h += `</div><div class="dp-foot"><div class="dp-legend"><span><i class="lg-sel"></i>נבחר</span><span><i class="lg-free"></i>פנוי</span>${st.blocked ? `<span><i class="lg-off"></i>תפוס</span>` : ""}</div><span class="dp-hint" aria-live="polite">${hint}</span><div class="dp-act"><button type="button" class="dp-clear" data-dp="clear">ניקוי</button><button type="button" class="dp-ok" data-dp="ok">${st.pair && st.a && !st.b ? "רק הגעה" : "אישור"}</button></div></div>`;
+      st.el.innerHTML = h;
+      dp.paint(st.el, st.a, st.b, st.hover);
+      if (!st.el.querySelector(`[data-dp-day="${focusIso}"]`)) { const f = st.el.querySelector(".dp-d:not([aria-disabled])") || st.el.querySelector(".dp-d"); if (f) f.tabIndex = 0; }
+    }
+    function place() {
+      if (!st) return;
+      const el = st.el;
+      if (mq()) { el.classList.add("dp-sheet"); el.style.cssText = ""; return; }
+      el.classList.remove("dp-sheet");
+      const anchor = (st.pair ? st.pair.a : st.inp).previousElementSibling || st.inp;
+      const r = anchor.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
+      const vw = window.innerWidth, vh = window.innerHeight;
+      let left = r.right - w;
+      left = Math.max(8, Math.min(left, vw - w - 8));
+      let top = r.bottom + 10;
+      if (top + h > vh - 8) top = r.top - h - 10 > 8 ? r.top - h - 10 : Math.max(8, vh - h - 8);
+      el.style.left = Math.round(left) + "px";
+      el.style.top = Math.round(Math.max(8, top)) + "px";
+      el.style.transformOrigin = top < r.top ? "bottom center" : "top center";
+    }
+    function onScroll(e) { if (!st || (e.target && e.target.nodeType === 1 && st.el.contains(e.target))) return; cancelAnimationFrame(raf); raf = requestAnimationFrame(place); }
+    function openFor(inp) {
+      if (inp.disabled || inp.readOnly) return;
+      close(false);
+      const pair = pairOf(inp);
+      st = { inp, pair, a: pair ? pair.a.value : inp.value, b: pair ? pair.b.value : "", hover: "", wantEnd: !!(pair && inp === pair.b && pair.a.value), min: (pair ? pair.a.min : inp.min) || "", max: inp.max || "" };
+      if (st.b && st.a && st.b <= st.a) st.b = "";
+      try { st.blocked = (dp.blockedFor && dp.blockedFor(inp)) || null; } catch (e) { st.blocked = null; }
+      const base = parse(st.wantEnd ? st.b || st.a : st.a) || parse(st.min) || T.today();
+      st.view = new Date(base.getFullYear(), base.getMonth(), 1);
+      st.focus = T.iso(base);
+      st.start0 = st.a; st.end0 = st.b;
+      const el = (st.el = document.createElement("div"));
+      el.className = "dp";
+      el.setAttribute("role", "dialog");
+      el.setAttribute("aria-label", pair ? "בחירת תאריכי הגעה ועזיבה" : "בחירת תאריך");
+      if (mq()) { scrim = document.createElement("div"); scrim.className = "dp-scrim"; document.body.appendChild(scrim); requestAnimationFrame(() => scrim && scrim.classList.add("in")); }
+      document.body.appendChild(el);
+      render();
+      place();
+      requestAnimationFrame(() => { if (st && st.el === el) el.classList.add("in"); });
+      document.addEventListener("scroll", onScroll, true);
+      window.addEventListener("resize", onScroll);
+      [inp, pair && pair.a, pair && pair.b].forEach((x) => x && paintField(x));
+      const f = el.querySelector('.dp-d[tabindex="0"]'); if (f) f.focus({ preventScroll: true });
+      dp.open = st;
+    }
+    function fire(x) { if (!x || !x.isConnected) return; x.dispatchEvent(new Event("input", { bubbles: true })); if (x.isConnected) x.dispatchEvent(new Event("change", { bubbles: true })); }
+    function commit() {
+      if (!st) return;
+      if (st.pair) {
+        const { a, b } = st.pair;
+        const changed = a.value !== (st.a || "") || b.value !== (st.b || "");
+        a.value = st.a || ""; b.value = st.b || "";
+        paintField(a); paintField(b);
+        if (changed) { fire(a); if (b.isConnected) fire(b); }
+      } else if (st.inp.value !== (st.a || "")) { st.inp.value = st.a || ""; paintField(st.inp); fire(st.inp); }
+    }
+    function close(focusBack, keep) {
+      if (!st) return;
+      const s = st;
+      st = null; dp.open = null;
+      document.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+      s.el.classList.remove("in"); s.el.classList.add("out");
+      setTimeout(() => s.el.remove(), 180);
+      if (scrim) { const sc = scrim; scrim = null; sc.classList.remove("in"); setTimeout(() => sc.remove(), 200); }
+      [s.inp, s.pair && s.pair.a, s.pair && s.pair.b].forEach((x) => x && x.isConnected && paintField(x));
+      if (focusBack) {
+        let btn = s.inp.isConnected ? s.inp.previousElementSibling : null;
+        if (!btn && s.inp.name) { const n = document.querySelector(`input[type=date][name="${s.inp.name}"]`); btn = n && n.previousElementSibling; }
+        if (btn && btn.focus) btn.focus({ preventScroll: true });
+      }
+    }
+    function pick(iso) {
+      const s = st;
+      if (!s.pair) { s.a = iso; commit(); close(true); return; }
+      if (s.a && (!s.b || s.wantEnd) && allowedEnd(iso)) {
+        s.b = iso; s.wantEnd = false; s.hover = "";
+        dp.paint(s.el, s.a, s.b, "");
+        const top = s.el.querySelector(".dp-chips"); if (top) top.outerHTML = summaryHTML();
+        s.el.classList.add("done");
+        setTimeout(() => { if (st === s) { commit(); close(true); } }, 280);
+        return;
+      }
+      s.a = iso; s.b = ""; s.wantEnd = true; s.hover = "";
+      render("", iso);
+      const f = s.el.querySelector(`[data-dp-day="${iso}"]`); if (f) f.focus({ preventScroll: true });
+    }
+    function shift(n, focusIso) {
+      st.view = new Date(st.view.getFullYear(), st.view.getMonth() + n, 1);
+      render(n > 0 ? "next" : "prev", focusIso || T.iso(st.view));
+      const f = st.el.querySelector(`[data-dp-day="${st.focus}"]`) || st.el.querySelector('.dp-d[tabindex="0"]');
+      if (f && focusIso) f.focus({ preventScroll: true });
+    }
+    document.addEventListener("click", (e) => {
+      if (!st) return;
+      const t = e.target;
+      if (!st.el.contains(t)) return;
+      const day = t.closest("[data-dp-day]");
+      if (day) { if (day.getAttribute("aria-disabled") !== "true") pick(day.dataset.dpDay); return; }
+      const b = t.closest("[data-dp]");
+      if (!b) return;
+      const a = b.dataset.dp;
+      if (a === "prev") shift(-1);
+      else if (a === "next") shift(1);
+      else if (a === "clear") { st.a = ""; st.b = ""; st.wantEnd = false; st.hover = ""; render(); }
+      else if (a === "ok") { commit(); close(true); }
+      else if (a === "cancel") close(true);
+    });
+    document.addEventListener("pointerdown", (e) => {
+      if (!st) return;
+      if (st.el.contains(e.target)) return;
+      const f = e.target.closest && e.target.closest(".dp-field");
+      if (f && (f.nextElementSibling === st.inp || (st.pair && (f.nextElementSibling === st.pair.a || f.nextElementSibling === st.pair.b)))) {
+        if (st.pair && f.nextElementSibling !== st.inp) { e.preventDefault(); st.inp = f.nextElementSibling; st.wantEnd = st.inp === st.pair.b && !!st.a; render(); paintField(st.pair.a); paintField(st.pair.b); }
+        return;
+      }
+      if (st.a !== st.start0 || st.b !== st.end0) commit();
+      close(false);
+    }, true);
+    document.addEventListener("mouseover", (e) => {
+      if (!st || !st.pair || !st.a || (st.b && !st.wantEnd)) return;
+      const d = e.target.closest && e.target.closest(".dp [data-dp-day]");
+      const iso = d && d.getAttribute("aria-disabled") !== "true" && allowedEnd(d.dataset.dpDay) ? d.dataset.dpDay : "";
+      if (iso !== st.hover) { st.hover = iso; dp.paint(st.el, st.a, st.wantEnd ? "" : st.b, iso); }
+    });
+    document.addEventListener("keydown", (e) => {
+      if (!st) return;
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(true); return; }
+      const d = e.target.closest && e.target.closest(".dp [data-dp-day]");
+      if (!d) return;
+      const cur = T.parseISO(d.dataset.dpDay);
+      const step = { ArrowLeft: 1, ArrowRight: -1, ArrowDown: 7, ArrowUp: -7 }[e.key];
+      let next = null;
+      if (step) next = T.addDays(cur, step);
+      else if (e.key === "PageDown") next = new Date(cur.getFullYear(), cur.getMonth() + 1, Math.min(cur.getDate(), 28));
+      else if (e.key === "PageUp") next = new Date(cur.getFullYear(), cur.getMonth() - 1, Math.min(cur.getDate(), 28));
+      else if (e.key === "Home") next = T.addDays(cur, -cur.getDay());
+      else if (e.key === "End") next = T.addDays(cur, 6 - cur.getDay());
+      if (!next) return;
+      e.preventDefault();
+      const iso = T.iso(next);
+      const months = st.pair && !mq() ? 2 : 1;
+      const first = st.view, last = new Date(st.view.getFullYear(), st.view.getMonth() + months, 0);
+      st.focus = iso;
+      if (next < first) shift(-1, iso);
+      else if (next > last) shift(1, iso);
+      else {
+        st.el.querySelectorAll('.dp-d[tabindex="0"]').forEach((x) => (x.tabIndex = -1));
+        const f = st.el.querySelector(`[data-dp-day="${iso}"]`); if (f) { f.tabIndex = 0; f.focus({ preventScroll: true }); }
+      }
+      if (st.pair && st.a && (!st.b || st.wantEnd)) { st.hover = allowedEnd(iso) ? iso : ""; dp.paint(st.el, st.a, "", st.hover); }
+    }, true);
+    /* כל שדה תאריך שנוסף לדף משתדרג אוטומטית */
+    const boot = () => {
+      dp.enhance(document);
+      new MutationObserver((list) => {
+        for (const m of list) for (const n of m.addedNodes) {
+          if (n.nodeType !== 1) continue;
+          if (n.matches && n.matches('input[type="date"]')) enhance(n);
+          else if (n.querySelector && n.querySelector('input[type="date"]')) dp.enhance(n);
+        }
+      }).observe(document.body, { childList: true, subtree: true });
+    };
+    if (document.body) boot(); else document.addEventListener("DOMContentLoaded", boot);
+  })();
 
   T.normalizeListing = (l) => {
     const n = (v) => (v === "" || v == null ? 0 : Number(v));
