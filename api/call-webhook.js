@@ -7,7 +7,10 @@
  *   המספר הווירטואלי שחויג: did | To | to | called | tracking_phone
  *   המתקשר: caller | From | from | CallerID | caller_id
  *   היעד (הטלפון של המארח): target | ForwardedTo | forwarded_to
- *   סטטוס: status | DialStatus | CallStatus   (ANSWER / NOANSWER / BUSY / completed / no-answer ...)
+ *   סטטוס: status | DialCallStatus | DialStatus | CallStatus   (ANSWER / NOANSWER / BUSY / completed / no-answer ...)
+ *
+ * Twilio: מגדירים על המספר TwiML עם <Dial action="https://<האתר>/api/call-webhook?key=...&provider=twilio">טלפון המארח</Dial>.
+ * Twilio שולח בסוף השיחה DialCallStatus ו-DialCallDuration, ומקבל בחזרה TwiML ריק שמסיים את השיחה.
  *   משך שיחה בשניות: duration | DialCallDuration | CallDuration | billsec
  *   זמן צלצול: dialtime | ring
  *   זמן: time (epoch) | Timestamp | start_time | started_at
@@ -66,7 +69,7 @@ export default async function handler(req, res) {
       const rec = {
         tracking_phone: did,
         caller: normPhone(pick(c, ["caller", "From", "from", "CallerID", "callerid", "caller_id", "Caller"])),
-        status: statusOf(pick(c, ["status", "DialStatus", "CallStatus", "leg1DialStatusName", "Status"]), duration),
+        status: statusOf(pick(c, ["status", "DialCallStatus", "DialStatus", "CallStatus", "leg1DialStatusName", "Status"]), duration),
         duration,
         ring: Math.max(0, Math.round(Number(pick(c, ["dialtime", "ring", "RingTime"])) || 0)),
         started_at: timeOf(pick(c, ["time", "Timestamp", "start_time", "started_at", "StartTime", "date"])),
@@ -100,6 +103,11 @@ export default async function handler(req, res) {
           }
         } catch (e) { /* מייל הוא תוספת: השיחה כבר נשמרה */ }
       }
+    }
+    /* Twilio מצפה ל-TwiML בתשובה ל-action של Dial */
+    if (String(query.provider || "") === "twilio" || (!Array.isArray(b) && b.CallSid)) {
+      res.statusCode = 200; res.setHeader("Content-Type", "text/xml; charset=utf-8");
+      return res.end('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
     }
     return send(res, 200, { Err: 0, Errdesc: "OK", ok: true, saved: out });
   } catch (e) {
