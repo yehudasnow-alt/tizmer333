@@ -1592,3 +1592,7 @@ a.note { color: var(--navy); }
 .ar-meta a { color: var(--navy); font-weight: 500; }
 .ar-meta .ic { width: 14px; height: 14px; vertical-align: -2px; color: var(--blue); }
 .toolbar-site .ar-kinds { margin-bottom: 0; }
+
+/* lean home (Nov 15): no stats under the hero copy, so the hero itself keeps room for the overlapping search box */
+.home-lean .hero-inner { padding-bottom: 168px; }
+@media (max-width: 720px) { .home-lean .hero-inner { padding-bottom: 150px; } }

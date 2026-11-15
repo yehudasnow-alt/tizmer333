@@ -323,18 +323,11 @@
     return `<section class="wrap page"><div class="news-band"><div><span class="eyebrow">דילים למייל</span><h2>דקה 90 ומבצעים, לפני כולם</h2><p>פעם בשבוע: מתחמים שהתפנו לסופ״ש הקרוב והנחות שמארחים פותחים רק לנרשמים.</p></div>
       <form class="news-form" data-form="subscribe" novalidate>${HP}<label class="field"><span>אימייל</span><input class="input" name="email" type="email" dir="ltr" autocomplete="email" required placeholder="name@example.com"></label><label class="field"><span>אזור מועדף (לא חובה)</span><select class="select" name="region">${placeOptions("", "כל הארץ")}</select></label><button class="btn btn-primary btn-lg" type="submit">${I("send")}הרשמה</button><p class="hint">בהרשמה אתם מאשרים לקבל מאיתנו דיוור שיווקי במייל. נשלח מייל לאישור, ואפשר להסיר את עצמכם בכל רגע. <a href="#terms">פרטיות</a></p></form></div></section>`;
   }
+  /* דף הבית – בנייה מחדש בהדרגה (נובמבר 2026): כרגע רק הפתיח עם החיפוש, הרשמה לדילים והפס למארחים.
+     שאר הקטעים (מסלולים, אזורים, מגזין וכו') הוסרו מדף הבית; הפונקציות שלהם נשארו בקוד לשימוש בהמשך. */
   function viewHome() {
-    const L = S.listings;
-    const featured = L.filter((l) => l.featured);
-    const lm = L.filter(T.lastMinuteActive);
-    const deals = L.filter((l) => l.deal_label || T.benefitsOf(l).length).slice(0, 4);
-    const newest = L.slice().sort((a, b) => (b.created_at || "").localeCompare(a.created_at || "")).slice(0, 8);
-    const regionsUsed = new Set(L.map((l) => l.region));
     const f = S.filters;
-    const lmN = T.lastMinuteNights();
-    const top = topRated(5);
-    const qi = (k) => quickIdx((q) => q.amenity === k || q.flag === k || q.audience === k);
-    return `<div class="view">
+    return `<div class="view home-lean">
       <section class="wrap page" aria-label="חיפוש">
         <div class="hero">
           <img class="hero-img" src="${esc(S.settings.hero_image || T.HERO_DEFAULT)}" alt="">
@@ -344,11 +337,6 @@
             <h1>${esc(S.settings.hero_title)}</h1>
             <p class="hero-sub">${esc(S.settings.hero_subtitle)}</p>
             <div class="hero-cta"><a class="btn btn-sky btn-lg" href="#lastminute">${I("bolt")}דקה 90 לסופ״ש הקרוב</a><a class="btn btn-glass btn-lg" href="#type-villa">${I("home")}וילות יוקרה</a></div>
-            <div class="hero-stats">
-              <div><b>${T.num(L.length)}</b><span>מתחמי אירוח</span></div>
-              <div><b>${T.num(regionsUsed.size)}</b><span>אזורים בארץ</span></div>
-              <div><b>₪0</b><span>עמלת הזמנה לאורחים</span></div>
-            </div>
           </div>
         </div>
         <form class="searchbox" data-form="hero-search" role="search">
@@ -358,59 +346,6 @@
           ${guestsPop(f)}
           <button class="btn btn-primary" type="submit">${I("search")}חיפוש</button>
         </form>
-        <div class="quick" aria-label="סינון מהיר">${T.QUICK_FILTERS.map((q, i) => `<button class="filter-chip" type="button" data-act="quick" data-i="${i}">${I(q.icon)}${esc(q.label)}</button>`).join("")}</div>
-      </section>
-
-      ${featured.length ? `<section class="section wrap page" aria-labelledby="h-featured">${head("נבחרי העונה", `<span id="h-featured">מתחמים שאורחים חוזרים אליהם</span>`, "", `<a class="link-more" href="#search">לכל המתחמים ${I("fwd")}</a>`)}<div id="showcase">${showcase(featured)}</div></section>` : ""}
-
-      ${railSection("mamad", `${I("shield")} ביטחון`, "חופשה עם מרחב מוגן צמוד", "ממ״ד בתוך היחידה או מרחב מוגן בבית המארחים, בלי לוותר על החופשה.", L.filter((l) => hasAmen(l, "mamad") || hasAmen(l, "mamad_host")), `#quick-${qi("mamad")}`)}
-
-      ${lm.length ? `<section class="section wrap page" id="lm-section" aria-labelledby="h-lm"><div class="lm-band">${head(`${I("bolt")} דקה 90`, `<span id="h-lm">פנוי בסופ״ש הקרוב, במחיר מוזל</span>`, `לילות ${lmN.map(T.fmtLong).join(" ו")}. ההנחה חלה על הלילות האלה בלבד.`, `<a class="link-more" href="#lastminute">לכל מבצעי דקה 90 ${I("fwd")}</a>`)}${grid(lm.slice(0, 3))}</div></section>` : ""}
-
-      ${railSection("weekend", `${I("calendar")} סופ״ש קרוב`, "עדיין פנויים לסופ״ש הקרוב", `לילות ${lmN.map(fmtDay).join(" ו")}, לפי היומן של המארחים.`, L.filter(T.freeWeekend), "#weekend")}
-
-      <section class="section wrap page" aria-labelledby="h-regions">
-        ${head("לפי אזור", `<span id="h-regions">מהבזלת בצפון ועד הגרניט באילת</span>`, "")}
-        <div class="regions">${T.REGIONS.map((r) => {
-          const inReg = L.filter((l) => l.region === r.key);
-          const withPhoto = inReg.find((l) => (l.photos || []).length);
-          const img = withPhoto ? T.thumbOf(withPhoto) : T.regionScene(r.key);
-          return `<a class="region" href="#region-${r.key}"><img src="${esc(img)}" alt="" loading="lazy"><span class="chip">${inReg.length ? plural.stays(inReg.length) : "בקרוב"}</span><span class="region-body"><b>${esc(r.name)}</b><span>${esc(r.blurb)}</span></span></a>`;
-        }).join("")}</div>
-      </section>
-
-      ${top.length >= 3 ? `<section class="section wrap page" aria-labelledby="h-top"><div class="top-band">${head(`${I("trophy")} מומלצי הגולשים`, `<span id="h-top">המקומות שהאורחים הכי אוהבים</span>`, "לפי חוות דעת מאומתות של אורחים שהזמינו דרך האתר.", `<a class="link-more" href="#top">לדירוג המלא ${I("fwd")}</a>`)}${rankList(top)}</div></section>` : ""}
-
-      ${(S.settings.collections || []).map((c, k) => railSection("col" + k, `${I("sparkle")} אוסף`, esc(c.title), esc(c.sub || ""), (c.ids || []).map(byId).filter(Boolean), "")).join("")}
-
-      ${railSection("pools", `${I("pool")} בריכות`, "בריכה פרטית, חלק מחוממות", "", L.filter((l) => hasAmen(l, "private_pool")), `#quick-${qi("heated_pool")}`)}
-      ${railSection("couples", `${I("heart")} רק שניכם`, "צימרים לזוגות בלבד", "בלי ילדים ובלי קבוצות: שקט, ג׳קוזי ופרטיות.", L.filter((l) => T.termsOf(l).couples_only), `#quick-${qi("couplesOnly")}`)}
-      ${railSection("families", `${I("users")} משפחות`, "לחופשה משפחתית", "בריכה בטיחותית, מתקנים לילדים ומקום לכולם.", L.filter((l) => (l.audience || []).includes("families")), `#quick-${qi("families")}`)}
-
-      <section class="section wrap page" aria-labelledby="h-types">
-        ${head("סוג אירוח", `<span id="h-types">צימר לזוג או וילה לכל המשפחה</span>`, "")}
-        <div class="types">${T.TYPES.filter((t) => L.some((l) => l.type === t.key) || ["zimmer", "villa", "cabin", "suite", "compound"].includes(t.key)).map((t) => `<a class="type-tile" href="#type-${t.key}"><b>${esc(t.plural)}</b><span>${L.some((l) => l.type === t.key) ? plural.stays(L.filter((l) => l.type === t.key).length) : "בקרוב"}</span></a>`).join("")}</div>
-      </section>
-
-      ${deals.length ? `<section class="section wrap page" aria-labelledby="h-deals">${head("דילים והטבות", `<span id="h-deals">הנחות שהמארחים מציעים עכשיו</span>`, "כולל הנחות למילואימניקים, חיילים, סטודנטים וגיל הזהב.", `<a class="link-more" href="#deals">לכל הדילים ${I("fwd")}</a>`)}${grid(deals)}</section>` : ""}
-
-      <section class="section wrap page" aria-labelledby="h-new">
-        ${head("חדש באתר", `<span id="h-new">נוספו לאחרונה</span>`, "", `<a class="link-more" href="#search">לחיפוש מלא ${I("fwd")}</a>`)}
-        ${newest.length ? grid(newest) : emptyState("עוד אין מתחמים באתר", "המתחמים הראשונים יופיעו כאן מיד אחרי שיתווספו בפאנל הניהול.")}
-      </section>
-
-      ${S.reviews.length ? `<section class="section wrap page" aria-labelledby="h-revs">${head("מחפשים המלצה?", `<span id="h-revs">מה אורחים כתבו לאחרונה</span>`, "כל חוות דעת נכתבת רק אחרי הזמנה שסומנה כמאושרת, ועוברת בדיקה.", `<a class="link-more" href="#top">למקומות המומלצים ${I("fwd")}</a>`)}<div class="rev-list">${recentReviews(3)}</div></section>` : ""}
-
-      ${S.articles.length ? `<section class="section wrap page" aria-labelledby="h-mag">${head("מגזין", `<span id="h-mag">טיפים לפני שמזמינים</span>`, "", `<a class="link-more" href="#magazine">לכל הכתבות ${I("fwd")}</a>`)}<div class="mag-grid">${S.articles.slice(0, 3).map(magCard).join("")}</div></section>` : ""}
-
-      <section class="section wrap page" aria-labelledby="h-how">
-        ${head("איך זה עובד", `<span id="h-how">בלי מתווכים ובלי עמלות</span>`, "ההזמנה נסגרת ישירות מול המארחים. אנחנו בודקים כל מתחם לפני שהוא עולה לאתר.")}
-        <div class="steps">
-          <div class="step"><h3>בוחרים אזור ותאריכים</h3><p>מסננים לפי ממ״ד, ג׳קוזי, בריכה מחוממת, כשרות או כלבים, ורואים מחיר כולל לתאריכים, כולל ילדים, חגים, חבילות והטבות.</p></div>
-          <div class="step"><h3>שולחים בקשה או וואטסאפ</h3><p>הבקשה מגיעה ישירות למארחים עם התאריכים, היחידות ומספר האורחים. אפשר גם להתקשר או לפתוח איתם שיחה בוואטסאפ.</p></div>
-          <div class="step"><h3>המארחים חוזרים אליכם</h3><p>מאשרים זמינות, מסכמים מחיר ותשלום ישירות איתם. אחרי החופשה מקבלים קישור אישי לחוות דעת מאומתת.</p></div>
-        </div>
-        <div class="vet">${[["shield", "כל מתחם נבדק", "פרטי המתחם, התמונות והמחירים עוברים בדיקה של הצוות לפני הפרסום ובכל שינוי."], ["star", "חוות דעת אמיתיות", "רק אורחים שההזמנה שלהם אושרה מקבלים קישור חד־פעמי לכתיבת חוות דעת."], ["sync", "יומן מעודכן", "היומנים מסתנכרנים כל שעה עם Booking ו-Airbnb, כדי שלא תבקשו תאריך שכבר נתפס."]].map(([ic, t, p]) => `<div>${I(ic)}<b>${t}</b><p>${p}</p></div>`).join("")}</div>
       </section>
 
       ${newsletterBand()}
