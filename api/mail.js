@@ -15,6 +15,8 @@ import { layout, sendMail, sendOnce, row, p, table, fmtDate, reviewRequest } fro
 
 const ADMIN_TYPES = new Set(["approved", "rejected", "moderation", "review_published", "test"]);
 const enc = encodeURIComponent;
+/* השוואת מייל מדויקת ב-ilike: _ ו-% במייל הם תווים רגילים ולא תווים כלליים */
+const likeExact = (email) => enc(String(email).replace(/[\\%_]/g, "\\$&"));
 const first = async (path) => (await db(path))[0] || null;
 
 export default async function handler(req, res) {
@@ -39,8 +41,8 @@ export default async function handler(req, res) {
 
     if (type === "welcome") {
       const em = String(user.email).toLowerCase();
-      const adv = await first(`advertisers?select=*&email=ilike.${enc(em)}`);
-      const app = await first(`applications?select=*&email=ilike.${enc(em)}&order=created_at.desc`);
+      const adv = await first(`advertisers?select=*&email=ilike.${likeExact(em)}`);
+      const app = await first(`applications?select=*&email=ilike.${likeExact(em)}&order=created_at.desc`);
       if (!adv && !app) return send(res, 200, { skipped: "no signup" });
       const name = (adv && adv.name) || (app && app.name) || "";
       const jobs = [];

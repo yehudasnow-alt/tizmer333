@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   try {
     const user = await getUser(req);
     if (!user || !(await isAdminEmail(user.email))) return send(res, 401, { error: "unauthorized" });
-    const r = await fetch(env("DEPLOY_HOOK_URL"), { method: "POST" });
+    const r = await fetch(env("DEPLOY_HOOK_URL"), { method: "POST", signal: AbortSignal.timeout(15000) });
     if (!r.ok) return send(res, 502, { error: "deploy hook " + r.status });
     return send(res, 200, { ok: true });
   } catch (e) {

@@ -116,6 +116,8 @@ alter table public.leads alter column listing_name set default '';
 create unique index if not exists leads_review_token_idx on public.leads (review_token) where review_token is not null;
 create index if not exists leads_listing_idx on public.leads (listing_id);
 create index if not exists leads_created_idx on public.leads (created_at desc);
+-- "הפניות שלי" של אורח מחובר (לפי האימייל שלו)
+create index if not exists leads_email_idx on public.leads (lower(email)) where email <> '';
 
 create table if not exists public.applications (
   id          text primary key default gen_random_uuid()::text,
@@ -513,12 +515,13 @@ create or replace function public.today_il()
 returns date language sql stable as $$ select (now() at time zone 'Asia/Jerusalem')::date $$;
 
 -- האם מתחמי הלקוח מוצגים לגולשים: לקוח פעיל או בניסיון, והמנוי בתוקף כולל ימי חסד (בהגדרות)
+-- (נבדק לכל מתחם בכל טעינה של האתר, ולכן קריאה אחת בלבד לטבלת הלקוחות)
 create or replace function public.owner_visible(p_owner text)
 returns boolean language sql stable security definer set search_path = public as $$
-  select p_owner is null or p_owner = ''
-    or not exists (select 1 from public.advertisers a where a.id = p_owner)
-    or exists (select 1 from public.advertisers a where a.id = p_owner and a.status in ('active', 'trial')
-      and (a.end_date is null or a.end_date + greatest(0, coalesce((select (data ->> 'grace_days')::int from public.settings where id = 1), 3)) >= public.today_il()));
+  select coalesce(p_owner, '') = ''
+    or coalesce((select coalesce(a.status, '') in ('active', 'trial')
+        and (a.end_date is null or a.end_date + greatest(0, coalesce((select (data ->> 'grace_days')::int from public.settings where id = 1), 3)) >= public.today_il())
+      from public.advertisers a where a.id = p_owner), true);
 $$;
 
 -- מצב מנהל לממשק: רשום כמנהל? צריך קוד דו-שלבי?
@@ -737,10 +740,10 @@ end $$;
 alter table public.mail_log  enable row level security;
 alter table public.audit_log enable row level security;
 drop policy if exists audit_read on public.audit_log;
-create policy audit_read on public.audit_log for select to authenticated using (public.is_admin());
+create policy audit_read on public.audit_log for select to authenticated using ((select public.is_admin()));
 -- מנהלים: מנהל רואה ומוסיף מנהלים אחרים
 drop policy if exists admins_manage on public.admins;
-create policy admins_manage on public.admins for all to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy admins_manage on public.admins for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 grant execute on function public.today_il() to anon, authenticated;
 grant execute on function public.owner_visible(text) to anon, authenticated;
@@ -856,7 +859,7 @@ create table if not exists public.favorites (
 alter table public.favorites enable row level security;
 drop policy if exists favorites_own on public.favorites;
 create policy favorites_own on public.favorites for all to authenticated
-  using (user_id = auth.uid()) with check (user_id = auth.uid());
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 
 -- מארח יכול לערוך רק כשהמנוי פעיל או בניסיון, כולל ימי חסד. אחרי זה הכרטיס "קפוא" עד שמחדשים.
 create or replace function public.owner_can_edit(p_owner text)
@@ -954,23 +957,23 @@ alter table public.subscribers   enable row level security;
 drop policy if exists listings_read on public.listings;
 -- גולשים רואים מתחם פעיל רק כשהמנוי של הלקוח בתוקף (כולל ימי חסד). מנהל ומארח רואים תמיד.
 create policy listings_read on public.listings for select
-  using (public.is_admin() or owner_id in (select public.my_advertiser_ids()) or (active and public.owner_visible(owner_id)));
+  using ((select public.is_admin()) or owner_id in (select public.my_advertiser_ids()) or (active and public.owner_visible(owner_id)));
 drop policy if exists listings_insert on public.listings;
-create policy listings_insert on public.listings for insert to authenticated with check (public.is_admin());
+create policy listings_insert on public.listings for insert to authenticated with check ((select public.is_admin()));
 drop policy if exists listings_update on public.listings;
 create policy listings_update on public.listings for update to authenticated
-  using (public.is_admin() or (owner_id in (select public.my_advertiser_ids()) and public.owner_can_edit(owner_id)))
-  with check (public.is_admin() or (owner_id in (select public.my_advertiser_ids()) and public.owner_can_edit(owner_id)));
+  using ((select public.is_admin()) or (owner_id in (select public.my_advertiser_ids()) and public.owner_can_edit(owner_id)))
+  with check ((select public.is_admin()) or (owner_id in (select public.my_advertiser_ids()) and public.owner_can_edit(owner_id)));
 drop policy if exists listings_delete on public.listings;
-create policy listings_delete on public.listings for delete to authenticated using (public.is_admin());
+create policy listings_delete on public.listings for delete to authenticated using ((select public.is_admin()));
 
 -- לקוחות (מפרסמים)
 drop policy if exists advertisers_read on public.advertisers;
 create policy advertisers_read on public.advertisers for select to authenticated
-  using (public.is_admin() or id in (select public.my_advertiser_ids()));
+  using ((select public.is_admin()) or id in (select public.my_advertiser_ids()));
 drop policy if exists advertisers_write on public.advertisers;
 create policy advertisers_write on public.advertisers for all to authenticated
-  using (public.is_admin()) with check (public.is_admin());
+  using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- פניות
 drop policy if exists leads_insert on public.leads;
@@ -983,15 +986,15 @@ create policy leads_insert on public.leads for insert to anon, authenticated
 drop policy if exists leads_read on public.leads;
 -- מנהל, מארח המתחם, או האורח עצמו (לפי האימייל המאומת שלו)
 create policy leads_read on public.leads for select to authenticated
-  using (public.is_admin()
+  using ((select public.is_admin())
          or listing_id in (select l.id from public.listings l where l.owner_id in (select public.my_advertiser_ids()))
-         or (email <> '' and lower(email) = lower(coalesce(auth.jwt() ->> 'email', ''))));
+         or (email <> '' and lower(email) = (select lower(coalesce(auth.jwt() ->> 'email', '')))));
 drop policy if exists leads_update on public.leads;
 create policy leads_update on public.leads for update to authenticated
-  using (public.is_admin() or listing_id in (select l.id from public.listings l where l.owner_id in (select public.my_advertiser_ids())))
-  with check (public.is_admin() or listing_id in (select l.id from public.listings l where l.owner_id in (select public.my_advertiser_ids())));
+  using ((select public.is_admin()) or listing_id in (select l.id from public.listings l where l.owner_id in (select public.my_advertiser_ids())))
+  with check ((select public.is_admin()) or listing_id in (select l.id from public.listings l where l.owner_id in (select public.my_advertiser_ids())));
 drop policy if exists leads_delete on public.leads;
-create policy leads_delete on public.leads for delete to authenticated using (public.is_admin());
+create policy leads_delete on public.leads for delete to authenticated using ((select public.is_admin()));
 
 -- בקשות הצטרפות
 drop policy if exists applications_insert on public.applications;
@@ -999,59 +1002,59 @@ drop policy if exists applications_insert on public.applications;
 create policy applications_insert on public.applications for insert to anon, authenticated
   with check (status = 'new' and notified_at is null and verified = false and user_id is null and advertiser_id is null);
 drop policy if exists applications_admin on public.applications;
-create policy applications_admin on public.applications for all to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy applications_admin on public.applications for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- חוות דעת
 drop policy if exists reviews_read on public.reviews;
 create policy reviews_read on public.reviews for select
-  using (status = 'approved' or public.is_admin()
+  using (status = 'approved' or (select public.is_admin())
          or listing_id in (select l.id from public.listings l where l.owner_id in (select public.my_advertiser_ids())));
 drop policy if exists reviews_update on public.reviews;
 create policy reviews_update on public.reviews for update to authenticated
-  using (public.is_admin() or listing_id in (select l.id from public.listings l where l.owner_id in (select public.my_advertiser_ids())))
-  with check (public.is_admin() or listing_id in (select l.id from public.listings l where l.owner_id in (select public.my_advertiser_ids())));
+  using ((select public.is_admin()) or listing_id in (select l.id from public.listings l where l.owner_id in (select public.my_advertiser_ids())))
+  with check ((select public.is_admin()) or listing_id in (select l.id from public.listings l where l.owner_id in (select public.my_advertiser_ids())));
 drop policy if exists reviews_delete on public.reviews;
-create policy reviews_delete on public.reviews for delete to authenticated using (public.is_admin());
+create policy reviews_delete on public.reviews for delete to authenticated using ((select public.is_admin()));
 
 -- מקומות באזור
 drop policy if exists places_read on public.places;
-create policy places_read on public.places for select using (active or public.is_admin());
+create policy places_read on public.places for select using (active or (select public.is_admin()));
 drop policy if exists places_write on public.places;
-create policy places_write on public.places for all to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy places_write on public.places for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- נרשמים לדילים: כל אחד נרשם, רק מנהל רואה ומוחק
 drop policy if exists subscribers_insert on public.subscribers;
 create policy subscribers_insert on public.subscribers for insert to anon, authenticated
   with check (confirmed_at is null and unsubscribed_at is null and notified_at is null);
 drop policy if exists subscribers_admin on public.subscribers;
-create policy subscribers_admin on public.subscribers for all to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy subscribers_admin on public.subscribers for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- מגזין
 drop policy if exists articles_read on public.articles;
-create policy articles_read on public.articles for select using (published or public.is_admin());
+create policy articles_read on public.articles for select using (published or (select public.is_admin()));
 drop policy if exists articles_write on public.articles;
-create policy articles_write on public.articles for all to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy articles_write on public.articles for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- סטטיסטיקה: מנהל ומארח המתחם קוראים; כתיבה רק דרך track_event
 drop policy if exists stats_read on public.listing_stats;
 create policy stats_read on public.listing_stats for select to authenticated
-  using (public.is_admin() or listing_id in (select l.id from public.listings l where l.owner_id in (select public.my_advertiser_ids())));
+  using ((select public.is_admin()) or listing_id in (select l.id from public.listings l where l.owner_id in (select public.my_advertiser_ids())));
 
 -- הגדרות
 drop policy if exists settings_read on public.settings;
 create policy settings_read on public.settings for select using (true);
 drop policy if exists settings_write on public.settings;
-create policy settings_write on public.settings for all to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy settings_write on public.settings for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 
 -- שיחות: מנהל רואה הכל, מארח רואה את השיחות למתחמים שלו. כתיבה רק מהשרת.
 alter table public.calls enable row level security;
 drop policy if exists calls_read on public.calls;
 create policy calls_read on public.calls for select to authenticated
-  using (public.is_admin() or owner_id in (select public.my_advertiser_ids())
+  using ((select public.is_admin()) or owner_id in (select public.my_advertiser_ids())
          or listing_id in (select id from public.listings where owner_id in (select public.my_advertiser_ids())));
 drop policy if exists calls_admin_delete on public.calls;
-create policy calls_admin_delete on public.calls for delete to authenticated using (public.is_admin());
+create policy calls_admin_delete on public.calls for delete to authenticated using ((select public.is_admin()));
 
 -- ------------------------------------------------------------ גישה לטבלאות דרך ה-API
 -- גם אם בפרויקט כובתה האפשרות "Automatically expose new tables".
@@ -1072,9 +1075,9 @@ exception when others then null;
 end $$;
 drop policy if exists photos_upload on storage.objects;
 create policy photos_upload on storage.objects for insert to authenticated
-  with check (bucket_id = 'photos' and (public.is_admin() or exists (select 1 from public.my_advertiser_ids())));
+  with check (bucket_id = 'photos' and ((select public.is_admin()) or exists (select 1 from public.my_advertiser_ids())));
 drop policy if exists photos_delete on storage.objects;
-create policy photos_delete on storage.objects for delete to authenticated using (bucket_id = 'photos' and public.is_admin());
+create policy photos_delete on storage.objects for delete to authenticated using (bucket_id = 'photos' and (select public.is_admin()));
 
 -- =====================================================================
 -- שלב 4 במדריך: הוסיפו את האימייל שלכם כמנהל (החליפו את הכתובת והריצו לבד):

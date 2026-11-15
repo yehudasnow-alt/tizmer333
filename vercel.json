@@ -11,6 +11,15 @@
     },
     "api/cleanup.js": {
       "maxDuration": 60
+    },
+    "api/mail.js": {
+      "maxDuration": 30
+    },
+    "api/notify.js": {
+      "maxDuration": 30
+    },
+    "api/account.js": {
+      "maxDuration": 30
     }
   },
   "crons": [
@@ -39,6 +48,21 @@
         {
           "key": "Cache-Control",
           "value": "public, max-age=2592000"
+        }
+      ]
+    },
+    {
+      "source": "/assets/(js|css|vendor)/(.*)",
+      "has": [
+        {
+          "type": "query",
+          "key": "v"
+        }
+      ],
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
         }
       ]
     },

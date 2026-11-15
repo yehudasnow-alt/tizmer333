@@ -662,6 +662,7 @@
   }
   /* אחרי שינוי מבני בטיוטה (הוספה/מחיקה של שורה) מציירים מחדש בלי לקרוא שוב את הטופס הישן */
   function rerenderEditor() { const y = window.scrollY; render(); window.scrollTo(0, y); }
+  const edMaps = [];
   async function addPhotos(files) {
     const d = A.drafts[A.editId];
     const list = Array.from(files).filter((f) => f.type.startsWith("image/")).slice(0, 24 - d.photos.length);
@@ -706,10 +707,13 @@
     /* מפת מיקום */
     const mapEl = $("#ed-map");
     if (mapEl && window.L && !mapEl._leaflet_id) {
+      /* מפה של רינדור קודם שכבר לא בדף: משחררים אותה */
+      edMaps.splice(0).forEach((m) => { if (m.getContainer().isConnected) edMaps.push(m); else try { m.off(); m.remove(); } catch (e) {} });
       const d = A.drafts[A.editId];
       const reg = T.regionOf(d.region);
       const ll = [d.lat || reg.lat, d.lng || reg.lng];
       const map = L.map(mapEl, { scrollWheelZoom: false }).setView(ll, d.lat ? 12 : 9);
+      edMaps.push(map);
       const tiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "© OpenStreetMap" }).addTo(map);
       let errs = 0;
       tiles.on("tileerror", () => { if (++errs === 2) { map.removeLayer(tiles); mapEl.classList.add("map-offline"); T.REGIONS.forEach((r) => L.marker([r.lat, r.lng], { interactive: false, icon: L.divIcon({ className: "tm", html: `<span class="region-label">${esc(r.name)}</span>`, iconSize: [0, 0] }) }).addTo(map)); } });

@@ -23,7 +23,7 @@
 | מיילים | **Resend** | 100 ביום, 3,000 בחודש | צריך לאמת דומיין כדי לשלוח למארחים |
 | מפות | Leaflet + OpenStreetMap | חינם | עם קרדיט ל-OpenStreetMap (מופיע במפה) |
 | סנכרון יומנים כל שעה, גיבוי שבועי | GitHub Actions | 2,000 דקות בחודש במאגר פרטי | ב-Vercel Hobby ה-Cron רץ רק פעם ביום, לכן GitHub משלים |
-| משימה יומית (תזכורות, חוות דעת, סיכום) | Vercel Cron | 2 משימות ביום ב-Hobby | `/api/daily` כל בוקר ב-08:00, `/api/sync-ical` ב-06:00 |
+| משימה יומית (תזכורות, חוות דעת, סיכום) | Vercel Cron + GitHub Actions | 2 משימות ביום ב-Hobby | `/api/daily` כל בוקר ב-08:00, `/api/sync-ical` ב-06:00, ועוד ריצת גיבוי של המשימה היומית מ-GitHub |
 
 המחירים נבדקו באוקטובר 2026. בדקו שוב באתרי השירותים לפני שמתחייבים.
 
@@ -89,10 +89,15 @@
 1. Vercel → **Settings → Git → Deploy Hooks** → שם `nightly`, ענף `main` → **Create** → מעתיקים את הכתובת.
 2. מדביקים אותה כ-`DEPLOY_HOOK_URL` ב-Vercel (ואז **Redeploy** פעם אחת).
 
+אם בזמן בנייה Supabase לא זמין לרגע, הבנייה מנסה שוב כמה פעמים ואז נעצרת, ו-Vercel משאיר באוויר את הגרסה הקודמת (במקום לפרסם דפי הדגמה שיוציאו את האתר מגוגל). הבנייה הבאה משלימה.
+בכל בנייה כל קובץ JS/CSS מקבל טביעת אצבע (`?v=`), כך שהדפדפן שומר אותו לשנה ומוריד מחדש רק מה שהשתנה.
+
 ### 7 · GitHub Actions
 ב-GitHub: **Settings → Secrets and variables → Actions → New repository secret**: ‏`SITE_URL`, ‏`CRON_SECRET` (אותו ערך כמו ב-Vercel), ‏`DEPLOY_HOOK_URL`.
 לגיבוי שבועי מוצפן של מסד הנתונים מוסיפים גם `SUPABASE_DB_URL` (ב-Supabase: **Connect → Session pooler**, פורט 5432) ו-`BACKUP_PASSPHRASE` (סיסמה ארוכה שאתם שומרים גם אצלכם, בלעדיה אי אפשר לשחזר). הגיבוי נשמר 30 יום ב-**Actions → Weekly DB backup → Artifacts**, והוראות השחזור בראש הקובץ `.github/workflows/backup.yml`.
 מעכשיו: סנכרון יומנים כל שעה, בנייה מחדש של דפי גוגל כל לילה וגיבוי כל שבוע. בלשונית **Actions** אפשר להריץ ידנית ולראות תוצאות.
+גם המשימה היומית (`/api/daily`) רצה פעם נוספת מ-GitHub ב-06:35 UTC, כגיבוי ל-Vercel Cron. כל מייל נרשם ביומן ויוצא פעם אחת בלבד, אז הריצה השנייה משלימה רק מה שלא יצא.
+במאגר ציבורי GitHub מכבה משימות מתוזמנות אחרי 60 יום בלי שינויים בקוד. הבנייה הלילית מפעילה אותן מחדש בכל לילה, כך שהן ממשיכות לרוץ גם בתקופות בלי עדכונים.
 
 ### 8 · גוגל
 [Google Search Console](https://search.google.com/search-console) → מוסיפים את הדומיין → **Sitemaps** → `sitemap.xml`.

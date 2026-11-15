@@ -9,6 +9,8 @@ const SB = () => env("SUPABASE_URL").replace(/\/+$/, "");
 const SERVICE = () => env("SUPABASE_SECRET_KEY") || env("SUPABASE_SERVICE_ROLE_KEY");
 /* מפתחות חדשים נשלחים רק ב-apikey; מפתחות ישנים (JWT) גם ב-Authorization */
 const keyHeaders = (key) => (key.startsWith("sb_") ? { apikey: key } : { apikey: key, Authorization: `Bearer ${key}` });
+/* כל קריאה החוצה מוגבלת בזמן: שרת שנתקע לא תוקע את הפונקציה עד שהיא נחתכת */
+export const timeout = (ms = 15000) => AbortSignal.timeout(ms);
 
 export function send(res, status, data, headers = {}) {
   res.statusCode = status;
@@ -32,6 +34,7 @@ export function requireEnv(res, keys) {
 export async function db(path, { method = "GET", body, prefer } = {}) {
   const r = await fetch(`${SB()}/rest/v1/${path}`, {
     method,
+    signal: timeout(),
     headers: {
       ...keyHeaders(SERVICE()),
       "Content-Type": "application/json",
@@ -48,7 +51,7 @@ export const rpc = (fn, args) => db(`rpc/${fn}`, { method: "POST", body: args })
 
 /* Supabase Storage עם מפתח השרת (רשימת קבצים ומחיקה) */
 export async function storageApi(path, { method = "POST", body } = {}) {
-  const r = await fetch(`${SB()}/storage/v1/${path}`, { method, headers: { ...keyHeaders(SERVICE()), "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const r = await fetch(`${SB()}/storage/v1/${path}`, { method, signal: timeout(), headers: { ...keyHeaders(SERVICE()), "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const text = await r.text();
   if (!r.ok) throw new Error(`storage ${r.status}: ${text.slice(0, 200)}`);
   return text ? JSON.parse(text) : null;
@@ -59,7 +62,7 @@ export async function getUser(req) {
   const h = req.headers.authorization || "";
   const token = h.startsWith("Bearer ") ? h.slice(7) : "";
   if (!token) return null;
-  const r = await fetch(`${SB()}/auth/v1/user`, { headers: { apikey: SERVICE(), Authorization: `Bearer ${token}` } });
+  const r = await fetch(`${SB()}/auth/v1/user`, { signal: timeout(10000), headers: { apikey: SERVICE(), Authorization: `Bearer ${token}` } });
   if (!r.ok) return null;
   const u = await r.json();
   if (!u || !u.email) return null;
@@ -85,6 +88,7 @@ export async function authApi(path, { method = "POST", body, query = {} } = {}) 
   const key = SERVICE();
   const r = await fetch(`${SB()}/auth/v1/${path}${q ? "?" + q : ""}`, {
     method,
+    signal: timeout(20000),
     headers: { ...keyHeaders(key), "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body)
   });

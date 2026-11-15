@@ -20,7 +20,8 @@
   var c = window.TAMARA_CONFIG || {}, list = [];
   if (c.SUPABASE_URL && c.SUPABASE_ANON_KEY) list.push("assets/vendor/supabase.js");
   list.push("assets/vendor/leaflet/leaflet.js", "assets/js/core.js", "assets/js/scene.js", "assets/js/seed.js", "assets/js/store.js", "assets/js/admin.js");
-  (function next() { var s = list.shift(); if (!s) return; var el = document.createElement("script"); el.src = s; el.onload = next; el.onerror = next; document.body.appendChild(el); })();
+  /* כל הקבצים יורדים במקביל ורצים לפי הסדר (async=false) */
+  list.forEach(function (s) { var el = document.createElement("script"); el.src = s; el.async = false; document.body.appendChild(el); });
 })();
 </script>
 </body>

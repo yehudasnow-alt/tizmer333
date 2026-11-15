@@ -134,7 +134,11 @@ export default async function handler(req, res) {
     }
     for (const m of noMail ? [] : plan) {
       if (out.sent >= MAX_MAILS) { out.more = true; break; }
-      if (!(await once(m.key, { to: m.to, subject: m.subject }))) { out.skipped++; continue; }
+      /* תקלה ברישום של מייל אחד לא עוצרת את כל השאר */
+      let first;
+      try { first = await once(m.key, { to: m.to, subject: m.subject }); }
+      catch (e) { out.errors.push({ kind: m.kind, to: m.to, error: String(e.message || e).slice(0, 200) }); continue; }
+      if (!first) { out.skipped++; continue; }
       try {
         let mail = m;
         if (m.kind === "review") {
@@ -165,7 +169,7 @@ export default async function handler(req, res) {
     out.maintenance = maint.map((x) => x.status);
     /* מתחם שהוסתר היום: מעדכנים גם את דפי גוגל (בנייה מחדש) */
     if (hiddenToday.length && env("DEPLOY_HOOK_URL")) {
-      try { await fetch(env("DEPLOY_HOOK_URL"), { method: "POST" }); out.rebuild = true; } catch (e) { out.rebuild = false; }
+      try { await fetch(env("DEPLOY_HOOK_URL"), { method: "POST", signal: AbortSignal.timeout(15000) }); out.rebuild = true; } catch (e) { out.rebuild = false; }
     }
     return send(res, out.errors.length && !out.sent ? 502 : 200, out);
   } catch (e) {

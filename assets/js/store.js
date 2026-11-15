@@ -320,7 +320,16 @@
 
   /* ================================================================ Supabase */
   function SupaStore(cfg) {
-    const sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+    /* בקשת נתונים שנתקעת (שרת עמוס, רשת חלשה) נחתכת אחרי 25 שניות, כדי שהדף לא יישאר "טוען…" לנצח.
+       העלאת תמונות (storage) לא מוגבלת, כי בסלולר היא יכולה לקחת זמן. */
+    const timedFetch = (input, init) => {
+      const url = typeof input === "string" ? input : (input && input.url) || String(input || "");
+      if (!/\/(rest|auth)\/v1\//.test(url) || (init && init.signal) || typeof AbortController === "undefined") return fetch(input, init);
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), 25000);
+      return fetch(input, Object.assign({}, init, { signal: c.signal })).finally(() => clearTimeout(t));
+    };
+    const sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { global: { fetch: timedFetch } });
     const listeners = new Set();
     const emit = () => listeners.forEach((f) => f());
     /* טבלה, עמודה או פונקציה שחסרות במסד = הסכמה לא עודכנה (צריך להריץ שוב את supabase/schema.sql) */

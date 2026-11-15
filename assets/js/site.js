@@ -453,7 +453,7 @@
     const t = $("#search-title"); if (t) t.textContent = searchTitle(S.filters);
     const ab = $("#apply-btn"); if (ab) ab.textContent = res.length ? `הצגת ${plural.stays(res.length)}` : "אין תוצאות";
     if (S.map) { S.map.remove(); S.map = null; }
-    if (!res.length) host.innerHTML = emptyState("אין מתחמים שמתאימים לכל הסינונים", "נסו להסיר סינון אחד או לבחור תאריכים אחרים.", `<span style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn btn-line" type="button" data-act="clear-all">ניקוי כל הסינונים</button><a class="btn btn-primary" href="#find">${I("sparkle")}מצא לי צימר</a></span>`);
+    if (!res.length) host.innerHTML = emptyState("אין מתחמים שמתאימים לכל הסינונים", "נסו להסיר סינון אחד או לבחור תאריכים אחרים.", `<span style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn btn-line" type="button" data-act="clear-all">ניקוי כל הסינונים</button></span>`);
     else if (S.filters.view === "map") { host.innerHTML = `<div class="map-wrap" id="map"></div>`; S.map = mountMap($("#map"), res); }
     else {
       const shown = res.slice(0, S.page * PAGE_SIZE);
@@ -534,10 +534,14 @@
   }, 1500);
 
   /* ---------------------------------------------------------------- map (Leaflet + OpenStreetMap) */
+  /* מפות של מסכים קודמים שכבר לא בדף: משחררים אותן (מאזיני resize וזיכרון), כדי שגלישה ארוכה לא תכביד */
+  const liveMaps = [];
   function mountMap(el, list, opts) {
     opts = opts || {};
     if (!window.L || !el) { if (el) el.innerHTML = `<div class="empty" style="height:100%;border:0">${I("map")}<p>המפה לא נטענה.</p></div>`; return null; }
+    for (let i = liveMaps.length - 1; i >= 0; i--) if (!liveMaps[i].getContainer().isConnected) { try { liveMaps[i].off(); liveMaps[i].remove(); } catch (e) {} liveMaps.splice(i, 1); }
     const map = L.map(el, { zoomControl: true, scrollWheelZoom: !opts.mini, attributionControl: true });
+    liveMaps.push(map);
     const tiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' }).addTo(map);
     let errors = 0, offline = false;
     const goOffline = () => {
@@ -911,7 +915,7 @@
           <button class="btn btn-line" type="button" data-act="to-message">${I("chat")}הודעה</button>
         </div>
       </div>
-      <div class="gallery n${Math.min(5, photos.length)}">${photos.slice(0, 5).map((p, i) => `<button type="button" data-act="lb" data-i="${i}" aria-label="פתיחת תמונה ${i + 1} מתוך ${allPhotos.length}"><img src="${esc(p.src)}" alt="${esc(imgAlt(p, l, i))}" ${i ? 'loading="lazy"' : ""}>${i === 0 && allPhotos.length > 1 ? `<span class="chip all">${I("image")}לגלריה · ${allPhotos.length} תמונות</span>` : ""}</button>`).join("")}</div>
+      <div class="gallery n${Math.min(5, photos.length)}">${photos.slice(0, 5).map((p, i) => `<button type="button" data-act="lb" data-i="${i}" aria-label="פתיחת תמונה ${i + 1} מתוך ${allPhotos.length}"><img src="${esc(i && photos.length >= 5 ? p.thumb : p.src)}" alt="${esc(imgAlt(p, l, i))}" ${i ? 'loading="lazy"' : ""}>${i === 0 && allPhotos.length > 1 ? `<span class="chip all">${I("image")}לגלריה · ${allPhotos.length} תמונות</span>` : ""}</button>`).join("")}</div>
       ${photos[0] && photos[0].real ? "" : `<p class="illus-note">${I("info")}איור להמחשה. המארחים יעלו כאן תמונות אמיתיות.</p>`}
       <div class="stay-layout">
         <div>
@@ -1714,12 +1718,20 @@
 
   /* ---------------------------------------------------------------- boot */
   async function load() {
-    try {
-      const [listings, settings, reviews, articles, places, top] = await Promise.all([T.store.listListings(), T.store.getSettings(), T.store.listReviews(), T.store.listArticles(), T.store.listPlaces().catch(() => []), T.store.topViewed(20).catch(() => [])]);
-      Object.assign(S, { listings, settings, reviews, articles, places, top, error: "" });
-      T.SETTINGS = settings;
-      computeRatings();
-    } catch (e) { S.error = e.message || String(e); }
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const [listings, settings, reviews, articles, places, top] = await Promise.all([T.store.listListings(), T.store.getSettings(), T.store.listReviews(), T.store.listArticles(), T.store.listPlaces().catch(() => []), T.store.topViewed(20).catch(() => [])]);
+        Object.assign(S, { listings, settings, reviews, articles, places, top, error: "" });
+        T.SETTINGS = settings;
+        computeRatings();
+        break;
+      } catch (e) {
+        /* תקלה זמנית (רשת חלשה, שרת עמוס לרגע): עוד שני ניסיונות בשקט לפני שמציגים שגיאה */
+        if (attempt < 2 && !e.missing) { await new Promise((r) => setTimeout(r, 1200 * (attempt + 1) * (attempt + 1))); continue; }
+        S.error = e.message || String(e);
+        break;
+      }
+    }
     S.loaded = true;
   }
   /* אורח מחובר: המועדפים נשמרים גם בחשבון (איחוד של מה שבדפדפן ומה שבחשבון) */

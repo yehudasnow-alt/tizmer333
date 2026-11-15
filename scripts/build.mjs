@@ -20,6 +20,7 @@
  * בלי חיבור ל-Supabase הדפים נבנים מנתוני ההדגמה ומסומנים noindex.
  */
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
@@ -49,6 +50,20 @@ if (env("CLOUDINARY_CLOUD_NAME")) cfg.CLOUDINARY_CLOUD_NAME = env("CLOUDINARY_CL
 const pub = { SUPABASE_URL: cfg.SUPABASE_URL || "", SUPABASE_ANON_KEY: cfg.SUPABASE_ANON_KEY || "", CLOUDINARY_CLOUD_NAME: cfg.CLOUDINARY_CLOUD_NAME || "" };
 fs.writeFileSync(path.join(OUT, "assets/js/config.js"), `/* נוצר אוטומטית בבנייה – מפתחות ציבוריים בלבד */\nwindow.TAMARA_CONFIG = ${JSON.stringify(pub, null, 2)};\n`);
 
+/* ------------------------------------------------------------ גרסאות לקבצים
+ * כל קובץ JS/CSS מקבל ?v=<טביעת אצבע של התוכן>. הדפדפן שומר אותו לשנה (vercel.json),
+ * וכל שינוי בקובץ יוצר כתובת חדשה, כך שאף אחד לא נתקע עם גרסה ישנה. */
+const VERSIONED = ["assets/css/fonts.css", "assets/css/tamara.css", "assets/vendor/leaflet/leaflet.css", "assets/vendor/leaflet/leaflet.js", "assets/vendor/supabase.js"]
+  .concat(fs.readdirSync(path.join(OUT, "assets/js")).filter((f) => f.endsWith(".js")).map((f) => "assets/js/" + f));
+const ver = Object.fromEntries(VERSIONED.filter((f) => fs.existsSync(path.join(OUT, f))).map((f) => [f, crypto.createHash("sha1").update(fs.readFileSync(path.join(OUT, f))).digest("hex").slice(0, 10)]));
+const versioned = (html) => html.replace(/(["'])(assets\/(?:js|css|vendor)\/[\w./-]+\.(?:js|css))\1/g, (m, q, f) => (ver[f] ? `${q}${f}?v=${ver[f]}${q}` : m));
+/* חיבור מוקדם לשרת הנתונים: חוסך זמן בבקשה הראשונה (בעיקר בסלולר) */
+const preconnect = (html) => (pub.SUPABASE_URL ? html.replace(/(<meta name="viewport"[^>]*>)/, `$1\n<link rel="preconnect" href="${pub.SUPABASE_URL.replace(/\/+$/, "").replace(/"/g, "")}" crossorigin>`) : html);
+for (const f of ["index.html", "admin.html", "owner.html"]) {
+  const p = path.join(OUT, f);
+  fs.writeFileSync(p, preconnect(versioned(fs.readFileSync(p, "utf8"))));
+}
+
 const SITE = (env("SITE_URL") || (env("VERCEL_PROJECT_PRODUCTION_URL") ? "https://" + env("VERCEL_PROJECT_PRODUCTION_URL") : "")).replace(/\/+$/, "");
 
 /* קבועים (אזורים, מאפיינים, סוגים) מתוך core.js, ונתוני הדגמה מתוך seed.js */
@@ -59,12 +74,24 @@ for (const f of ["core.js", "seed.js"]) vm.runInContext(fs.readFileSync(path.joi
 const T = app.window.Tamara;
 
 /* ------------------------------------------------------------ נתונים */
+/* תקלה זמנית (אין רשת, שרת עמוס, 5xx): עד 4 ניסיונות. טעות קבועה (4xx, למשל טבלה חסרה) נזרקת מיד. */
 async function rest(table, query) {
-  const r = await fetch(`${pub.SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/${table}?${query}`, {
-    headers: pub.SUPABASE_ANON_KEY.startsWith("sb_") ? { apikey: pub.SUPABASE_ANON_KEY } : { apikey: pub.SUPABASE_ANON_KEY, Authorization: `Bearer ${pub.SUPABASE_ANON_KEY}` }
-  });
-  if (!r.ok) throw new Error(`${table}: ${r.status} ${await r.text()}`);
-  return r.json();
+  for (let attempt = 1; ; attempt++) {
+    let r;
+    try {
+      r = await fetch(`${pub.SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/${table}?${query}`, {
+        signal: AbortSignal.timeout(30000),
+        headers: pub.SUPABASE_ANON_KEY.startsWith("sb_") ? { apikey: pub.SUPABASE_ANON_KEY } : { apikey: pub.SUPABASE_ANON_KEY, Authorization: `Bearer ${pub.SUPABASE_ANON_KEY}` }
+      });
+    } catch (e) { r = { ok: false, status: 0, text: async () => String(e.message || e) }; }
+    if (r.ok) return r.json();
+    const msg = `${table}: ${r.status} ${(await r.text()).slice(0, 300)}`;
+    const transient = r.status === 0 || r.status === 408 || r.status === 429 || r.status >= 500;
+    if (!transient) throw new Error(msg);
+    if (attempt >= 4) throw Object.assign(new Error(msg), { transient: true });
+    console.warn(`⚠ ${msg} – ניסיון נוסף בעוד ${attempt * 5} שניות`);
+    await new Promise((res) => setTimeout(res, attempt * 5000));
+  }
 }
 let live = false, listings, articles, reviews, settings, places;
 if (pub.SUPABASE_URL && pub.SUPABASE_ANON_KEY) {
@@ -74,10 +101,13 @@ if (pub.SUPABASE_URL && pub.SUPABASE_ANON_KEY) {
       rest("articles", "select=*&published=eq.true&order=created_at.desc&limit=1000"),
       rest("reviews", "select=listing_id,rating&status=eq.approved&limit=20000"),
       rest("settings", "select=data&id=eq.1").then((r) => (r[0] && r[0].data) || {}),
-      rest("places", "select=*&active=eq.true&limit=5000").catch(() => [])
+      rest("places", "select=*&active=eq.true&limit=5000").catch((e) => { if (e.transient) throw e; return []; })
     ]);
     live = true;
   } catch (e) {
+    /* Supabase מוגדר אבל לא זמין כרגע: עוצרים את הבנייה. Vercel משאיר את הגרסה הקודמת באוויר,
+       במקום לפרסם דפי הדגמה עם noindex שיוציאו את האתר מגוגל. הבנייה הבאה (בלילה או בעדכון) תצליח. */
+    if (e.transient) { console.error("✗ Supabase לא זמין כרגע, הבנייה נעצרה כדי שהאתר הקיים יישאר באוויר:", e.message); process.exit(1); }
     console.warn("⚠ לא ניתן לקרוא מ-Supabase, הדפים לגוגל לא נוצרו:", e.message);
   }
 }
@@ -130,7 +160,7 @@ const towns = [...new Set(listings.map((l) => String(l.settlement || "").trim())
 const townUrl = (n) => `/s/${T.townSlug(n)}/`;
 
 /* ------------------------------------------------------------ תבנית */
-const TEMPLATE = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+const TEMPLATE = fs.readFileSync(path.join(OUT, "index.html"), "utf8");
 const pages = []; // לאתר-מפה
 
 function page({ file, url, title, description, image, jsonld = [], route = "", body = "", lastmod }) {
@@ -158,10 +188,9 @@ function page({ file, url, title, description, image, jsonld = [], route = "", b
   if (url !== "/") {
     /* דפים בתת-תיקייה: כתובות יחסיות מתייחסות לשורש, והמסך המתאים נפתח אוטומטית */
     html = html.replace(/<meta charset="utf-8">/, `<meta charset="utf-8">\n<base href="/">`).replace(
-      /<script src="assets\/js\/config.js"><\/script>/,
-      `<script>(function(){var r=${JSON.stringify(route)};if(r&&!location.hash)history.replaceState(null,"",location.pathname+location.search+"#"+r);` +
-        `window.addEventListener("click",function(e){if(e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;var a=e.target.closest&&e.target.closest('a[href^="#"]');if(!a)return;e.preventDefault();var h=a.getAttribute("href").slice(1);if(h==="main"){var m=document.getElementById("main");if(m)m.focus();return;}location.hash=h;});})();</script>\n` +
-        `<script src="assets/js/config.js"></script>`
+      /<script src="assets\/js\/config\.js(?:\?v=\w+)?"><\/script>/,
+      (tag) => `<script>(function(){var r=${JSON.stringify(route)};if(r&&!location.hash)history.replaceState(null,"",location.pathname+location.search+"#"+r);` +
+        `window.addEventListener("click",function(e){if(e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;var a=e.target.closest&&e.target.closest('a[href^="#"]');if(!a)return;e.preventDefault();var h=a.getAttribute("href").slice(1);if(h==="main"){var m=document.getElementById("main");if(m)m.focus();return;}location.hash=h;});})();</script>\n` + tag
     );
   }
   const dest = path.join(OUT, file);

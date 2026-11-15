@@ -2,7 +2,7 @@
  * מיילים: תבנית אחידה בעברית (RTL), שליחה דרך Resend, ויומן שליחה (mail_log)
  * כדי שכל מייל אוטומטי ייצא פעם אחת בלבד.
  */
-import { env, db, esc } from "./_lib.js";
+import { env, db, esc, timeout } from "./_lib.js";
 
 export const fmtDate = (iso) => (iso ? String(iso).slice(0, 10).split("-").reverse().join(".") : "");
 export const money = (n) => (n || n === 0 ? "₪" + Math.round(Number(n)).toLocaleString("he-IL") : "");
@@ -35,6 +35,7 @@ export async function sendMail({ to, subject, html, replyTo, from }) {
   if (!mailReady()) return { skipped: "RESEND_API_KEY missing" };
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
+    signal: timeout(15000),
     headers: { Authorization: `Bearer ${env("RESEND_API_KEY")}`, "Content-Type": "application/json" },
     body: JSON.stringify({ from: from || env("NOTIFY_FROM", "תמרה – צימרים ווילות <onboarding@resend.dev>"), to: list, subject, html, text: text(html), ...(replyTo ? { reply_to: replyTo } : {}) })
   });

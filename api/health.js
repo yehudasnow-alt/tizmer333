@@ -4,6 +4,9 @@
  */
 import { env, send, db, rpc } from "./_lib.js";
 
+/* הגרסה שהקוד הזה צריך (כמו T.SCHEMA_VERSION בדפדפן) */
+const SCHEMA = 6;
+
 export default async function handler(req, res) {
   const checks = {};
   const add = (key, label, ok, detail, optional) => (checks[key] = { label, ok: !!ok, detail: detail || "", optional: !!optional });
@@ -14,7 +17,7 @@ export default async function handler(req, res) {
   if (url && secret) {
     try { await db("settings?select=id&limit=1"); add("db", "השרת מתחבר למסד הנתונים", true); }
     catch (e) { add("db", "השרת מתחבר למסד הנתונים", false, String(e.message || e).slice(0, 160)); }
-    try { const v = await rpc("schema_version", {}); add("schema", "גרסת מסד הנתונים (מצד השרת)", Number(v) >= 5, "גרסה " + v + (Number(v) < 5 ? ": צריך להריץ שוב את supabase/schema.sql" : "")); }
+    try { const v = await rpc("schema_version", {}); add("schema", "גרסת מסד הנתונים (מצד השרת)", Number(v) >= SCHEMA, "גרסה " + v + (Number(v) < SCHEMA ? ": צריך להריץ שוב את supabase/schema.sql" : "")); }
     catch (e) { add("schema", "גרסת מסד הנתונים (מצד השרת)", false, "ישנה: צריך להריץ שוב את supabase/schema.sql"); }
     try { await db("mail_log?select=key&limit=1"); add("mail_log", "יומן מיילים אוטומטיים (תזכורות פעם אחת בלבד)", true); }
     catch (e) { add("mail_log", "יומן מיילים אוטומטיים (תזכורות פעם אחת בלבד)", false, "חסר: צריך להריץ שוב את supabase/schema.sql"); }
