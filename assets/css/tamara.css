@@ -169,7 +169,7 @@ input[type="date"].input { min-width: 0; max-width: 100%; }
 @media (max-width: 640px) { .wrap { padding-left: var(--gutter); padding-right: var(--gutter-r); } }
 .topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 40; background: rgba(255, 255, 255, .96); backdrop-filter: blur(10px); transition: box-shadow .2s; }
 .topbar.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 20px rgba(40, 54, 24, .05); }
-.topbar-in { display: flex; align-items: center; gap: 22px; min-height: 84px; max-width: var(--page-max); margin: 0 auto; }
+.topbar-in { display: flex; align-items: center; gap: 22px; min-height: 84px; max-width: none; margin: 0; }
 .brand { display: inline-flex; align-items: center; text-decoration: none; flex: none; }
 .brand img { height: 56px; width: auto; }
 .mainnav { display: flex; align-items: center; gap: 4px; margin-inline-start: 12px; }
@@ -1610,10 +1610,12 @@ a.note { color: var(--navy); }
    התמונה נפתחת מכרטיס מעוגל למסך מלא, הכותרת ותיבת החיפוש נכנסות בעדינות.
    קטעים בהמשך הדף נחשפים מתוך מסגרת מעוגלת. */
 .home-lean { animation: none; }
-.hf { position: relative; isolation: isolate; min-height: calc(100svh - 84px); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px max(20px, 4vw) 76px; color: #fff; }
+.hf { position: relative; isolation: isolate; min-height: calc(100svh - 84px); display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: clamp(40px, 11vh, 150px) max(20px, 4vw) 76px; color: #fff; }
 .hf-media { position: absolute; inset: 0; z-index: -1; overflow: hidden; background: var(--ink); animation: hfOpen 1.35s var(--ease-soft) both; }
 .hf-par { position: absolute; inset: 0; }
-.hf-media img { width: 100%; height: 100%; object-fit: cover; animation: hfZoom 1.9s var(--ease-soft) both, hfDrift 26s 1.9s ease-in-out infinite alternate; }
+.hf-media img, .hf-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: hfZoom 1.9s var(--ease-soft) both; }
+.hf-video { opacity: 0; transition: opacity .8s ease; }
+.hf-video.on { opacity: 1; }
 .hf-media::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse 72% 58% at 50% 52%, rgba(30, 38, 16, .5), rgba(30, 38, 16, .16) 74%), linear-gradient(to bottom, rgba(30, 38, 16, .22), rgba(30, 38, 16, 0) 26%, rgba(30, 38, 16, 0) 72%, rgba(30, 38, 16, .38)); }
 @keyframes hfOpen { from { clip-path: inset(8% 12% round 48px); } to { clip-path: inset(0 round 0); } }
 @keyframes hfZoom { from { transform: scale(1.22); } to { transform: scale(1.04); } }
@@ -1673,7 +1675,7 @@ a.note { color: var(--navy); }
 
 /* רענון נתונים בלי לנגן שוב את הפתיחה */
 .hf-again .hf-media, .hf-again .hf-title, .hf-again .searchbox, .hf-again .searchbox > * { animation: none; }
-.hf-again .hf-media img { animation: hfDrift 26s ease-in-out infinite alternate; }
+.hf-again .hf-media img, .hf-again .hf-video { animation: none; transform: scale(1.04); }
 
 /* גלילה: התמונה זזה לאט יותר מהדף (רק בדפדפנים שתומכים) */
 @supports (animation-timeline: scroll()) {
@@ -1760,3 +1762,25 @@ a.note { color: var(--navy); }
 .dp-inline .cal-units { background: var(--sky-50); }
 .dp-inline .cal-units button { color: var(--ink); }
 .dp-inline .cal-units button[aria-pressed="true"] { background: var(--navy); color: #fff; }
+
+/* יומן קומפקטי: נכנס בתוך תמונת הפתיח בלי לגלול את הדף */
+.dp { padding: 12px 14px 10px; width: min(600px, calc(100vw - 16px)); }
+.dp:has(.dp-months[style*="--n:1"]) { width: min(330px, calc(100vw - 16px)); }
+.dp .dp-top { margin-bottom: 4px; }
+.dp .dp-chip { padding: 3px 10px; border-radius: 12px; min-width: 84px; }
+.dp .dp-chip b { font-size: .9rem; }
+.dp .dp-arrow { width: 32px; height: 32px; }
+.dp .dp-months { gap: 20px; }
+.dp .dp-mtitle { font-size: .92rem; margin: 2px 0 4px; }
+.dp .dp-dow { padding-bottom: 2px; font-size: .7rem; }
+.dp .dp-c { height: 34px; }
+.dp .dp-d { width: 32px; height: 32px; font-size: .86rem; }
+.dp .dp-foot { margin-top: 6px; padding-top: 8px; }
+.dp .dp-ok { padding: 7px 18px; }
+.dp.dp-sheet .dp-c { height: 44px; } .dp.dp-sheet .dp-d { width: 40px; height: 40px; font-size: .95rem; }
+/* בחלון שנפתח מתחת לשדה: התאריכים כבר מופיעים בשדות, אז שורת הסיכום יורדת והחצים עוברים לגובה שם החודש */
+.dp:not(.dp-sheet) .dp-top { position: absolute; top: 9px; inset-inline: 14px; margin: 0; pointer-events: none; z-index: 2; justify-content: flex-end; }
+.dp:not(.dp-sheet) .dp-chips { display: none; }
+.dp:not(.dp-sheet) .dp-nav { pointer-events: auto; }
+.dp:not(.dp-sheet) .dp-arrow { width: 28px; height: 28px; border-radius: 9px; }
+.dp:not(.dp-sheet) .dp-mtitle { line-height: 28px; margin-top: 0; }

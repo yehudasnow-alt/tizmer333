@@ -361,7 +361,7 @@
     const f = S.filters;
     return `<div class="view home-lean">
       <section class="hf${S.homeAgain ? " hf-again" : ""}" aria-label="חיפוש">
-        <div class="hf-media"><div class="hf-par"><img src="${esc(S.settings.hero_image || T.HERO_DEFAULT)}" alt="" fetchpriority="high"></div></div>
+        <div class="hf-media"><div class="hf-par"><img src="assets/video/hero-poster${innerWidth < 900 ? "-720" : ""}.jpg" alt="" fetchpriority="high"><video class="hf-video" muted playsinline loop autoplay preload="auto" aria-hidden="true" tabindex="-1"></video></div></div>
         <div class="hf-inner">
           <h1 class="hf-title"><span class="sr">${esc(S.settings.hero_title)} – </span>${esc(heroHeadline())}</h1>
           <form class="searchbox" data-form="hero-search" role="search">
@@ -1432,6 +1432,20 @@
     $("#footer").innerHTML = footer();
     floating();
     reveal();
+    heroVideo();
+  }
+  /* סרטון הרקע בפתיח: קובץ קטן לטלפון וגדול למחשב. מי שביקש בלי תנועה או חוסך נתונים רואה את התמונה בלבד */
+  function heroVideo() {
+    const v = $(".hf-video");
+    if (!v) return;
+    const still = document.documentElement.classList.contains("a11y-still") || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const save = navigator.connection && (navigator.connection.saveData || /2g/.test(navigator.connection.effectiveType || ""));
+    if (still || save) { v.remove(); return; }
+    const big = Math.max(screen.width, screen.height) * (devicePixelRatio || 1) > 1700 && innerWidth >= 900;
+    v.addEventListener("playing", () => v.classList.add("on"), { once: true });
+    v.src = `assets/video/hero-${big ? "1080" : "720"}.mp4`;
+    const p = v.play();
+    if (p && p.catch) p.catch(() => {});
   }
   /* תנועה (v6): קטעים וכרטיסים נכנסים בעדינות כשמגיעים אליהם, בהשהיה קטנה בין כרטיס לכרטיס.
      בלי תנועה למי שביקש (הגדרת מערכת או ״עצירת אנימציות״ בתפריט הנגישות). */

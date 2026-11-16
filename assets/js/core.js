@@ -1144,15 +1144,9 @@
       const vw = window.innerWidth, vh = window.innerHeight;
       let left = r.right - w;
       left = Math.max(8, Math.min(left, vw - w - 8));
-      /* תמיד נפתח מתחת לשדה, כמו שאר החלונות בחיפוש. אם אין מקום מתחת, בפתיחה הדף נגלל למטה כדי לפנות מקום */
+      /* תמיד נפתח מתחת לשדה, כמו שאר החלונות בחיפוש, בלי לגלול את הדף */
       let top = r.bottom + 10;
-      if (first && top + h > vh - 8) {
-        const need = top + h - (vh - 8), room = document.documentElement.scrollHeight - window.innerHeight - window.scrollY;
-        const by = Math.min(need, Math.max(0, room), Math.max(0, r.top - 80));
-        if (by > 0) { window.scrollBy(0, by); top -= by; }
-      }
-      if (top + h > vh - 8 && !first) top = Math.max(top, 8);
-      else if (top + h > vh - 8) top = Math.max(8, vh - h - 8);
+      if (first && top + h > vh - 8) top = Math.max(8, vh - h - 8);
       el.style.left = Math.round(left) + "px";
       el.style.top = Math.round(Math.max(8, top)) + "px";
       el.style.transformOrigin = "top center";
