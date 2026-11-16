@@ -194,7 +194,8 @@
     const amen = T.AMENITY_PRIORITY.filter((a) => hasAmen(l, a)).slice(0, 4).map(T.amenityOf);
     const f = S.filters;
     const dated = f.ci && f.co && T.nightsBetween(f.ci, f.co) > 0;
-    const freeN = dated ? T.freeUnits(l, f.ci, f.co).length : 0;
+    const freeU = dated ? T.freeUnits(l, f.ci, f.co) : [];
+    const freeN = freeU.length, freeCap = freeU.reduce((s, u) => s + (Number(u.guests_max) || 0), 0);
     const km = opts.km != null ? opts.km : S.geo ? T.distKm(S.geo, T.coordsOf(l)) : null;
     return `<article class="card">
       <div class="card-media"><img src="${esc(src)}" alt="${photos[i].real ? esc(imgAlt(photos[i], l, i)) : ""}" loading="lazy">
@@ -210,7 +211,7 @@
         <div class="card-meta">${scoreHTML(l.id)}<span>${I("home")}${esc(typ.name)}${units.length > 1 ? ` · ${units.length} יחידות` : ""}</span><span>${I("users")}עד ${T.capacity(l)}</span>${km != null ? `<span>${I("nav")}${T.kmText(km)}${opts.km != null ? " מכאן" : " ממך"}</span>` : ""}</div>
         ${amen.length ? `<div class="card-amen">${amen.map((a) => `<span>${I(a.icon)}${esc(a.name)}</span>`).join("")}</div>` : ""}
         ${badges.length ? `<div class="badges">${badges.slice(0, 3).map((b) => `<span class="badge b-${b.k}">${I(b.icon)}${esc(b.t)}</span>`).join("")}</div>` : ""}
-        ${opts.noFree ? "" : dated ? (units.length > 1 && freeN ? `<p class="avail-line">${I("check")}${freeN === units.length ? "כל היחידות פנויות" : plural.units(freeN) + " פנויות"} בתאריכים שלכם</p>` : "") : freeNightsHTML(l)}
+        ${opts.near ? opts.near : opts.noFree ? "" : dated ? (units.length > 1 && freeN ? `<p class="avail-line">${I("check")}${freeN === units.length ? "כל היחידות פנויות" : plural.units(freeN) + " פנויות"} בתאריכים שלכם${freeN < units.length ? ` · עד ${freeCap} אורחים` : ""}</p>` : "") : freeNightsHTML(l)}
         <div class="card-foot">${priceHTML(l)}<span class="go-btn" aria-hidden="true">${I("fwd")}</span></div>
       </div>
     </article>`;
@@ -469,6 +470,32 @@
       </div>
     </div>`;
   }
+  /* אין תוצאה מדויקת: מסבירים למה, ומציגים מתחמים שמתאימים לשאר הסינונים,
+     עם מה שפנוי בתאריכים שנבחרו ומתי הם פנויים לכל הקבוצה */
+  function nearMiss(f) {
+    const dated = f.ci && f.co && T.nightsBetween(f.ci, f.co) > 0;
+    const p = people(f);
+    if (!dated) {
+      if (!p) return "";
+      const fit = S.listings.filter((l) => matches(l, Object.assign({}, f, { guests: 0, children: 0 })));
+      if (!fit.length) return "";
+      const max = Math.max(...fit.map((l) => T.capacity(l)));
+      return emptyState(`אין מתחם ל־${plural.guests(p)} עם הסינונים האלה`, `הגדול ביותר שמתאים לשאר מה שבחרתם מתאים לעד ${plural.guests(max)}.`, `<button class="btn btn-line" type="button" data-act="unfilter" data-k="people" data-v="">ניקוי מספר האורחים</button>`);
+    }
+    const loose = Object.assign({}, f, { ci: "", co: "", tonight: false, weekend: false });
+    const cands = S.listings.filter((l) => matches(l, loose)).slice(0, 6);
+    if (!cands.length) return "";
+    const range = `${T.fmtShort(f.ci)}–${T.fmtShort(f.co)}`;
+    const cards = cands.map((l) => {
+      const free = T.freeUnits(l, f.ci, f.co);
+      const cap = free.reduce((s, u) => s + (Number(u.guests_max) || 0), 0);
+      const alt = T.nearestFit(l, f.ci, f.co, p);
+      const now = !free.length ? "תפוס בתאריכים שלכם" : p ? `בתאריכים שלכם ${free.length === 1 ? "פנויה" : "פנויות"} ${plural.units(free.length)} לעד ${plural.guests(cap)}` : `${plural.units(free.length)} ${free.length === 1 ? "פנויה" : "פנויות"} בתאריכים שלכם`;
+      const near = `<p class="near-line">${I("info")}<span>${now}</span></p>` + (alt ? `<div class="fn"><a href="#stay-${esc(l.id)}" data-act="quick-dates" data-ci="${alt.ci}" data-co="${alt.co}">${I("calendar")}פנוי${p ? " לכולם" : ""} ב־${T.fmtShort(alt.ci)}–${T.fmtShort(alt.co)}</a></div>` : "");
+      return card(l, { near });
+    });
+    return `<div class="near-head">${I("search")}<div><h3>${p ? `אין מתחם פנוי ל־${plural.guests(p)} ב־${range}` : `אין מתחם פנוי ב־${range}`}</h3><p>אלה מתאימים לשאר מה שחיפשתם. ליד כל אחד: מה פנוי בתאריכים שלכם, ומתי הוא פנוי${p ? " לכל הקבוצה" : ""}.</p></div><button class="btn btn-line" type="button" data-act="unfilter" data-k="dates" data-v="">ניקוי התאריכים</button></div><div class="grid">${cards.join("")}</div>`;
+  }
   function renderResults() {
     setTimeout(() => reveal($("#results") || document), 0);
     const res = applyFilters(S.listings, S.filters);
@@ -479,7 +506,9 @@
     const t = $("#search-title"); if (t) t.textContent = searchTitle(S.filters);
     const ab = $("#apply-btn"); if (ab) ab.textContent = res.length ? `הצגת ${plural.stays(res.length)}` : "אין תוצאות";
     if (S.map) { S.map.remove(); S.map = null; }
-    if (!res.length) host.innerHTML = emptyState("אין מתחמים שמתאימים לכל הסינונים", "נסו להסיר סינון אחד או לבחור תאריכים אחרים.", `<span style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn btn-line" type="button" data-act="clear-all">ניקוי כל הסינונים</button></span>`);
+    const nm = !res.length ? nearMiss(S.filters) : "";
+    if (nm) host.innerHTML = nm;
+    else if (!res.length) host.innerHTML = emptyState("אין מתחמים שמתאימים לכל הסינונים", "נסו להסיר סינון אחד או לבחור תאריכים אחרים.", `<span style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn btn-line" type="button" data-act="clear-all">ניקוי כל הסינונים</button></span>`);
     else if (S.filters.view === "map") { host.innerHTML = `<div class="map-wrap" id="map"></div>`; S.map = mountMap($("#map"), res); }
     else {
       const shown = res.slice(0, S.page * PAGE_SIZE);

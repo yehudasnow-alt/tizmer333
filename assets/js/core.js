@@ -23,7 +23,7 @@
     { key: "villa", name: "וילה", plural: "וילות" },
     { key: "cabin", name: "בקתת עץ", plural: "בקתות עץ" },
     { key: "suite", name: "סוויטה", plural: "סוויטות" },
-    { key: "compound", name: "מתחם לקבוצות", plural: "מתחמים לקבוצות" },
+    { key: "compound", name: "מתחם אירוח", plural: "מתחמי אירוח" },
     { key: "boutique", name: "מלון בוטיק", plural: "מלונות בוטיק" },
     { key: "loft", name: "לופט", plural: "לופטים" },
     { key: "apartment", name: "דירת נופש", plural: "דירות נופש" },
@@ -844,6 +844,22 @@
       }
     }
     return { units, dates: dates.sort((a, b) => a.ci.localeCompare(b.ci)) };
+  };
+
+  /* התאריכים הקרובים ביותר (באותו מספר לילות) שבהם המתחם פנוי לכל הקבוצה */
+  T.nearestFit = (l, ci, co, guests, days) => {
+    const n = T.nightsBetween(ci, co);
+    if (n <= 0) return null;
+    const today = T.iso(T.today());
+    for (let k = 1; k <= (days || 30); k++) {
+      for (const sgn of [1, -1]) {
+        const s = T.iso(T.addDays(T.parseISO(ci), sgn * k));
+        if (s < today) continue;
+        const e = T.iso(T.addDays(T.parseISO(s), n));
+        if (T.isAvailable(l, s, e, guests)) return { ci: s, co: e };
+      }
+    }
+    return null;
   };
 
   /* ציון: ממוצע 1–5 מוצג מתוך 10 */

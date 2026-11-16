@@ -841,6 +841,16 @@ input[type="range"] { width: 100%; accent-color: var(--navy); }
 .fn-full { font-size: var(--t-xs); color: var(--muted); }
 .fn-none { display: flex; align-items: center; gap: 6px; font-size: var(--t-xs); color: var(--muted); margin-top: 10px; }
 .avail-line { display: flex; align-items: center; gap: 6px; font-size: var(--t-xs); color: var(--ok); margin-top: 8px; font-weight: 500; }
+/* אין תוצאה מדויקת: הסבר + מתחמים קרובים */
+.near-head { display: flex; align-items: center; gap: 16px; padding: 18px 22px; margin-bottom: 18px; border-radius: var(--r-l); background: var(--sky-50); border: 1px solid var(--line); }
+.near-head > .ic { width: 22px; height: 22px; color: var(--blue); flex: none; }
+.near-head > div { flex: 1; }
+.near-head h3 { font-size: 1.12rem; font-weight: 600; letter-spacing: -0.01em; }
+.near-head p { color: var(--ink-2); font-size: var(--t-s); margin-top: 4px; }
+.near-head .btn { flex: none; }
+.near-line { display: flex; align-items: flex-start; gap: 6px; font-size: var(--t-xs); color: var(--ink-2); margin-top: 8px; font-weight: 500; }
+.near-line .ic { width: 15px; height: 15px; color: var(--blue); margin-top: 2px; flex: none; }
+@media (max-width: 640px) { .near-head { flex-wrap: wrap; } .near-head .btn { width: 100%; } }
 .price b.call { font-size: 1.4rem; }
 .price small s { opacity: .7; }
 .rail { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(270px, 300px); gap: 22px; overflow-x: auto; padding-bottom: 12px; scroll-snap-type: x mandatory; scrollbar-width: thin; }
