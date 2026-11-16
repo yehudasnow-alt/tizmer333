@@ -1134,7 +1134,7 @@
       dp.paint(st.el, st.a, st.b, st.hover);
       if (!st.el.querySelector(`[data-dp-day="${focusIso}"]`)) { const f = st.el.querySelector(".dp-d:not([aria-disabled])") || st.el.querySelector(".dp-d"); if (f) f.tabIndex = 0; }
     }
-    function place() {
+    function place(first) {
       if (!st) return;
       const el = st.el;
       if (mq()) { el.classList.add("dp-sheet"); el.style.cssText = ""; return; }
@@ -1144,13 +1144,20 @@
       const vw = window.innerWidth, vh = window.innerHeight;
       let left = r.right - w;
       left = Math.max(8, Math.min(left, vw - w - 8));
+      /* תמיד נפתח מתחת לשדה, כמו שאר החלונות בחיפוש. אם אין מקום מתחת, בפתיחה הדף נגלל למטה כדי לפנות מקום */
       let top = r.bottom + 10;
-      if (top + h > vh - 8) top = r.top - h - 10 > 8 ? r.top - h - 10 : Math.max(8, vh - h - 8);
+      if (first && top + h > vh - 8) {
+        const need = top + h - (vh - 8), room = document.documentElement.scrollHeight - window.innerHeight - window.scrollY;
+        const by = Math.min(need, Math.max(0, room), Math.max(0, r.top - 80));
+        if (by > 0) { window.scrollBy(0, by); top -= by; }
+      }
+      if (top + h > vh - 8 && !first) top = Math.max(top, 8);
+      else if (top + h > vh - 8) top = Math.max(8, vh - h - 8);
       el.style.left = Math.round(left) + "px";
       el.style.top = Math.round(Math.max(8, top)) + "px";
-      el.style.transformOrigin = top < r.top ? "bottom center" : "top center";
+      el.style.transformOrigin = "top center";
     }
-    function onScroll(e) { if (!st || (e.target && e.target.nodeType === 1 && st.el.contains(e.target))) return; cancelAnimationFrame(raf); raf = requestAnimationFrame(place); }
+    function onScroll(e) { if (!st || (e.target && e.target.nodeType === 1 && st.el.contains(e.target))) return; cancelAnimationFrame(raf); raf = requestAnimationFrame(() => place()); }
     function openFor(inp) {
       if (inp.disabled || inp.readOnly) return;
       close(false);
@@ -1169,7 +1176,7 @@
       if (mq()) { scrim = document.createElement("div"); scrim.className = "dp-scrim"; document.body.appendChild(scrim); requestAnimationFrame(() => scrim && scrim.classList.add("in")); }
       document.body.appendChild(el);
       render();
-      place();
+      place(true);
       requestAnimationFrame(() => { if (st && st.el === el) el.classList.add("in"); });
       document.addEventListener("scroll", onScroll, true);
       window.addEventListener("resize", onScroll);

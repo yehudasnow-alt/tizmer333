@@ -52,7 +52,7 @@ export default async function handler(req, res) {
           title: `שלום ${name}, ברוכים הבאים`,
           body: p(`החשבון של <b>${esc(adv.business || name)}</b> נפתח${adv.status === "trial" && adv.end_date ? `, עם תקופת ניסיון עד ${fmtDate(adv.end_date)}` : ""}.`)
             + p("מה עכשיו? נכנסים לממשק המארחים, משלימים תמונות, תיאור, מחירים ויומן, ושולחים לבדיקה. אחרי אישור של צוות האתר המתחם עולה לאוויר.")
-            + p(`<span style="color:#5b6b75;font-size:13px">הכניסה היא עם האימייל והסיסמה שבחרתם. שכחתם סיסמה? בדף הכניסה יש "שכחתי סיסמה".</span>`),
+            + p(`<span style="color:#5E6248;font-size:13px">הכניסה היא עם האימייל והסיסמה שבחרתם. שכחתם סיסמה? בדף הכניסה יש "שכחתי סיסמה".</span>`),
           cta: base && { href: `${base}/owner.html`, label: "לממשק המארחים" }
         } : {
           title: `שלום ${name}, ההרשמה התקבלה`,

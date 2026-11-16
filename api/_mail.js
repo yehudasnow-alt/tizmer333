@@ -6,23 +6,23 @@ import { env, db, esc, timeout } from "./_lib.js";
 
 export const fmtDate = (iso) => (iso ? String(iso).slice(0, 10).split("-").reverse().join(".") : "");
 export const money = (n) => (n || n === 0 ? "₪" + Math.round(Number(n)).toLocaleString("he-IL") : "");
-export const row = (k, v) => (v ? `<tr><td style="padding:6px 0;color:#5b6b75;width:130px;vertical-align:top">${esc(k)}</td><td style="padding:6px 0;color:#1B262C">${v}</td></tr>` : "");
-export const p = (html) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.7;color:#1B262C">${html}</p>`;
+export const row = (k, v) => (v ? `<tr><td style="padding:6px 0;color:#5E6248;width:130px;vertical-align:top">${esc(k)}</td><td style="padding:6px 0;color:#283618">${v}</td></tr>` : "");
+export const p = (html) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.7;color:#283618">${html}</p>`;
 export const table = (rows) => `<table style="width:100%;border-collapse:collapse;font-size:15px;margin:4px 0 8px">${rows}</table>`;
 
 /* מסגרת המייל. footer: טקסט קטן בתחתית (למשל קישור הסרה מדיוור) */
 export function layout({ title, preheader = "", body, cta, footer = "", siteName = "תמרה" }) {
   return `<!doctype html><html dir="rtl" lang="he"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(title)}</title></head>
-<body style="margin:0;background:#F3F9FD;font-family:Arial,Helvetica,sans-serif;direction:rtl;text-align:right">
+<body style="margin:0;background:#FEFAE0;font-family:Arial,Helvetica,sans-serif;direction:rtl;text-align:right">
 <span style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(preheader)}</span>
 <div style="max-width:580px;margin:0 auto;padding:28px 16px">
-  <div style="background:#1B262C;color:#fff;padding:18px 22px;border-radius:14px 14px 0 0;font-size:20px;letter-spacing:.02em">${esc(siteName)} · צימרים ווילות</div>
-  <div style="background:#fff;padding:24px 22px;border-radius:0 0 14px 14px;border:1px solid #E4F2FC;border-top:0">
-    <h1 style="margin:0 0 16px;font-size:21px;color:#0F4C75;font-weight:bold">${esc(title)}</h1>
+  <div style="background:#283618;color:#fff;padding:18px 22px;border-radius:14px 14px 0 0;font-size:20px;letter-spacing:.02em">${esc(siteName)} · צימרים ווילות</div>
+  <div style="background:#fff;padding:24px 22px;border-radius:0 0 14px 14px;border:1px solid #F6EBC6;border-top:0">
+    <h1 style="margin:0 0 16px;font-size:21px;color:#606C38;font-weight:bold">${esc(title)}</h1>
     ${body}
-    ${cta ? `<p style="margin:22px 0 4px"><a href="${esc(cta.href)}" style="display:inline-block;background:#0F4C75;color:#fff;text-decoration:none;padding:13px 22px;border-radius:999px;font-size:15px">${esc(cta.label)}</a></p>` : ""}
+    ${cta ? `<p style="margin:22px 0 4px"><a href="${esc(cta.href)}" style="display:inline-block;background:#606C38;color:#fff;text-decoration:none;padding:13px 22px;border-radius:999px;font-size:15px">${esc(cta.label)}</a></p>` : ""}
   </div>
-  <p style="color:#8a99a3;font-size:12px;text-align:center;margin-top:14px;line-height:1.6">${footer || "הודעה אוטומטית מהאתר. אפשר להשיב למייל הזה."}</p>
+  <p style="color:#8C8F74;font-size:12px;text-align:center;margin-top:14px;line-height:1.6">${footer || "הודעה אוטומטית מהאתר. אפשר להשיב למייל הזה."}</p>
 </div></body></html>`;
 }
 const text = (html) => html.replace(/<style[\s\S]*?<\/style>/g, "").replace(/<br\s*\/?>/g, "\n").replace(/<\/(p|tr|h1|div)>/g, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\n{3,}/g, "\n\n").trim();
@@ -67,7 +67,7 @@ export function reviewRequest({ L, base, q }) {
     html: L({
       title: `שלום ${q.name}, איך היה?`,
       preheader: "שתי דקות שעוזרות לאורחים הבאים",
-      body: p(`תודה שהתארחתם ב<b>${esc(q.listing_name)}</b>. חוות דעת קצרה עוזרת לאורחים אחרים לבחור, ולמארחים להשתפר.`) + p(`<span style="color:#5b6b75;font-size:13px">הקישור אישי, עובד פעם אחת ורק להזמנה שלכם. חוות הדעת מתפרסמת אחרי בדיקה קצרה.</span>`),
+      body: p(`תודה שהתארחתם ב<b>${esc(q.listing_name)}</b>. חוות דעת קצרה עוזרת לאורחים אחרים לבחור, ולמארחים להשתפר.`) + p(`<span style="color:#5E6248;font-size:13px">הקישור אישי, עובד פעם אחת ורק להזמנה שלכם. חוות הדעת מתפרסמת אחרי בדיקה קצרה.</span>`),
       cta: base && { href: `${base}/#review-${q.review_token}`, label: "כתיבת חוות דעת" }
     })
   };

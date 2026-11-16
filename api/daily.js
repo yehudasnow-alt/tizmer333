@@ -60,7 +60,7 @@ export default async function handler(req, res) {
           html: L({ title: `${what} ${ends} ${when}`, preheader: `בתוקף עד ${fmtDate(a.end_date)}`,
             body: p(`${hi}${what} של <b>${esc(a.business || a.name)}</b> ב${esc(site)} בתוקף עד <b>${fmtDate(a.end_date)}</b>.`)
               + p("כדי שהמתחם ימשיך להופיע באתר ולקבל פניות בלי הפסקה, מבקשים חידוש בלחיצה אחת בממשק המארחים, ואנחנו חוזרים אליכם.")
-              + (grace ? p(`<span style="color:#5b6b75;font-size:13px">אם המנוי לא יחודש, המתחם ימשיך להופיע עוד ${grace} ימים אחרי הסיום ואז יוסתר עד החידוש. שום נתון לא נמחק.</span>`) : ""),
+              + (grace ? p(`<span style="color:#5E6248;font-size:13px">אם המנוי לא יחודש, המתחם ימשיך להופיע עוד ${grace} ימים אחרי הסיום ואז יוסתר עד החידוש. שום נתון לא נמחק.</span>`) : ""),
             cta: account }) });
       } else if (-d <= grace) {
         plan.push({ kind: "ended", key: `sub-ended:${a.id}:${a.end_date}`, to: a.email, replyTo: adminTo || undefined,

@@ -50,9 +50,9 @@ export default async function handler(req, res) {
         html: layout({
           siteName: site, title: "רק לאשר שזה אתם",
           preheader: "לחיצה אחת ותתחילו לקבל דילים ודקה 90",
-          body: p("ביקשתם לקבל מאיתנו במייל דילים, מבצעי דקה 90 ומתחמים שהתפנו לסופ״ש. כדי להתחיל, אשרו את הכתובת:") + p(`<span style="color:#5b6b75;font-size:13px">אם לא אתם נרשמתם, פשוט התעלמו מהמייל הזה ולא נשלח לכם דבר.</span>`),
+          body: p("ביקשתם לקבל מאיתנו במייל דילים, מבצעי דקה 90 ומתחמים שהתפנו לסופ״ש. כדי להתחיל, אשרו את הכתובת:") + p(`<span style="color:#5E6248;font-size:13px">אם לא אתם נרשמתם, פשוט התעלמו מהמייל הזה ולא נשלח לכם דבר.</span>`),
           cta: base && { href: `${base}/#sub-confirm-${r.token}`, label: "אישור ההרשמה" },
-          footer: `קיבלתם את המייל כי הכתובת הוזנה בטופס ההרשמה ב${esc(site)}.${base ? ` <a href="${esc(base)}/#unsubscribe-${esc(r.token)}" style="color:#8a99a3">הסרה</a>` : ""}`
+          footer: `קיבלתם את המייל כי הכתובת הוזנה בטופס ההרשמה ב${esc(site)}.${base ? ` <a href="${esc(base)}/#unsubscribe-${esc(r.token)}" style="color:#8C8F74">הסרה</a>` : ""}`
         })
       }));
     } else if (type === "application") {
@@ -102,7 +102,7 @@ export default async function handler(req, res) {
       if (adminTo) jobs.push(sendMail({ to: adminTo, replyTo: r.email || undefined, subject, html: layout({ siteName: site, title: "פנייה חדשה מהאתר", body: table(details.concat(contact).join("")), cta: base && { href: `${base}/admin.html#leads`, label: "לפניות בפאנל הניהול" } }) }));
       /* מארח: לא על דיווחים, ולא אם ביקש לא לקבל מיילים על פניות */
       if (host && r.source !== "report" && hostPrefs.notify_leads !== false && host.toLowerCase() !== String(adminTo).toLowerCase()) {
-        jobs.push(sendMail({ to: host, replyTo: r.email || undefined, subject, html: layout({ siteName: site, title: "פנייה חדשה על המתחם שלך", preheader: `${r.name} · ${fmtDate(r.check_in)}`, body: table(details.concat(contact).join("")) + p(`<span style="color:#5b6b75;font-size:13px">כדאי לחזור לאורח מהר: רוב האורחים סוגרים עם המקום הראשון שחוזר אליהם.</span>`), cta: base && { href: `${base}/owner.html#leads`, label: "לממשק המארחים" } }) }));
+        jobs.push(sendMail({ to: host, replyTo: r.email || undefined, subject, html: layout({ siteName: site, title: "פנייה חדשה על המתחם שלך", preheader: `${r.name} · ${fmtDate(r.check_in)}`, body: table(details.concat(contact).join("")) + p(`<span style="color:#5E6248;font-size:13px">כדאי לחזור לאורח מהר: רוב האורחים סוגרים עם המקום הראשון שחוזר אליהם.</span>`), cta: base && { href: `${base}/owner.html#leads`, label: "לממשק המארחים" } }) }));
       }
       /* אישור לאורח: מה שלח ולמי, ומה קורה עכשיו */
       if (r.email && s.guest_confirmation_email !== false && (r.source === "form" || r.source === "find")) {
@@ -112,7 +112,7 @@ export default async function handler(req, res) {
           html: layout({
             siteName: site, title: `שלום ${r.name}, הבקשה נשלחה`,
             body: p(r.source === "find" ? "קיבלנו את הבקשה. נבדוק זמינות מול המארחים ונחזור אליך בהקדם עם כמה מקומות שמתאימים." : `הבקשה שלך הגיעה ישירות למארחים של <b>${esc(r.listing_name)}</b>. הם יחזרו אליך לאישור זמינות ומחיר, בדרך כלל בטלפון או בוואטסאפ.`)
-              + table(details.filter((x, i) => i !== 0).join("")) + p(`<span style="color:#5b6b75;font-size:13px">זו בקשה ולא הזמנה סופית. ההזמנה והתשלום נסגרים ישירות מול המארחים.</span>`),
+              + table(details.filter((x, i) => i !== 0).join("")) + p(`<span style="color:#5E6248;font-size:13px">זו בקשה ולא הזמנה סופית. ההזמנה והתשלום נסגרים ישירות מול המארחים.</span>`),
             cta: base && { href: `${base}/#me-leads`, label: "הפניות שלי באתר" }
           })
         }));
