@@ -199,7 +199,7 @@
 ```
 index.html / admin.html / owner.html   שלושת הממשקים
 assets/css/tamara.css                  העיצוב (צבעים וגופנים בראש הקובץ)
-assets/css/fonts.css, assets/fonts/    גופנים מקומיים: Heebo (משתנה, 100–900) ו-Cinzel ללוגו (רישיון OFL)
+assets/css/fonts.css, assets/fonts/    גופנים מקומיים: Heebo (משתנה, 100–900), Cinzel ללוגו ו-Gveret Levin לכותרת בכתב יד בדף הבית (רישיון OFL)
 assets/js/config.js                    חיבור (בהדגמה ריק; ב-Vercel נכתב אוטומטית)
 assets/js/core.js                      אזורים, סוגים, מאפיינים, חגים, מנוע התמחור
 assets/js/seed.js                      נתוני ההדגמה

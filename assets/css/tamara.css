@@ -1594,5 +1594,109 @@ a.note { color: var(--navy); }
 .toolbar-site .ar-kinds { margin-bottom: 0; }
 
 /* lean home (Nov 15): no stats under the hero copy, so the hero itself keeps room for the overlapping search box */
-.home-lean .hero-inner { padding-bottom: 168px; }
-@media (max-width: 720px) { .home-lean .hero-inner { padding-bottom: 150px; } }
+/* ===================================================================== v7: פתיח דף הבית על כל המסך
+   תנועה בהשראת הסרטון: התמונה נפתחת מכרטיס למסך מלא, הלשונית "נופלת" מהתפריט, הכותרת נכתבת בכתב יד,
+   תיבת החיפוש עולה והשדות נכנסים אחד אחרי השני. קטעים בהמשך הדף נחשפים מתוך מסגרת מעוגלת. */
+.home-lean { animation: none; }
+.hf { position: relative; isolation: isolate; min-height: calc(100svh - 84px); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 112px max(20px, 4vw) 76px; color: #fff; }
+.hf-media { position: absolute; inset: 0; z-index: -1; overflow: hidden; background: var(--ink); animation: hfOpen 1.35s var(--ease-soft) both; }
+.hf-par { position: absolute; inset: 0; }
+.hf-media img { width: 100%; height: 100%; object-fit: cover; animation: hfZoom 1.9s var(--ease-soft) both, hfDrift 26s 1.9s ease-in-out infinite alternate; }
+.hf-media::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse 72% 58% at 50% 54%, rgba(11, 30, 46, .5), rgba(11, 30, 46, .16) 74%), linear-gradient(to bottom, rgba(11, 30, 46, .3), rgba(11, 30, 46, 0) 26%, rgba(11, 30, 46, 0) 72%, rgba(11, 30, 46, .38)); }
+@keyframes hfOpen { from { clip-path: inset(8% 12% round 48px); } to { clip-path: inset(0 round 0); } }
+@keyframes hfZoom { from { transform: scale(1.22); } to { transform: scale(1.04); } }
+@keyframes hfDrift { from { transform: scale(1.04); } to { transform: scale(1.1) translate3d(-1.2%, -1%, 0); } }
+
+/* הלשונית בראש הפתיח: ממשיכה את התפריט הלבן כלפי מטה, עם פינות קעורות */
+.hf-tab { position: absolute; top: 0; left: 50%; translate: -50% 0; z-index: 5; background: var(--white); color: var(--ink); border-radius: 0 0 26px 26px; padding: 4px 12px 10px; animation: hfTab .75s .6s var(--ease-soft) both; }
+.hf-tab::before, .hf-tab::after { content: ""; position: absolute; top: 0; width: 26px; height: 26px; pointer-events: none; }
+.hf-tab::before { right: 100%; background: radial-gradient(circle at 0 100%, transparent 25.5px, var(--white) 26px); }
+.hf-tab::after { left: 100%; background: radial-gradient(circle at 100% 100%, transparent 25.5px, var(--white) 26px); }
+@keyframes hfTab { from { transform: translateY(-105%); } }
+.hf-tabs { display: flex; gap: 2px; }
+.hf-dd { display: inline-flex; align-items: center; gap: 4px; padding: 9px 14px; border: 0; border-radius: 999px; background: none; font: inherit; font-size: .95rem; font-weight: 500; color: var(--ink-2); white-space: nowrap; cursor: pointer; transition: background .2s, color .2s; animation: hfDrop .55s calc(.95s + var(--i, 0) * 70ms) var(--ease-soft) both; }
+.hf-dd .ic { width: 15px; height: 15px; transition: transform .25s var(--ease-out); }
+.hf-s { display: none; }
+.hf-dd:hover, .hf-dd[aria-expanded="true"] { color: var(--navy); background: var(--sky-50); }
+.hf-dd[aria-expanded="true"] .ic { transform: rotate(180deg); }
+@keyframes hfDrop { from { opacity: 0; transform: translateY(-10px); } }
+.hf-menu { position: absolute; top: calc(100% + 10px); left: var(--x, 0); min-width: 236px; padding: 8px; background: var(--white); border-radius: 18px; box-shadow: 0 2px 6px rgba(27, 38, 44, .08), 0 24px 54px rgba(6, 20, 32, .28); display: grid; gap: 2px; transform-origin: 50% 0; animation: hfMenu .28s var(--ease-out) both; }
+.hf-menu[hidden] { display: none; }
+.hf-menu a { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 14px; border-radius: 12px; color: var(--ink); text-decoration: none; font-size: .95rem; white-space: nowrap; transition: background .15s, color .15s; }
+.hf-menu a:hover, .hf-menu a:focus-visible { background: var(--sky-50); color: var(--navy); }
+.hf-menu a span { font-size: .78rem; color: var(--muted); background: var(--sky-50); border-radius: 999px; padding: 1px 8px; font-variant-numeric: tabular-nums; }
+.hf-menu a:hover span { background: var(--white); }
+.hf-menu .hf-all { border-bottom: 1px solid var(--line); border-radius: 12px 12px 4px 4px; margin-bottom: 2px; }
+@keyframes hfMenu { from { opacity: 0; transform: translateY(-6px) scale(.97); } }
+
+/* הכותרת בכתב יד: כל המשפטים באותו תא, כך שהגובה לא קופץ כשהם מתחלפים */
+.hf-inner { width: 100%; max-width: 1120px; display: flex; flex-direction: column; align-items: center; gap: clamp(24px, 4vh, 44px); text-align: center; }
+.hf-title { margin: 0; font-family: "Gveret Levin", var(--f-body); font-weight: 400; font-size: clamp(46px, 7.2vw, 112px); line-height: 1.14; letter-spacing: 0; color: #fff; text-shadow: 0 2px 28px rgba(0, 0, 0, .28); max-width: none; }
+.hf-phr { display: grid; justify-items: center; }
+.hf-phr > span { grid-area: 1 / 1; visibility: hidden; padding-inline: .12em; }
+.hf-phr > span.on, .hf-phr > span.off { visibility: visible; }
+.hf:not(.hf-go) .hf-phr > span.on { clip-path: inset(-30% 0 -30% 100%); }
+.hf-go .hf-phr > span.on { animation: hfWrite 1.5s cubic-bezier(.5, .1, .3, 1) both; }
+.hf-phr > span.off { animation: hfErase .6s var(--ease-out) both; }
+@keyframes hfWrite { from { clip-path: inset(-30% 0 -30% 100%); } to { clip-path: inset(-30% 0 -30% 0); } }
+@keyframes hfErase { to { opacity: 0; transform: translateY(-14px); filter: blur(6px); } }
+.hf-swash { display: block; width: min(46%, 330px); height: auto; margin: -.06em auto 0; overflow: visible; }
+.hf-swash path { fill: none; stroke: var(--sky); stroke-width: 3.4; stroke-linecap: round; stroke-dasharray: 340; stroke-dashoffset: 340; }
+.hf-go .hf-swash path { animation: hfSwash 1.1s 1.2s var(--ease-soft) forwards; }
+@keyframes hfSwash { to { stroke-dashoffset: 0; } }
+
+/* תיבת החיפוש בתוך הפתיח */
+.hf .searchbox { margin: 0; width: 100%; max-width: 1080px; text-align: start; color: var(--ink); box-shadow: 0 2px 6px rgba(6, 20, 32, .12), 0 34px 80px rgba(6, 20, 32, .34); animation: hfRise 1s .5s var(--ease-soft) both; }
+.hf .searchbox > * { animation: hfField .7s calc(.8s + var(--k, 0) * 65ms) var(--ease-soft) both; }
+.hf .searchbox > :nth-child(2) { --k: 1; } .hf .searchbox > :nth-child(3) { --k: 2; } .hf .searchbox > :nth-child(4) { --k: 3; } .hf .searchbox > :nth-child(5) { --k: 4; }
+@media (max-width: 980px) { .hf .searchbox .guests-pop { grid-column: 1 / -1; } }
+@keyframes hfRise { from { opacity: 0; transform: translateY(40px) scale(.97); } }
+@keyframes hfField { from { opacity: 0; transform: translateY(12px); } }
+
+/* רענון נתונים בלי לנגן שוב את הפתיחה */
+.hf-again .hf-media, .hf-again .hf-tab, .hf-again .hf-dd, .hf-again .searchbox, .hf-again .searchbox > * { animation: none; }
+.hf-again .hf-media img { animation: hfDrift 26s ease-in-out infinite alternate; }
+.hf-again .hf-phr > span.on { animation: none; clip-path: none; }
+.hf-again .hf-swash path { animation: none; stroke-dashoffset: 0; }
+
+/* גלילה: התמונה זזה לאט יותר מהדף (רק בדפדפנים שתומכים) */
+@supports (animation-timeline: scroll()) {
+  .hf-par { animation: hfPar linear both; animation-timeline: scroll(root); animation-range: 0 100vh; }
+  @keyframes hfPar { to { transform: translateY(22%); } }
+}
+
+/* קטעים בהמשך הדף: נחשפים מתוך מסגרת מעוגלת, והתוכן נכנס בהדרגה */
+.home-lean .news-band.rv, .home-lean .band.rv { clip-path: inset(7% 5% round 44px); transition: opacity .6s var(--ease-soft), transform .8s var(--ease-soft), clip-path 1.15s var(--ease-soft); }
+.home-lean .news-band.rv.in, .home-lean .band.rv.in { clip-path: inset(-60px round 0); }
+.home-lean .rv > div > *, .home-lean .rv > form, .home-lean .band.rv > ul > li { opacity: 0; transform: translateY(16px); transition: opacity .6s var(--ease-soft), transform .75s var(--ease-soft); }
+.home-lean .rv.in > div > *, .home-lean .rv.in > form, .home-lean .band.rv.in > ul > li { opacity: 1; transform: none; transition-delay: calc(.3s + var(--j, 0) * 80ms); }
+.home-lean .rv > div > :nth-child(2), .home-lean .band.rv > ul > li:nth-child(2) { --j: 1; }
+.home-lean .rv > div > :nth-child(3), .home-lean .band.rv > ul > li:nth-child(3) { --j: 2; }
+.home-lean .rv > div > :nth-child(4), .home-lean .rv > form, .home-lean .band.rv > ul > li:nth-child(4) { --j: 3; }
+
+@media (max-width: 720px) {
+  .hf { min-height: calc(100svh - 68px); padding: 86px 14px 44px; }
+  .hf-tab { left: 0; right: 0; translate: none; border-radius: 0 0 22px 22px; padding: 2px 4px 8px; }
+  .hf-tab::before, .hf-tab::after { display: none; }
+  .hf-tabs { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .hf-tabs::-webkit-scrollbar { display: none; }
+  .hf-tabs > :first-child { margin-inline-start: auto; } .hf-tabs > :last-child { margin-inline-end: auto; }
+  .hf-dd { padding: 8px 7px; gap: 2px; font-size: .9rem; }
+  .hf-dd .ic { width: 13px; height: 13px; }
+  .hf-l { display: none; } .hf-s { display: inline; }
+  .hf-tabs.ovf { -webkit-mask-image: linear-gradient(to left, #000 82%, transparent); mask-image: linear-gradient(to left, #000 82%, transparent); }
+  .hf-menu { left: 8px; right: 8px; min-width: 0; }
+  .hf-title { font-size: clamp(38px, 11.2vw, 62px); line-height: 1.12; }
+  .hf-media::after { background: linear-gradient(to bottom, rgba(11, 30, 46, .42), rgba(11, 30, 46, .3) 40%, rgba(11, 30, 46, .55)); }
+  @keyframes hfOpen { from { clip-path: inset(6% 6% round 32px); } to { clip-path: inset(0 round 0); } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hf-phr > span.on { clip-path: none !important; }
+  .hf-swash path { stroke-dashoffset: 0; }
+  .home-lean .news-band.rv, .home-lean .band.rv { clip-path: none !important; }
+  .home-lean .rv > div > *, .home-lean .rv > form, .home-lean .band.rv > ul > li { opacity: 1 !important; transform: none !important; }
+}
+.a11y-still .hf-phr > span.on { clip-path: none !important; }
+.a11y-still .hf-swash path { stroke-dashoffset: 0; }
+.a11y-still .home-lean .news-band.rv, .a11y-still .home-lean .band.rv { clip-path: none !important; }
+.a11y-still .home-lean .rv > div > *, .a11y-still .home-lean .rv > form, .a11y-still .home-lean .band.rv > ul > li { opacity: 1 !important; transform: none !important; }

@@ -1182,8 +1182,8 @@
               <label class="field"><span>סמכות שיפוט (עיר)</span><input class="input" name="legal_court" value="${esc(s.legal_court || "")}" maxlength="40" placeholder="תל אביב-יפו"></label></div>
               <p class="hint" style="margin-top:8px">לקריאה: <a href="${siteURL("terms")}" target="_blank" rel="noopener">תנאי שימוש ופרטיות</a> · <a href="${siteURL("terms-hosts")}" target="_blank" rel="noopener">הסכם פרסום למארחים</a> (גרסה ${esc(T.HOST_TERMS_VERSION)}). הנוסח הוא בסיס מקצועי, ומומלץ שעורך דין יעבור עליו לפני שמתחילים לגבות תשלום. כשמשנים את גרסת ההסכם בקוד, כל המארחים מתבקשים לאשר אותו שוב בכניסה הבאה.</p></section>
             <section class="panel" ${tabAttr("settings", "site")}><h2>עמוד הבית</h2><div class="form-grid">
-              <label class="field span2"><span>כותרת ראשית</span><input class="input" name="hero_title" value="${esc(s.hero_title)}" maxlength="70"></label>
-              <label class="field span2"><span>משפט משנה</span><textarea class="textarea" name="hero_subtitle" rows="2" style="min-height:70px" maxlength="200">${esc(s.hero_subtitle)}</textarea></label></div>
+              <label class="field span2"><span>משפטים בכותרת (בכתב יד, מתחלפים כל כמה שניות)</span><textarea class="textarea" name="hero_phrases" rows="4" style="min-height:104px" maxlength="400">${esc(s.hero_phrases || T.DEFAULT_SETTINGS.hero_phrases)}</textarea><small class="hint">משפט בכל שורה. קצר עדיף: עד 30 תווים בערך.</small></label>
+              <label class="field span2"><span>כותרת לגוגל ולקוראי מסך</span><input class="input" name="hero_title" value="${esc(s.hero_title)}" maxlength="70"></label></div>
               <p class="field-label" style="margin:16px 0 8px">תמונת באנר</p>
               <div style="display:grid;grid-template-columns:minmax(0,240px) 1fr;gap:14px;align-items:center">
                 <div class="photo" style="aspect-ratio:16/9;cursor:default"><img src="${esc(s.hero_image || T.HERO_DEFAULT)}" alt="הבאנר הנוכחי"></div>
@@ -1933,7 +1933,7 @@
     const fd = new FormData(form);
     A.settings.social = {};
     ["instagram", "facebook", "tiktok", "youtube"].forEach((k) => { const v = (fd.get("social_" + k) || "").trim(); if (v) A.settings.social[k] = /^https?:\/\//.test(v) ? v : "https://" + v; });
-    ["site_name", "site_tagline", "phone", "whatsapp", "email", "notify_email", "a11y_coordinator", "hero_title", "hero_subtitle", "legal_name", "legal_id", "legal_address", "legal_court"].forEach((k) => { if (fd.has(k)) A.settings[k] = (fd.get(k) || "").trim(); });
+    ["site_name", "site_tagline", "phone", "whatsapp", "email", "notify_email", "a11y_coordinator", "hero_title", "hero_phrases", "hero_subtitle", "legal_name", "legal_id", "legal_address", "legal_court"].forEach((k) => { if (fd.has(k)) A.settings[k] = (fd.get(k) || "").trim(); });
     A.settings.plan_prices = {};
     T.PLANS.forEach((p) => (A.settings.plan_prices[p.key] = Number(fd.get("price_" + p.key)) || 0));
     A.settings.lead_price_default = Number(fd.get("lead_price_default")) || 0;

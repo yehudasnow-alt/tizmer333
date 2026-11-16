@@ -325,27 +325,44 @@
   }
   /* דף הבית – בנייה מחדש בהדרגה (נובמבר 2026): כרגע רק הפתיח עם החיפוש, הרשמה לדילים והפס למארחים.
      שאר הקטעים (מסלולים, אזורים, מגזין וכו') הוסרו מדף הבית; הפונקציות שלהם נשארו בקוד לשימוש בהמשך. */
+  /* לשונית הסוגים בראש הפתיח: כל סוג נפתח לרשימה לפי אזור (כמו "צימרים" בתפריט העליון) */
+  const HF_TYPES = [
+    { key: "zimmer", label: "צימרים", all: "כל הצימרים" },
+    { key: "villa", label: "וילות", all: "כל הווילות" },
+    { key: "cabin", label: "בקתות עץ", short: "בקתות", all: "כל בקתות העץ" },
+    { key: "suite", label: "סוויטות", all: "כל הסוויטות" },
+    { key: "compound", label: "מתחמי אירוח", short: "מתחמים", all: "כל מתחמי האירוח" }
+  ];
+  function hfMenu(key) {
+    const t = HF_TYPES.find((x) => x.key === key);
+    if (!t) return "";
+    const of = S.listings.filter((l) => l.type === key);
+    const n = (c) => (c ? `<span>${c}</span>` : "");
+    return `<a href="#type-${key}" class="hf-all"><b>${esc(t.all)}</b>${n(of.length)}</a>` +
+      Object.entries(T.AREAS).map(([a, name]) => `<a href="#type-${key}/${a}">${esc(t.label)} ב${esc(name)}${n(of.filter((l) => T.regionOf(l.region).area === a).length)}</a>`).join("");
+  }
+  const heroPhrases = () => String(S.settings.hero_phrases || T.DEFAULT_SETTINGS.hero_phrases || "").split(/\n+/).map((x) => x.trim()).filter(Boolean).slice(0, 8);
   function viewHome() {
     const f = S.filters;
+    const ph = heroPhrases();
     return `<div class="view home-lean">
-      <section class="wrap page" aria-label="חיפוש">
-        <div class="hero">
-          <img class="hero-img" src="${esc(S.settings.hero_image || T.HERO_DEFAULT)}" alt="">
-          <div class="hero-tab" aria-label="קיצורי אזורים">${Object.entries(T.AREAS).map(([k, n]) => `<a href="#area-${k}">${n}</a>`).join("")}</div>
-          <div class="hero-inner">
-            <span class="eyebrow">${esc(S.settings.site_tagline)} · מהצפון ועד הדרום</span>
-            <h1>${esc(S.settings.hero_title)}</h1>
-            <p class="hero-sub">${esc(S.settings.hero_subtitle)}</p>
-            <div class="hero-cta"><a class="btn btn-sky btn-lg" href="#lastminute">${I("bolt")}דקה 90 לסופ״ש הקרוב</a><a class="btn btn-glass btn-lg" href="#type-villa">${I("home")}וילות יוקרה</a></div>
-          </div>
+      <section class="hf${S.homeAgain ? " hf-again" : ""}" aria-label="חיפוש">
+        <div class="hf-media"><div class="hf-par"><img src="${esc(S.settings.hero_image || T.HERO_DEFAULT)}" alt="" fetchpriority="high"></div></div>
+        <div class="hf-tab">
+          <div class="hf-tabs" role="group" aria-label="סוגי אירוח">${HF_TYPES.map((x, i) => `<button type="button" class="hf-dd" data-act="hf-dd" data-t="${x.key}" aria-expanded="false" aria-controls="hf-menu" style="--i:${i}">${x.short ? `<span class="hf-l">${esc(x.label)}</span><span class="hf-s">${esc(x.short)}</span>` : esc(x.label)}${I("chev-d")}</button>`).join("")}</div>
+          <div class="hf-menu" id="hf-menu" hidden></div>
         </div>
-        <form class="searchbox" data-form="hero-search" role="search">
-          <label class="field f-region"><span>לאן נוסעים?</span><select class="select" name="place">${placeOptions(f.place)}</select></label>
-          <label class="field"><span>הגעה</span><input class="input" type="date" name="ci" min="${minDate()}" value="${esc(f.ci)}"></label>
-          <label class="field"><span>עזיבה</span><input class="input" type="date" name="co" min="${minDate()}" value="${esc(f.co)}"></label>
-          ${guestsPop(f)}
-          <button class="btn btn-primary" type="submit">${I("search")}חיפוש</button>
-        </form>
+        <div class="hf-inner">
+          <h1 class="hf-title"><span class="sr">${esc(S.settings.hero_title)}</span><span class="hf-phr" aria-hidden="true">${ph.map((x, i) => `<span class="${i ? "" : "on"}">${esc(x)}</span>`).join("")}</span>
+            <svg class="hf-swash" viewBox="0 0 320 24" aria-hidden="true" focusable="false"><path d="M6 16c38-9 92-13 150-11 54 2 104 7 158 1" /></svg></h1>
+          <form class="searchbox" data-form="hero-search" role="search">
+            <label class="field f-region"><span>לאן נוסעים?</span><select class="select" name="place">${placeOptions(f.place)}</select></label>
+            <label class="field"><span>הגעה</span><input class="input" type="date" name="ci" min="${minDate()}" value="${esc(f.ci)}"></label>
+            <label class="field"><span>עזיבה</span><input class="input" type="date" name="co" min="${minDate()}" value="${esc(f.co)}"></label>
+            ${guestsPop(f)}
+            <button class="btn btn-primary" type="submit">${I("search")}חיפוש</button>
+          </form>
+        </div>
       </section>
 
       ${newsletterBand()}
@@ -1323,6 +1340,8 @@
     S.map = S.miniMap = S.bigMap = null;
     if (!S.loaded) { main.innerHTML = `<div class="wrap" style="padding-block:120px;text-align:center;color:var(--muted)">טוען…</div>`; return; }
     if (S.error) { main.innerHTML = `<div class="wrap page">${emptyState("לא הצלחנו לטעון את האתר", esc(S.error), `<button class="btn btn-primary" type="button" onclick="location.reload()">ניסיון נוסף</button>`)}</div>`; return; }
+    /* רענון נתונים כשהפתיח כבר מוצג: בלי לנגן שוב את אנימציית הפתיחה */
+    S.homeAgain = !!$(".hf", main);
     let html, title = S.settings.site_name + " – " + S.settings.site_tagline;
     const preset = (patch) => { S.page = 1; S.filters = Object.assign(defaultFilters(), { ci: S.filters.ci, co: S.filters.co, guests: S.filters.guests, children: S.filters.children, benefit: S.filters.benefit, view: S.filters.view }, patch); const h = viewSearch(); title = searchTitle(S.filters) + " | " + S.settings.site_name; return h; };
     if (!hash || hash === "home") html = viewHome();
@@ -1346,7 +1365,7 @@
       if (r) title = `${ty ? ty.plural : "צימרים"} ${f ? f.phrase + " " : ""}${T.inPlace(r.name)} | ${S.settings.site_name}`;
     }
     else if (hash.startsWith("area-")) html = preset({ place: "area:" + hash.slice(5) });
-    else if (hash.startsWith("type-")) html = preset({ type: hash.slice(5) });
+    else if (hash.startsWith("type-")) { const [ty, ar] = hash.slice(5).split("/"); html = preset(Object.assign({ type: ty }, T.AREAS[ar] ? { place: "area:" + ar } : {})); }
     else if (hash.startsWith("aud-")) html = preset({ audience: [hash.slice(4)] });
     else if (hash.startsWith("town-")) { html = preset({ town: hash.slice(5) }); title = `צימרים ב${hash.slice(5)} | ${S.settings.site_name}`; }
     else if (hash.startsWith("stay-")) {
@@ -1375,10 +1394,11 @@
     $("#footer").innerHTML = footer();
     floating();
     reveal();
+    heroMotion();
   }
   /* תנועה (v6): קטעים וכרטיסים נכנסים בעדינות כשמגיעים אליהם, בהשהיה קטנה בין כרטיס לכרטיס.
      בלי תנועה למי שביקש (הגדרת מערכת או ״עצירת אנימציות״ בתפריט הנגישות). */
-  const REVEAL = ".section, .stay-section, .area-sec, .news-band, .page-head, .grid > .card, .rail > *, .regions > *, .type-tiles > *, .mag-grid > *, .ar-grid > *, .ar-mag > *, .plans > *, .steps > *, .top-band, .rev-cards > *";
+  const REVEAL = ".section, .stay-section, .area-sec, .news-band, .home-lean .band, .page-head, .grid > .card, .rail > *, .regions > *, .type-tiles > *, .mag-grid > *, .ar-grid > *, .ar-mag > *, .plans > *, .steps > *, .top-band, .rev-cards > *";
   let revObs = null;
   function reveal(root) {
     const still = document.documentElement.classList.contains("a11y-still") || (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -1393,6 +1413,59 @@
     });
   }
 
+  /* פתיח דף הבית: הכותרת "נכתבת" בכתב יד אחרי שהגופן נטען, ומתחלפת בין המשפטים שנקבעו בהגדרות.
+     עוצרים כשהלשונית מוסתרת, כשעוברים דף, ולמי שביקש בלי תנועה. */
+  let heroTimer = 0;
+  function heroMotion() {
+    clearInterval(heroTimer);
+    const box = $(".hf");
+    if (!box) return;
+    const go = () => box.classList.add("hf-go");
+    if (box.classList.contains("hf-again")) go();
+    const fonts = document.fonts && document.fonts.load ? document.fonts.load('1em "Gveret Levin"', "אב") : Promise.resolve();
+    Promise.race([fonts, new Promise((r) => setTimeout(r, 900))]).then(go, go);
+    const still = document.documentElement.classList.contains("a11y-still") || (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    /* בנייד, אם הסוגים לא נכנסים בשורה: גלילה הצידה עם דהייה בקצה */
+    const tb = $(".hf-tabs", box);
+    if (tb) tb.classList.toggle("ovf", tb.scrollWidth > tb.clientWidth + 2);
+    const items = $$(".hf-phr > span", box);
+    if (still || items.length < 2) return;
+    let i = 0;
+    heroTimer = setInterval(() => {
+      if (!box.isConnected) { clearInterval(heroTimer); return; }
+      if (document.hidden || box.contains(document.activeElement) && document.activeElement.matches("input, select")) return;
+      const cur = items[i];
+      i = (i + 1) % items.length;
+      cur.classList.remove("on");
+      cur.classList.add("off");
+      setTimeout(() => cur.classList.remove("off"), 700);
+      items[i].classList.add("on");
+    }, 5600);
+  }
+  const closeHf = (focus) => {
+    const m = $("#hf-menu");
+    if (!m || m.hidden) return;
+    m.hidden = true;
+    const b = $(".hf-dd[aria-expanded=true]");
+    if (b) { b.setAttribute("aria-expanded", "false"); if (focus) b.focus(); }
+  };
+  function openHf(btn) {
+    const m = $("#hf-menu");
+    const was = btn.getAttribute("aria-expanded") === "true";
+    closeHf();
+    if (was) return;
+    m.innerHTML = hfMenu(btn.dataset.t);
+    m.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    /* במחשב: הרשימה נפתחת מתחת לסוג שנלחץ; בנייד: לכל הרוחב */
+    m.style.removeProperty("--x");
+    if (window.innerWidth > 720) {
+      const tab = m.parentElement.getBoundingClientRect(), b = btn.getBoundingClientRect();
+      const x = b.left + b.width / 2 - tab.left - m.offsetWidth / 2;
+      m.style.setProperty("--x", Math.round(Math.max(8 - tab.left, Math.min(x, window.innerWidth - tab.left - m.offsetWidth - 8))) + "px");
+    }
+  }
+
   /* ---------------------------------------------------------------- events */
   const closeMega = () => { const m = $("#mega"); if (m && !m.hidden) { m.hidden = true; const b = $(".mega-btn"); if (b) b.setAttribute("aria-expanded", "false"); } };
   const updateSavedCount = () => { $$(".saved-count:not(.viewed-count)").forEach((sc) => { S.saved.size ? sc.setAttribute("data-n", S.saved.size) : sc.removeAttribute("data-n"); sc.setAttribute("aria-label", `המועדפים שלי (${S.saved.size})`); }); };
@@ -1400,6 +1473,7 @@
     const tr = e.target.closest("[data-track]");
     if (tr && S.stay.id && location.hash.startsWith("#stay-")) T.store.track(S.stay.id, tr.dataset.track);
     if (!e.target.closest("#mega, .mega-btn")) closeMega();
+    if (!e.target.closest(".hf-tab")) closeHf();
     const el = e.target.closest("[data-act]");
     if (!el) {
       const pnl = $("#a11y-panel");
@@ -1409,6 +1483,7 @@
     }
     const act = el.dataset.act;
     const st = S.stay;
+    if (act === "hf-dd") { openHf(el); return; }
     if (act === "save") {
       e.preventDefault();
       const id = el.dataset.id;
@@ -1543,6 +1618,7 @@
     else if (e.key === "Escape") {
       if ($("#modal")) { $("#modal").remove(); if (S.bigMap) { S.bigMap.remove(); S.bigMap = null; } return; }
       const m = $("#mega"); if (m && !m.hidden) { closeMega(); $(".mega-btn").focus(); return; }
+      const hm = $("#hf-menu"); if (hm && !hm.hidden) { closeHf(true); return; }
       const f = $("#filters.open"); if (f) { f.classList.remove("open"); document.body.style.overflow = ""; }
       const p = $("#a11y-panel"); if (p && !p.hidden) { p.hidden = true; $("#a11y-btn").focus(); }
     }
