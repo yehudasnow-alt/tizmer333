@@ -974,35 +974,40 @@
       ${photos[0] && photos[0].real ? "" : `<p class="illus-note">${I("info")}איור להמחשה. המארחים יעלו כאן תמונות אמיתיות.</p>`}
       <div class="stay-layout">
         <div>
-          <nav class="stay-tabs" aria-label="תוכן הדף"><a href="#avail" data-act="jump" data-to="avail">זמינות</a>${units.length > 1 ? `<a href="#units" data-act="jump" data-to="units">יחידות</a>` : ""}<a href="#prices" data-act="jump" data-to="prices">מחירון</a><a href="#reviews" data-act="jump" data-to="reviews">חוות דעת${rt ? ` (${rt.n})` : ""}</a><a href="#policies" data-act="jump" data-to="policies">מדיניות</a><a href="#map-sec" data-act="jump" data-to="map-sec">מפה</a><a href="#area" data-act="jump" data-to="area">מה עושים באזור</a></nav>
-          <div class="facts-row">
-            <div class="fact">${T.pic("fact-guests", "pic-l")}<div><b>עד ${T.capacity(l)}</b><span>אורחים</span></div></div>
-            ${units.length > 1 ? `<div class="fact">${T.pic("fact-units", "pic-l")}<div><b>${units.length}</b><span>יחידות במתחם</span></div></div>` : `<div class="fact">${T.pic("fact-bedrooms", "pic-l")}<div><b>${l.bedrooms}</b><span>חדרי שינה</span></div></div>`}
-            <div class="fact">${T.pic("fact-baths", "pic-l")}<div><b>${l.bathrooms}</b><span>חדרי רחצה</span></div></div>
-            <div class="fact">${T.pic("fact-minnights", "pic-l")}<div><b>${l.min_nights}</b><span>לילות מינימום</span></div></div>
-            ${t.checkin ? `<div class="fact">${T.pic("fact-checkin", "pic-l")}<div><b>${esc(t.checkin)}</b><span>כניסה</span></div></div>` : ""}
+          <nav class="stay-tabs" role="tablist" aria-label="תוכן הדף">${[["over", "סקירה"], units.length > 1 && ["units", "יחידות"], ["prices", "מחירון"], ["amen", "מה יש במתחם"], ["avail", "זמינות"], ["reviews", `חוות דעת${rt ? ` (${rt.n})` : ""}`], ["info", "מדיניות ושאלות"], ["map", "מפה"]].filter(Boolean).map(([k, label]) => `<button type="button" role="tab" data-act="st-pane" data-v="${k}" aria-selected="${k === "over"}" aria-controls="pane-${k}">${label}</button>`).join("")}<a href="#area" data-act="jump" data-to="area">מה עושים באזור</a></nav>
+          <div class="st-panes">
+          <div class="st-pane" id="pane-over" role="tabpanel">
+            <div class="facts-row">
+              <div class="fact">${T.pic("fact-guests", "pic-l")}<div><b>עד ${T.capacity(l)}</b><span>אורחים</span></div></div>
+              ${units.length > 1 ? `<div class="fact">${T.pic("fact-units", "pic-l")}<div><b>${units.length}</b><span>יחידות במתחם</span></div></div>` : `<div class="fact">${T.pic("fact-bedrooms", "pic-l")}<div><b>${l.bedrooms}</b><span>חדרי שינה</span></div></div>`}
+              <div class="fact">${T.pic("fact-baths", "pic-l")}<div><b>${l.bathrooms}</b><span>חדרי רחצה</span></div></div>
+              <div class="fact">${T.pic("fact-minnights", "pic-l")}<div><b>${l.min_nights}</b><span>לילות מינימום</span></div></div>
+              ${t.checkin ? `<div class="fact">${T.pic("fact-checkin", "pic-l")}<div><b>${esc(t.checkin)}</b><span>כניסה</span></div></div>` : ""}
+            </div>
+            ${lm ? `<div class="deal-box lm">${I("bolt")}<div><b>דקה 90 · ‎-${l.lastminute_pct}%</b><div>הנחה על לילות ${T.lastMinuteNights().map(T.fmtLong).join(" ו")}, אם עדיין פנויים.</div></div></div>` : ""}
+            ${l.deal_label ? `<div class="deal-box">${I("tag")}<div><b>${esc(l.deal_label)}</b><div>${esc(l.deal_text)}</div></div></div>` : ""}
+            ${benefits.length ? `<div class="deal-box benefit">${T.pic("ben-reservists", "pic-l")}<div><b>הטבות</b><div>${benefits.map((b) => `${b.pct}% הנחה ל${b.name}`).join(" · ")}. בוחרים את ההטבה בטופס ההזמנה.</div></div></div>` : ""}
+            <div class="bento">
+              <section class="stay-section box tone-a wide"><h2>על המקום</h2><div class="prose clamp" id="about-text"><p class="lead">${esc(l.tagline)}</p>${desc}</div>${(l.description || "").length > 380 ? `<button type="button" class="link-btn" data-act="more-desc" aria-expanded="false" aria-controls="about-text">קראו עוד</button>` : ""}
+                ${secCards.length ? `<div class="about-cards">${secCards.map(([k, h, ic]) => `<div>${I(ic)}<b>${h}</b><p>${esc(sec[k])}</p></div>`).join("")}</div>` : ""}</section>
+              ${(d.included || []).length ? `<section class="stay-section box tone-b"><h2>מה כלול באירוח</h2><p class="incl">${d.included.map((x) => `<span>${I("check")}${esc(x)}</span>`).join("")}</p></section>` : ""}
+              ${good.length ? `<section class="stay-section box tone-c"><h2>טוב לדעת</h2><ul class="good-list">${good.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></section>` : ""}
+              ${(t.packages || []).length || (l.extras || []).length ? `<section class="stay-section box tone-b"><h2>חבילות ותוספות</h2><div class="extra-list">${(t.packages || []).map((p) => `<div><span>${I("coffee")}${esc(p.name)}</span><b>${T.money(p.price)} <small>${esc(T.statusName(T.EXTRA_PER, p.per))}</small></b></div>`).join("")}${(l.extras || []).map((x) => `<div><span>${I("gift")}${esc(x.name)}</span><b>${Number(x.price) ? `${T.money(x.price)} <small>${esc(T.statusName(T.EXTRA_PER, x.per))}</small>` : "<small>בתיאום מראש</small>"}</b></div>`).join("")}</div></section>` : ""}
+              ${noiseHTML(l).replace('class="stay-section"', 'class="stay-section box tone-c"')}
+              ${l.video_url ? `<section class="stay-section box tone-a wide"><h2>סרטון</h2><div id="video">${videoHTML(l)}</div></section>` : ""}
+            </div>
           </div>
-          ${lm ? `<div class="deal-box lm">${I("bolt")}<div><b>דקה 90 · ‎-${l.lastminute_pct}%</b><div>הנחה על לילות ${T.lastMinuteNights().map(T.fmtLong).join(" ו")}, אם עדיין פנויים.</div></div></div>` : ""}
-          ${l.deal_label ? `<div class="deal-box">${I("tag")}<div><b>${esc(l.deal_label)}</b><div>${esc(l.deal_text)}</div></div></div>` : ""}
-          ${benefits.length ? `<div class="deal-box benefit">${I("percent")}<div><b>הטבות</b><div>${benefits.map((b) => `${b.pct}% הנחה ל${b.name}`).join(" · ")}. בוחרים את ההטבה בטופס ההזמנה.</div></div></div>` : ""}
-          <section class="stay-section"><h2>על המקום</h2><div class="prose"><p class="lead">${esc(l.tagline)}</p>${desc}</div>
-            ${secCards.length ? `<div class="about-cards">${secCards.map(([k, h, ic]) => `<div>${I(ic)}<b>${h}</b><p>${esc(sec[k])}</p></div>`).join("")}</div>` : ""}
-            ${good.length ? `<div class="good-box"><b>${I("info")}טוב לדעת</b><ul>${good.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
-          </section>
-          ${(d.included || []).length ? `<section class="stay-section"><h2>מה כלול באירוח</h2><p class="incl">${d.included.map((x) => `<span>${I("check")}${esc(x)}</span>`).join("")}</p></section>` : ""}
-          ${unitsHTML(l)}
-          ${priceTableHTML(l)}
-          <section class="stay-section"><h2>מה יש במתחם</h2>${groups.length ? groups.map(({ g, items }) => `<h3 class="sub-h">${T.pic(g.pic)}${esc(g.name)}</h3><div class="amen-grid">${items.map((m) => `<div class="amen">${T.pic(m.pic, "pic-l")}<span>${esc(m.name)}</span></div>`).join("")}</div>`).join("") : '<p class="muted">המארחים עוד לא פירטו.</p>'}</section>
-          ${(t.packages || []).length || (l.extras || []).length ? `<section class="stay-section"><h2>חבילות, תוספות ושירותים</h2><div class="extra-list">${(t.packages || []).map((p) => `<div><span>${I("coffee")}${esc(p.name)}</span><b>${T.money(p.price)} <small>${esc(T.statusName(T.EXTRA_PER, p.per))}</small></b></div>`).join("")}${(l.extras || []).map((x) => `<div><span>${I("gift")}${esc(x.name)}</span><b>${Number(x.price) ? `${T.money(x.price)} <small>${esc(T.statusName(T.EXTRA_PER, x.per))}</small>` : "<small>בתיאום מראש</small>"}</b></div>`).join("")}</div></section>` : ""}
-          ${l.video_url ? `<section class="stay-section"><h2>סרטון</h2><div id="video">${videoHTML(l)}</div></section>` : ""}
-          ${noiseHTML(l)}
-          <section class="stay-section" id="avail"><h2>יומן זמינות</h2><div id="cal">${calendarHTML(l)}</div></section>
-          ${policiesHTML(l)}
-          <section class="stay-section" id="reviews"><h2>חוות דעת</h2><div id="rev-host">${reviewsHTML(l)}</div></section>
-          <section class="stay-section" id="faq"><h2>שאלות נפוצות</h2><div class="faq">${faq.map((x) => `<details><summary>${esc(x.q)}</summary><p>${esc(x.a)}</p></details>`).join("")}</div></section>
-          <section class="stay-section" id="map-sec"><h2>איפה זה במפה?</h2><p class="muted">${esc(l.settlement)}, ${esc(reg.name)}. הכתובת המדויקת נמסרת על ידי המארחים לאחר אישור ההזמנה.</p>
+          ${units.length > 1 ? `<div class="st-pane" id="pane-units" role="tabpanel" hidden>${unitsHTML(l)}</div>` : ""}
+          <div class="st-pane" id="pane-prices" role="tabpanel" hidden>${priceTableHTML(l)}</div>
+          <div class="st-pane" id="pane-amen" role="tabpanel" hidden><section class="stay-section"><h2>מה יש במתחם</h2>${groups.length ? `<div class="amen-bento">${groups.map(({ g, items }, gi) => `<div class="box tone-${"abc"[gi % 3]}"><h3 class="sub-h">${T.pic(g.pic)}${esc(g.name)}</h3><div class="amen-grid">${items.map((m) => `<div class="amen">${T.pic(m.pic, "pic-l")}<span>${esc(m.name)}</span></div>`).join("")}</div></div>`).join("")}</div>` : '<p class="muted">המארחים עוד לא פירטו.</p>'}</section></div>
+          <div class="st-pane" id="pane-avail" role="tabpanel" hidden><section class="stay-section" id="avail"><h2>יומן זמינות</h2><div id="cal">${calendarHTML(l)}</div></section></div>
+          <div class="st-pane" id="pane-reviews" role="tabpanel" hidden><section class="stay-section" id="reviews"><h2>חוות דעת</h2><div id="rev-host">${reviewsHTML(l)}</div></section></div>
+          <div class="st-pane" id="pane-info" role="tabpanel" hidden>${policiesHTML(l)}
+            <section class="stay-section" id="faq"><h2>שאלות נפוצות</h2><div class="faq">${faq.map((x) => `<details><summary>${esc(x.q)}</summary><p>${esc(x.a)}</p></details>`).join("")}</div></section></div>
+          <div class="st-pane" id="pane-map" role="tabpanel" hidden><section class="stay-section" id="map-sec"><h2>איפה זה במפה?</h2><p class="muted">${esc(l.settlement)}, ${esc(reg.name)}. הכתובת המדויקת נמסרת על ידי המארחים לאחר אישור ההזמנה.</p>
             <div class="mini-map" id="mini-map"></div>
-            <div class="loc-links"><a class="btn btn-line" href="${esc(T.wazeLink(l.settlement, l.lat, l.lng))}" target="_blank" rel="noopener">${I("nav")}ניווט ב־Waze</a><a class="btn btn-line" href="${esc(T.mapsLink(l.settlement + ", ישראל", l.lat, l.lng))}" target="_blank" rel="noopener">${I("pin")}Google Maps</a><button class="btn btn-line" type="button" data-act="big-map">${I("map")}מפה גדולה</button></div></section>
+            <div class="loc-links"><a class="btn btn-line" href="${esc(T.wazeLink(l.settlement, l.lat, l.lng))}" target="_blank" rel="noopener">${I("nav")}ניווט ב־Waze</a><a class="btn btn-line" href="${esc(T.mapsLink(l.settlement + ", ישראל", l.lat, l.lng))}" target="_blank" rel="noopener">${I("pin")}Google Maps</a><button class="btn btn-line" type="button" data-act="big-map">${I("map")}מפה גדולה</button></div></section></div>
+          </div>
         </div>
         <aside aria-label="בקשת הזמנה" id="book-host">${bookHTML(l)}</aside>
       </div>
@@ -1476,6 +1481,14 @@
     return true;
   };
 
+  /* עמוד המתחם: לשונית אחת פתוחה בכל פעם, כך שהתוכן לא נמתח מתחת לטופס ההזמנה */
+  function showPane(k) {
+    if (!$("#pane-" + k)) return;
+    $$(".st-pane").forEach((p) => (p.hidden = p.id !== "pane-" + k));
+    $$(".stay-tabs [data-act=st-pane]").forEach((b) => b.setAttribute("aria-selected", b.dataset.v === k));
+    if (k === "map" && S.miniMap) setTimeout(() => { try { S.miniMap.invalidateSize(); const l = stayL(); if (l.lat) S.miniMap.setView([l.lat, l.lng], 11); } catch (e) {} }, 30);
+    reveal();
+  }
   /* ---------------------------------------------------------------- events */
   const closeMega = () => { const m = $("#mega"); if (m && !m.hidden) { m.hidden = true; const b = $(".mega-btn"); if (b) b.setAttribute("aria-expanded", "false"); } };
   const updateSavedCount = () => { $$(".saved-count:not(.viewed-count)").forEach((sc) => { S.saved.size ? sc.setAttribute("data-n", S.saved.size) : sc.removeAttribute("data-n"); sc.setAttribute("aria-label", `המועדפים שלי (${S.saved.size})`); }); };
@@ -1608,7 +1621,9 @@
       else window.open(l.video_url, "_blank", "noopener");
     } else if (act === "to-book") { const b = $("#book"); b.scrollIntoView({ behavior: "smooth", block: "start" }); const i = $("#book [name=ci]"); if (i) setTimeout(() => i.focus({ preventScroll: true }), 400); }
     else if (act === "to-message") { const b = $("#book [name=message]"); if (b) { b.scrollIntoView({ behavior: "smooth", block: "center" }); setTimeout(() => b.focus({ preventScroll: true }), 400); } }
-    else if (act === "jump") { e.preventDefault(); const t = document.getElementById(el.dataset.to); if (t) t.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    else if (act === "jump") { e.preventDefault(); const t = document.getElementById(el.dataset.to); if (!t) return; const pane = t.closest(".st-pane"); if (pane) showPane(pane.id.slice(5)); t.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    else if (act === "st-pane") { showPane(el.dataset.v); const nav = el.closest(".stay-tabs"); if (nav.getBoundingClientRect().top < 90) nav.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    else if (act === "more-desc") { const x = $("#about-text"); const open = x.classList.toggle("open"); el.setAttribute("aria-expanded", open); el.textContent = open ? "פחות" : "קראו עוד"; }
     else if (act === "book-again") { st.sent = null; refreshBooking(); }
     else if (act === "rev-sort") { st.revSort = el.dataset.v; $("#rev-host").innerHTML = reviewsHTML(stayL()); }
     else if (act === "rev-more") { st.revShow += 6; $("#rev-host").innerHTML = reviewsHTML(stayL()); }
