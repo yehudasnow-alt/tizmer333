@@ -17,6 +17,8 @@
     { key: "eilat", name: "אילת והערבה", area: "south", land: "redsea", time: "day", blurb: "הרי גרניט ומים צלולים", lat: 29.62, lng: 34.98 }
   ];
   T.AREAS = { north: "צפון", center: "מרכז", south: "דרום" };
+  /* אייקונים מאוירים (assets/icons/*.webp, רקע שקוף). שם הקובץ = המפתח. */
+  T.pic = (key, cls) => (key ? `<img class="pic${cls ? " " + cls : ""}" src="assets/icons/${key}.webp" alt="" width="96" height="96" loading="lazy" decoding="async">` : "");
 
   T.TYPES = [
     { key: "zimmer", name: "צימר", plural: "צימרים" },
@@ -143,6 +145,16 @@
     { key: "spa", name: "ספא וטיפולים", one: "ספא", icon: "leaf" }
   ];
   T.UNIT_COUNTS = [2, 3, 4, 6, 8, 10];
+  /* מפתח האייקון המאויר של כל פריט */
+  T.AMENITIES.forEach((a) => (a.pic = "am-" + a.key));
+  T.AMENITY_GROUPS.forEach((g) => (g.pic = "grp-" + g.key));
+  T.AUDIENCE.forEach((a) => (a.pic = "aud-" + a.key));
+  T.BENEFITS.forEach((b) => (b.pic = "ben-" + b.key));
+  T.REVIEW_CATS.forEach((c) => (c.pic = "rev-" + c.key));
+  T.PLACE_KINDS.forEach((k) => (k.pic = "place-" + k.key));
+  T.TYPES.forEach((x) => (x.pic = "type-" + x.key));
+  T.REGIONS.forEach((r) => (r.pic = "region-" + r.key));
+  T.AREA_PIC = { north: "area-north", center: "area-center", south: "area-south", "": "area-all" };
 
   /* דפי נחיתה לגוגל: אזור + מאפיין (משמש גם את scripts/build.mjs) */
   T.SEO_FEATURES = [

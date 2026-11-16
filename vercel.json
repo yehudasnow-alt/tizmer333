@@ -61,6 +61,15 @@
       ]
     },
     {
+      "source": "/assets/icons/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=2592000"
+        }
+      ]
+    },
+    {
       "source": "/assets/(js|css|vendor)/(.*)",
       "has": [
         {

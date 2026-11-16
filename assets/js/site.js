@@ -209,7 +209,7 @@
         <div class="card-head"><h3><a href="#stay-${esc(l.id)}">${esc(l.name)}</a></h3><span class="card-place">${esc(reg.name)}</span></div>
         <p class="card-tag">${esc(l.tagline)}</p>
         <div class="card-meta">${scoreHTML(l.id)}<span>${I("home")}${esc(typ.name)}${units.length > 1 ? ` · ${units.length} יחידות` : ""}</span><span>${I("users")}עד ${T.capacity(l)}</span>${km != null ? `<span>${I("nav")}${T.kmText(km)}${opts.km != null ? " מכאן" : " ממך"}</span>` : ""}</div>
-        ${amen.length ? `<div class="card-amen">${amen.map((a) => `<span>${I(a.icon)}${esc(a.name)}</span>`).join("")}</div>` : ""}
+        ${amen.length ? `<div class="card-amen">${amen.map((a) => `<span>${T.pic(a.pic)}${esc(a.name)}</span>`).join("")}</div>` : ""}
         ${badges.length ? `<div class="badges">${badges.slice(0, 3).map((b) => `<span class="badge b-${b.k}">${I(b.icon)}${esc(b.t)}</span>`).join("")}</div>` : ""}
         ${opts.near ? opts.near : opts.noFree ? "" : dated ? (units.length > 1 && freeN ? `<p class="avail-line">${I("check")}${freeN === units.length ? "כל היחידות פנויות" : plural.units(freeN) + " פנויות"} בתאריכים שלכם${freeN < units.length ? ` · עד ${freeCap} אורחים` : ""}</p>` : "") : freeNightsHTML(l)}
         <div class="card-foot">${priceHTML(l)}<span class="go-btn" aria-hidden="true">${I("fwd")}</span></div>
@@ -243,8 +243,8 @@
     const t = NAV_TYPES.find((x) => x.key === key);
     const of = S.listings.filter((l) => l.type === key);
     const n = (c) => (c ? `<span>${c}</span>` : "");
-    return `<a href="#type-${key}" class="tdd-all"><b>${esc(t.all)}</b>${n(of.length)}</a>` +
-      Object.entries(T.AREAS).map(([a, name]) => `<a href="#type-${key}/${a}">${esc(t.label)} ב${esc(name)}${n(of.filter((l) => T.regionOf(l.region).area === a).length)}</a>`).join("");
+    return `<a href="#type-${key}" class="tdd-all">${T.pic("type-" + key)}<b>${esc(t.all)}</b>${n(of.length)}</a>` +
+      Object.entries(T.AREAS).map(([a, name]) => `<a href="#type-${key}/${a}">${T.pic(T.AREA_PIC[a])}${esc(t.label)} ב${esc(name)}${n(of.filter((l) => T.regionOf(l.region).area === a).length)}</a>`).join("");
   }
   function header() {
     const n = S.saved.size;
@@ -325,7 +325,7 @@
     }).join("");
   }
   function newsletterBand() {
-    return `<section class="wrap page"><div class="news-band"><div><span class="eyebrow">דילים למייל</span><h2>דקה 90 ומבצעים, לפני כולם</h2><p>פעם בשבוע: מתחמים שהתפנו לסופ״ש הקרוב והנחות שמארחים פותחים רק לנרשמים.</p></div>
+    return `<section class="wrap page"><div class="news-band"><div>${T.pic("newsletter", "pic-xl")}<span class="eyebrow">דילים למייל</span><h2>דקה 90 ומבצעים, לפני כולם</h2><p>פעם בשבוע: מתחמים שהתפנו לסופ״ש הקרוב והנחות שמארחים פותחים רק לנרשמים.</p></div>
       <form class="news-form" data-form="subscribe" novalidate>${HP}<label class="field"><span>אימייל</span><input class="input" name="email" type="email" dir="ltr" autocomplete="email" required placeholder="name@example.com"></label><label class="field"><span>אזור מועדף (לא חובה)</span><select class="select" name="region">${placeOptions("", "כל הארץ")}</select></label><button class="btn btn-primary btn-lg" type="submit">${I("send")}הרשמה</button><p class="hint">בהרשמה אתם מאשרים לקבל מאיתנו דיוור שיווקי במייל. נשלח מייל לאישור, ואפשר להסיר את עצמכם בכל רגע. <a href="#terms">פרטיות</a></p></form></div></section>`;
   }
   /* דף הבית – בנייה מחדש בהדרגה (נובמבר 2026): כרגע רק הפתיח עם החיפוש, הרשמה לדילים והפס למארחים.
@@ -338,8 +338,8 @@
     return `<details class="field pick pick-type"><summary><span>מה מחפשים?</span><b class="psum">${esc(sel ? typePlural(sel) : "כל סוגי האירוח")}</b></summary>
       <div class="pop pick-pop"><input type="hidden" name="type" value="${esc(sel || "")}">
         <div class="pick-grid" role="listbox" aria-label="סוג אירוח">
-          <button type="button" class="pick-opt${sel ? "" : " on"}" data-act="pick" data-v="" data-l="כל סוגי האירוח" role="option" aria-selected="${!sel}">${I("sparkle")}<span>הכל</span></button>
-          ${T.TYPES.map((x) => `<button type="button" class="pick-opt${sel === x.key ? " on" : ""}" data-act="pick" data-v="${x.key}" data-l="${esc(typePlural(x.key))}" role="option" aria-selected="${sel === x.key}">${I(TYPE_ICON[x.key] || "home")}<span>${esc(typePlural(x.key))}</span>${c(x.key) ? `<small>${c(x.key)}</small>` : ""}</button>`).join("")}
+          <button type="button" class="pick-opt${sel ? "" : " on"}" data-act="pick" data-v="" data-l="כל סוגי האירוח" role="option" aria-selected="${!sel}">${T.pic("type-all", "pic-l")}<span>הכל</span></button>
+          ${T.TYPES.map((x) => `<button type="button" class="pick-opt${sel === x.key ? " on" : ""}" data-act="pick" data-v="${x.key}" data-l="${esc(typePlural(x.key))}" role="option" aria-selected="${sel === x.key}">${T.pic(x.pic, "pic-l")}<span>${esc(typePlural(x.key))}</span>${c(x.key) ? `<small>${c(x.key)}</small>` : ""}</button>`).join("")}
         </div></div></details>`;
   }
   function placePick(sel) {
@@ -349,10 +349,10 @@
     return `<details class="field pick pick-place"><summary><span>לאן נוסעים?</span><b class="psum">${esc(placeName(sel))}</b></summary>
       <div class="pop pick-pop"><input type="hidden" name="place" value="${esc(sel || "")}">
         <div class="pick-list" role="listbox" aria-label="אזור">
-          ${opt("", "כל הארץ", I("map"))}
+          ${opt("", "כל הארץ", T.pic("area-all", "pic-l"))}
           ${Object.entries(T.AREAS).map(([a, name]) => `<div class="pick-area${openArea(a) ? " open" : ""}">
-            <div class="pick-row">${opt("area:" + a, name, I("pin"))}<small class="pick-n">${inArea(a) || ""}</small><button type="button" class="pick-exp" data-act="pick-exp" aria-expanded="${openArea(a)}" aria-label="אזורים ב${esc(name)}">${I("chev-d")}</button></div>
-            <div class="pick-sub"><div>${T.REGIONS.filter((r) => r.area === a).map((r) => opt(r.key, r.name)).join("")}</div></div>
+            <div class="pick-row">${opt("area:" + a, name, T.pic(T.AREA_PIC[a], "pic-l"))}<small class="pick-n">${inArea(a) || ""}</small><button type="button" class="pick-exp" data-act="pick-exp" aria-expanded="${openArea(a)}" aria-label="אזורים ב${esc(name)}">${I("chev-d")}</button></div>
+            <div class="pick-sub"><div>${T.REGIONS.filter((r) => r.area === a).map((r) => opt(r.key, r.name, T.pic(r.pic))).join("")}</div></div>
           </div>`).join("")}
         </div></div></details>`;
   }
@@ -381,7 +381,7 @@
         <img src="assets/img/photos/band.jpg" alt="" loading="lazy">
         <div><span class="eyebrow">למארחים</span><h2>יש לכם צימר או וילה?</h2><p>פרסמו ב${esc(S.settings.site_name)} וקבלו פניות ישירות לוואטסאפ ולמייל, בלי עמלה על הזמנות. מעדכנים מחירים, תמונות ויומן בממשק מארחים, ומסנכרנים עם Booking ו-Airbnb.</p>
           <div class="btns"><a class="btn btn-sky btn-lg" href="#join">להצטרפות</a><a class="btn btn-glass btn-lg" href="owner.html">כניסת מארחים</a></div></div>
-        <ul>${["פניות עם תאריכים, יחידות ומספר אורחים, ישר לנייד", "סנכרון יומן iCal למניעת הזמנות כפולות", "מחירי חג ועונה, חבילות, הטבות ודקה 90", "דוח צפיות, לחיצות ופניות לכל מתחם"].map((t) => `<li>${I("check")}<span>${t}</span></li>`).join("")}</ul>
+        <ul>${[["direct", "פניות עם תאריכים, יחידות ומספר אורחים, ישר לנייד"], ["weekend", "סנכרון יומן iCal למניעת הזמנות כפולות"], ["deals", "מחירי חג ועונה, חבילות, הטבות ודקה 90"], ["verified", "דוח צפיות, לחיצות ופניות לכל מתחם"]].map(([p, t]) => `<li>${T.pic(p, "pic-l")}<span>${t}</span></li>`).join("")}</ul>
       </div></section>
     </div>`;
   }
@@ -431,7 +431,7 @@
     const groups = T.AMENITY_GROUPS.map((g, gi) => {
       const items = T.AMENITIES.filter((a) => a.group === g.key);
       const open = gi < 2 || items.some((a) => f.amenities.includes(a.key));
-      return `<details class="fgroup" ${open ? "open" : ""}><summary>${esc(g.name)}</summary>${items.map((a) => chk("amenities", a.key, f.amenities.includes(a.key), esc(a.name), "amenities:" + a.key)).join("")}</details>`;
+      return `<details class="fgroup" ${open ? "open" : ""}><summary>${T.pic(g.pic)}${esc(g.name)}</summary>${items.map((a) => chk("amenities", a.key, f.amenities.includes(a.key), T.pic(a.pic) + esc(a.name), "amenities:" + a.key)).join("")}</details>`;
     }).join("");
     return `<div class="view wrap page">
       <div class="page-head"><div class="crumbs"><a href="#">ראשי</a><span>›</span><span>חיפוש</span></div><span class="eyebrow">חיפוש מתחם</span><h1 id="search-title">${esc(searchTitle(f))}</h1></div>
@@ -445,7 +445,7 @@
           <fieldset><legend>מי מגיע</legend><div class="row2">
             <div class="field"><span id="fa-lbl">מבוגרים</span><div class="stepper" role="group" aria-labelledby="fa-lbl"><button type="button" data-act="step" data-d="-1" aria-label="פחות">${I("minus")}</button><input name="guests" type="number" min="0" max="40" value="${f.guests || 0}" aria-labelledby="fa-lbl" inputmode="numeric"><button type="button" data-act="step" data-d="1" aria-label="יותר">${I("plus")}</button></div></div>
             <div class="field"><span id="fk-lbl">ילדים</span><div class="stepper" role="group" aria-labelledby="fk-lbl"><button type="button" data-act="step" data-d="-1" aria-label="פחות">${I("minus")}</button><input name="children" type="number" min="0" max="20" value="${f.children || 0}" aria-labelledby="fk-lbl" inputmode="numeric"><button type="button" data-act="step" data-d="1" aria-label="יותר">${I("plus")}</button></div></div></div>
-            ${T.AUDIENCE.map((a) => chk("audience", a.key, f.audience.includes(a.key), a.name, "audience:" + a.key)).join("")}${chk("couplesOnly", "1", f.couplesOnly, "לזוגות בלבד (בלי ילדים)", "couplesOnly")}${chk("quiet", "1", f.quiet, "סביבה שקטה", "quiet")}${chk("party", "1", f.party, "מותר להרעיש (מוזיקה, קריוקי, מסיבות)", "party")}</fieldset>
+            ${T.AUDIENCE.map((a) => chk("audience", a.key, f.audience.includes(a.key), T.pic(a.pic) + a.name, "audience:" + a.key)).join("")}${chk("couplesOnly", "1", f.couplesOnly, "לזוגות בלבד (בלי ילדים)", "couplesOnly")}${chk("quiet", "1", f.quiet, "סביבה שקטה", "quiet")}${chk("party", "1", f.party, "מותר להרעיש (מוזיקה, קריוקי, מסיבות)", "party")}</fieldset>
           <fieldset><legend>הטבה שמגיעה לכם</legend><select class="select" name="benefit" aria-label="הטבה"><option value="">ללא</option>${T.BENEFITS.map((b) => `<option value="${b.key}" ${f.benefit === b.key ? "selected" : ""}>${esc(b.name)} (${cntKey("benefit:" + b.key)})</option>`).join("")}</select><span class="hint">המחירים בתוצאות יכללו את ההנחה</span></fieldset>
           <fieldset><legend>סוג אירוח</legend><label class="check"><input type="radio" name="type" value="" ${!f.type ? "checked" : ""}><span>הכל</span></label>${T.TYPES.map((t) => `<label class="check"><input type="radio" name="type" value="${t.key}" ${f.type === t.key ? "checked" : ""}><span>${esc(t.plural)}</span>${cnt("type:" + t.key)}</label>`).join("")}</fieldset>
           <fieldset><legend>מספר יחידות במתחם</legend><div class="pill-pick"><label><input type="radio" name="units" value="0" ${!f.units ? "checked" : ""}><span>הכל</span></label>${T.UNIT_COUNTS.map((u) => `<label><input type="radio" name="units" value="${u}" ${f.units === u ? "checked" : ""}><span>${u}+</span></label>`).join("")}</div></fieldset>
@@ -798,7 +798,7 @@
     const s10 = T.score10(rt.avg);
     const cats = T.REVIEW_CATS.filter((c) => rt.cats[c.key]);
     return `<div class="rev-summary"><span class="big">${s10.toFixed(1)}</span><span><b style="font-size:var(--t-l)">${T.scoreLabel(s10)}</b><br>${T.stars(rt.avg, "lg")}<br><span class="muted" style="font-size:var(--t-s)">${plural.reviews(rt.n)} מאורחים שהזמינו דרך האתר</span></span></div>
-      ${cats.length ? `<div class="rev-cats">${cats.map((c) => { const v = T.score10(rt.cats[c.key]); return `<div><span>${esc(c.name)}</span><span class="bar"><i style="width:${v * 10}%"></i></span><b>${v.toFixed(1)}</b></div>`; }).join("")}</div>` : ""}
+      ${cats.length ? `<div class="rev-cats">${cats.map((c) => { const v = T.score10(rt.cats[c.key]); return `<div><span>${T.pic(c.pic)}${esc(c.name)}</span><span class="bar"><i style="width:${v * 10}%"></i></span><b>${v.toFixed(1)}</b></div>`; }).join("")}</div>` : ""}
       <div class="rev-tools"><span class="seg-tabs" role="group" aria-label="מיון חוות דעת">${[["new", "חדשות"], ["high", "גבוהות"], ["low", "נמוכות"]].map(([k, t]) => `<button type="button" data-act="rev-sort" data-v="${k}" aria-pressed="${st.revSort === k}">${t}</button>`).join("")}</span></div>
       <div class="rev-list">${sorted.slice(0, st.revShow).map((r) => `<div class="rev"><div class="rev-top"><b class="score">${T.score10(r.rating).toFixed(0)}</b><span><b>${esc(r.title || "")}</b><span class="muted">${r.unit_name ? esc(r.unit_name) + " · " : ""}${r.stay_month ? "התארחו ב" + esc(r.stay_month) : ""}</span></span></div><p>${esc(r.text)}</p>${r.reply ? `<p class="reply"><b>תגובת המארחים:</b> ${esc(r.reply)}</p>` : ""}<div class="who"><b>${esc(r.name)}</b><span class="verified">${I("shield")}הזמנה מאומתת</span></div></div>`).join("")}</div>
       ${sorted.length > st.revShow ? `<button class="btn btn-line" type="button" data-act="rev-more" style="margin-top:14px">עוד ${sorted.length - st.revShow} חוות דעת</button>` : ""}`;
@@ -821,7 +821,7 @@
     const min = p.km != null ? driveMin(p.km) : null;
     return `<article class="ar-card k-${esc(k.key)}">
       <div class="ar-media">${p.photo ? `<img src="${esc(T.img(p.photo, 520))}" alt="${esc(p.name)}" loading="lazy">${p.photo_credit ? `<small class="ar-credit">צילום: ${esc(p.photo_credit)}</small>` : ""}` : `<span class="ar-art" aria-hidden="true">${I(k.icon)}</span>`}${min ? `<span class="ar-time">${I("car2")}${min} דק׳</span>` : ""}</div>
-      <div class="ar-body"><span class="ar-kind">${I(k.icon)}${esc(k.one)}${p.settlement ? ` · ${esc(p.settlement)}` : ""}</span><h3>${esc(p.name)}</h3>${p.blurb ? `<p>${esc(p.blurb)}</p>` : ""}
+      <div class="ar-body"><span class="ar-kind">${T.pic(k.pic)}${esc(k.one)}${p.settlement ? ` · ${esc(p.settlement)}` : ""}</span><h3>${esc(p.name)}</h3>${p.blurb ? `<p>${esc(p.blurb)}</p>` : ""}
         ${min ? `<p class="ar-meta">${T.kmText(p.km)} מהמתחם · כ־${min} דקות נסיעה</p>` : ""}${extra || ""}
         <div class="ar-acts"><a href="${esc(T.wazeLink(p.name, p.lat, p.lng))}" target="_blank" rel="noopener" aria-label="ניווט ב־Waze אל ${esc(p.name)}">${I("nav")}Waze</a><a href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank" rel="noopener" aria-label="מסלול ב־Google Maps אל ${esc(p.name)}">${I("pin")}מסלול</a><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name + (p.settlement ? " " + p.settlement : ""))}" target="_blank" rel="noopener" aria-label="תמונות וביקורות על ${esc(p.name)} ב־Google (נפתח בחלון חדש)">${I("image")}תמונות וביקורות</a>${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${I("external")}אתר</a>` : ""}</div></div></article>`;
   };
@@ -842,7 +842,7 @@
     const shown = list.filter((p) => !cur || p.kind === cur).slice(0, st.areaMore ? 40 : 9);
     const total = list.filter((p) => !cur || p.kind === cur).length;
     let pane = "";
-    if (tab === "todo") pane = `<div class="ar-kinds" role="group" aria-label="סוג מקום"><button type="button" data-act="place-kind" data-v="" aria-pressed="${!cur}">הכל<b>${list.length}</b></button>${kinds.map((k) => `<button type="button" data-act="place-kind" data-v="${k.key}" aria-pressed="${cur === k.key}">${I(k.icon)}${esc(k.name)}<b>${list.filter((p) => p.kind === k.key).length}</b></button>`).join("")}</div>
+    if (tab === "todo") pane = `<div class="ar-kinds" role="group" aria-label="סוג מקום"><button type="button" data-act="place-kind" data-v="" aria-pressed="${!cur}">הכל<b>${list.length}</b></button>${kinds.map((k) => `<button type="button" data-act="place-kind" data-v="${k.key}" aria-pressed="${cur === k.key}">${T.pic(k.pic)}${esc(k.name)}<b>${list.filter((p) => p.kind === k.key).length}</b></button>`).join("")}</div>
       <div class="ar-grid">${shown.map(placeCard).join("")}</div>
       ${total > shown.length ? `<button class="btn btn-line ar-more" type="button" data-act="area-more">${I("plus")}עוד ${total - shown.length} מקומות באזור</button>` : ""}
       <p class="ar-note">${I("info")}זמני הנסיעה משוערים לפי מרחק. התמונות והביקורות נפתחות ב־Google, והמידע על שעות פתיחה ומחירים מתעדכן אצל האתרים עצמם.</p>`;
@@ -853,7 +853,7 @@
         <div class="area-tabs" role="tablist" aria-label="על האזור">${tabs.map(([k, n, c, ic]) => `<button type="button" role="tab" data-act="area-tab" data-v="${k}" aria-selected="${tab === k}">${I(ic)}${n}${c ? `<b>${c}</b>` : ""}</button>`).join("")}</div></div>
       <div class="area-pane" role="tabpanel">${pane}</div></section>`;
   }
-  const placeItem = (p) => { const k = T.PLACE_KINDS.find((x) => x.key === p.kind) || T.PLACE_KINDS[1]; return `<div class="place">${p.photo ? `<img src="${esc(T.img(p.photo, 300))}" alt="" loading="lazy">` : `<span class="place-ic">${I(k.icon)}</span>`}<div><b>${esc(p.name)}</b><span class="muted">${esc(k.one)} · ${esc(p.settlement || T.regionOf(p.region).name)}${p.km != null ? ` · ${T.kmText(p.km)}` : ""}</span>${p.blurb ? `<p>${esc(p.blurb)}</p>` : ""}<span class="place-links">${p.phone ? `<a href="tel:${esc(p.phone)}" dir="ltr">${I("phone")}${esc(p.phone)}</a>` : ""}${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${I("external")}לאתר</a>` : ""}${p.lat != null ? `<a href="${esc(T.wazeLink(p.name, p.lat, p.lng))}" target="_blank" rel="noopener">${I("nav")}Waze</a>` : ""}</span></div></div>`; };
+  const placeItem = (p) => { const k = T.PLACE_KINDS.find((x) => x.key === p.kind) || T.PLACE_KINDS[1]; return `<div class="place">${p.photo ? `<img src="${esc(T.img(p.photo, 300))}" alt="" loading="lazy">` : `<span class="place-ic">${T.pic(k.pic, "pic-l")}</span>`}<div><b>${esc(p.name)}</b><span class="muted">${esc(k.one)} · ${esc(p.settlement || T.regionOf(p.region).name)}${p.km != null ? ` · ${T.kmText(p.km)}` : ""}</span>${p.blurb ? `<p>${esc(p.blurb)}</p>` : ""}<span class="place-links">${p.phone ? `<a href="tel:${esc(p.phone)}" dir="ltr">${I("phone")}${esc(p.phone)}</a>` : ""}${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${I("external")}לאתר</a>` : ""}${p.lat != null ? `<a href="${esc(T.wazeLink(p.name, p.lat, p.lng))}" target="_blank" rel="noopener">${I("nav")}Waze</a>` : ""}</span></div></div>`; };
   function priceTableHTML(l) {
     const units = T.unitsOf(l);
     const t = T.termsOf(l);
@@ -909,7 +909,7 @@
       const pickedRow = S.stay.rooms.some((r) => r.unitId === u.id);
       return `<article class="unit-card ${pickedRow ? "on" : ""}">${u.photos.length ? `<button type="button" class="unit-pic" data-act="lb-unit" data-id="${esc(u.id)}" aria-label="תמונות של ${esc(u.name)}"><img src="${esc(T.img(u.photos[0], 600))}" alt="${esc(u.name)}" loading="lazy">${u.photos.length > 1 ? `<span class="chip">${I("image")}${u.photos.length}</span>` : ""}</button>` : ""}
         <div class="unit-body"><h3>${esc(u.name)}</h3><p class="meta">${spec.map((x) => `<span>${x}</span>`).join("")}</p>${u.desc ? `<p>${esc(u.desc)}</p>` : ""}
-          ${am.length ? `<p class="unit-amen">${am.slice(0, 6).map((a) => `<span>${I(a.icon)}${esc(a.name)}</span>`).join("")}${am.length > 6 ? `<span>+${am.length - 6}</span>` : ""}</p>` : ""}
+          ${am.length ? `<p class="unit-amen">${am.slice(0, 6).map((a) => `<span>${T.pic(a.pic)}${esc(a.name)}</span>`).join("")}${am.length > 6 ? `<span>+${am.length - 6}</span>` : ""}</p>` : ""}
           <div class="unit-foot"><span class="price"><b>${T.money(u.price_weekday)}</b>ללילה<small>סופ״ש ${T.money(u.price_weekend)}</small></span><button class="btn ${pickedRow ? "btn-primary" : "btn-line"} btn-sm" type="button" data-act="unit" data-id="${esc(u.id)}" aria-pressed="${pickedRow}">${pickedRow ? `${I("check")}נבחרה` : "בחירת היחידה"}</button></div></div></article>`;
     }).join("")}</div></section>`;
   }
@@ -976,11 +976,11 @@
         <div>
           <nav class="stay-tabs" aria-label="תוכן הדף"><a href="#avail" data-act="jump" data-to="avail">זמינות</a>${units.length > 1 ? `<a href="#units" data-act="jump" data-to="units">יחידות</a>` : ""}<a href="#prices" data-act="jump" data-to="prices">מחירון</a><a href="#reviews" data-act="jump" data-to="reviews">חוות דעת${rt ? ` (${rt.n})` : ""}</a><a href="#policies" data-act="jump" data-to="policies">מדיניות</a><a href="#map-sec" data-act="jump" data-to="map-sec">מפה</a><a href="#area" data-act="jump" data-to="area">מה עושים באזור</a></nav>
           <div class="facts-row">
-            <div class="fact">${I("users")}<div><b>עד ${T.capacity(l)}</b><span>אורחים</span></div></div>
-            ${units.length > 1 ? `<div class="fact">${I("door")}<div><b>${units.length}</b><span>יחידות במתחם</span></div></div>` : `<div class="fact">${I("bed")}<div><b>${l.bedrooms}</b><span>חדרי שינה</span></div></div>`}
-            <div class="fact">${I("bath")}<div><b>${l.bathrooms}</b><span>חדרי רחצה</span></div></div>
-            <div class="fact">${I("moon")}<div><b>${l.min_nights}</b><span>לילות מינימום</span></div></div>
-            ${t.checkin ? `<div class="fact">${I("clock")}<div><b>${esc(t.checkin)}</b><span>כניסה</span></div></div>` : ""}
+            <div class="fact">${T.pic("fact-guests", "pic-l")}<div><b>עד ${T.capacity(l)}</b><span>אורחים</span></div></div>
+            ${units.length > 1 ? `<div class="fact">${T.pic("fact-units", "pic-l")}<div><b>${units.length}</b><span>יחידות במתחם</span></div></div>` : `<div class="fact">${T.pic("fact-bedrooms", "pic-l")}<div><b>${l.bedrooms}</b><span>חדרי שינה</span></div></div>`}
+            <div class="fact">${T.pic("fact-baths", "pic-l")}<div><b>${l.bathrooms}</b><span>חדרי רחצה</span></div></div>
+            <div class="fact">${T.pic("fact-minnights", "pic-l")}<div><b>${l.min_nights}</b><span>לילות מינימום</span></div></div>
+            ${t.checkin ? `<div class="fact">${T.pic("fact-checkin", "pic-l")}<div><b>${esc(t.checkin)}</b><span>כניסה</span></div></div>` : ""}
           </div>
           ${lm ? `<div class="deal-box lm">${I("bolt")}<div><b>דקה 90 · ‎-${l.lastminute_pct}%</b><div>הנחה על לילות ${T.lastMinuteNights().map(T.fmtLong).join(" ו")}, אם עדיין פנויים.</div></div></div>` : ""}
           ${l.deal_label ? `<div class="deal-box">${I("tag")}<div><b>${esc(l.deal_label)}</b><div>${esc(l.deal_text)}</div></div></div>` : ""}
@@ -992,7 +992,7 @@
           ${(d.included || []).length ? `<section class="stay-section"><h2>מה כלול באירוח</h2><p class="incl">${d.included.map((x) => `<span>${I("check")}${esc(x)}</span>`).join("")}</p></section>` : ""}
           ${unitsHTML(l)}
           ${priceTableHTML(l)}
-          <section class="stay-section"><h2>מה יש במתחם</h2>${groups.length ? groups.map(({ g, items }) => `<h3 class="sub-h">${esc(g.name)}</h3><div class="amen-grid">${items.map((m) => `<div class="amen">${I(m.icon)}<span>${esc(m.name)}</span></div>`).join("")}</div>`).join("") : '<p class="muted">המארחים עוד לא פירטו.</p>'}</section>
+          <section class="stay-section"><h2>מה יש במתחם</h2>${groups.length ? groups.map(({ g, items }) => `<h3 class="sub-h">${T.pic(g.pic)}${esc(g.name)}</h3><div class="amen-grid">${items.map((m) => `<div class="amen">${T.pic(m.pic, "pic-l")}<span>${esc(m.name)}</span></div>`).join("")}</div>`).join("") : '<p class="muted">המארחים עוד לא פירטו.</p>'}</section>
           ${(t.packages || []).length || (l.extras || []).length ? `<section class="stay-section"><h2>חבילות, תוספות ושירותים</h2><div class="extra-list">${(t.packages || []).map((p) => `<div><span>${I("coffee")}${esc(p.name)}</span><b>${T.money(p.price)} <small>${esc(T.statusName(T.EXTRA_PER, p.per))}</small></b></div>`).join("")}${(l.extras || []).map((x) => `<div><span>${I("gift")}${esc(x.name)}</span><b>${Number(x.price) ? `${T.money(x.price)} <small>${esc(T.statusName(T.EXTRA_PER, x.per))}</small>` : "<small>בתיאום מראש</small>"}</b></div>`).join("")}</div></section>` : ""}
           ${l.video_url ? `<section class="stay-section"><h2>סרטון</h2><div id="video">${videoHTML(l)}</div></section>` : ""}
           ${noiseHTML(l)}
@@ -1163,7 +1163,7 @@
       <div class="page-head"><div class="crumbs"><a href="#">ראשי</a><span>›</span><span>מה עושים באזור</span></div><span class="eyebrow">אטרקציות, מסעדות וטבע</span><h1>מה עושים ${r ? T.inPlace(r.name) : "בחופשה"}</h1><p>מקומות שכדאי להכיר ליד הצימר, עם מרחק ולינה קרובה.</p></div>
       <div class="toolbar-site">
         <select class="select" id="pl-region" aria-label="אזור" style="width:auto"><option value="">כל האזורים</option>${T.REGIONS.map((x) => `<option value="${x.key}" ${pf.region === x.key ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select>
-        <span class="ar-kinds" role="group" aria-label="סוג"><button type="button" data-act="pl-kind" data-v="" aria-pressed="${!pf.kind}">הכל</button>${T.PLACE_KINDS.filter((k) => S.places.some((p) => p.kind === k.key && (!pf.region || p.region === pf.region))).map((k) => `<button type="button" data-act="pl-kind" data-v="${k.key}" aria-pressed="${pf.kind === k.key}">${I(k.icon)}${esc(k.name)}</button>`).join("")}</span>
+        <span class="ar-kinds" role="group" aria-label="סוג"><button type="button" data-act="pl-kind" data-v="" aria-pressed="${!pf.kind}">הכל</button>${T.PLACE_KINDS.filter((k) => S.places.some((p) => p.kind === k.key && (!pf.region || p.region === pf.region))).map((k) => `<button type="button" data-act="pl-kind" data-v="${k.key}" aria-pressed="${pf.kind === k.key}">${T.pic(k.pic)}${esc(k.name)}</button>`).join("")}</span>
       </div>
       ${list.length ? `<div class="ar-grid">${list.map((p) => { const near = stays(p); return placeCard(p, near.length ? `<p class="ar-meta">${I("home")} לינה קרובה: ${near.map((o) => `<a href="#stay-${esc(o.l.id)}">${esc(o.l.name)}</a> (${T.kmText(o.km)})`).join(" · ")}</p>` : ""); }).join("")}</div>` : emptyState("עוד אין מקומות באזור הזה", "נוסיף בקרוב המלצות על אטרקציות ומסעדות.", `<a class="btn btn-line" href="#places">לכל האזורים</a>`)}
     </div>`;
