@@ -320,7 +320,7 @@
     email: "",
     notify_email: "",
     hero_title: "צימרים ווילות מהגולן ועד הערבה",
-    hero_phrases: "בואו נחפש את הנופש הבא\nהגיע הזמן לחופשה\nמגיע לכם קצת שקט\nהחופשה הבאה מחכה לכם",
+    hero_headline: "בואו נחפש את הנופש הבא",
     hero_subtitle: "מחפשים לפי אזור, תאריכים ומה שחשוב לכם, ושולחים בקשה ישירות למארחים. בלי עמלות ובלי מתווכים.",
     hero_image: "",
     plan_prices: { basic: 149, pro: 299, premium: 549 },
@@ -1053,6 +1053,8 @@
     /* צביעת טווח על כל מכל עם תאים [data-iso] (גם הלוח הקבוע בעמוד המתחם) */
     dp.paint = (box, a, b, hover) => {
       const end = b || (a && hover && hover > a ? hover : "");
+      /* טווח זמני (בזמן מעבר עכבר): כל הפס באותו גוון, והסוף עגול כמו אחרי לחיצה */
+      box.classList.toggle("dp-pv", !b && !!end);
       box.querySelectorAll(".dp-c[data-iso]").forEach((c) => {
         const d = c.dataset.iso;
         const isA = !!a && d === a, isB = !!end && d === end;

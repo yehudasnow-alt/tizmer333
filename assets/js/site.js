@@ -228,38 +228,42 @@
     return Object.entries(m).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "he")).slice(0, 12);
   };
   const quickIdx = (pred) => T.QUICK_FILTERS.findIndex(pred);
-  function megaHTML() {
-    const L = S.listings;
-    const countReg = (k) => L.filter((l) => l.region === k).length;
-    return `<div class="mega" id="mega" hidden><div class="mega-in page">
-      <div><h4>לפי אזור</h4>${Object.entries(T.AREAS).map(([k, n]) => `<p class="mega-area"><a href="#area-${k}">כל ה${n}</a></p><ul>${T.REGIONS.filter((r) => r.area === k).map((r) => `<li><a href="#region-${r.key}">${esc(r.name)}${countReg(r.key) ? ` <span>${countReg(r.key)}</span>` : ""}</a></li>`).join("")}</ul>`).join("")}</div>
-      <div><h4>גולשים מחפשים</h4><ul>${T.QUICK_FILTERS.map((q, i) => `<li><a href="#quick-${i}">${I(q.icon)}${esc(q.label)}</a></li>`).join("")}<li><a href="#lastminute">${I("bolt")}דקה 90</a></li><li><a href="#top">${I("trophy")}הכי מומלצים</a></li></ul></div>
-      <div><h4>סוג אירוח</h4><ul>${T.TYPES.map((t) => { const c = L.filter((l) => l.type === t.key).length; return `<li><a href="#type-${t.key}">${esc(t.plural)}${c ? ` <span>${c}</span>` : ""}</a></li>`; }).join("")}</ul>
-        <h4 style="margin-top:18px">מתאים ל</h4><ul>${T.AUDIENCE.map((a) => `<li><a href="#aud-${a.key}">${esc(a.name)}</a></li>`).join("")}</ul></div>
-      <div><h4>יישובים מבוקשים</h4><ul>${topTowns().map(([t, c]) => `<li><a href="#town-${encodeURIComponent(t)}">${esc(t)} <span>${c}</span></a></li>`).join("") || `<li class="muted">יתווספו בקרוב</li>`}</ul>
-        <a class="mega-more" href="#search">${I("search")}לכל המתחמים והמפה</a></div>
-    </div></div>`;
+  /* סוגי האירוח בתפריט העליון: כל סוג נפתח לרשימה (הכול, צפון, מרכז, דרום) */
+  const NAV_TYPES = [
+    { key: "zimmer", label: "צימרים", all: "כל הצימרים" },
+    { key: "villa", label: "וילות", all: "כל הווילות" },
+    { key: "cabin", label: "בקתות עץ", all: "כל בקתות העץ" },
+    { key: "suite", label: "סוויטות", all: "כל הסוויטות" },
+    { key: "compound", label: "מתחמי אירוח", all: "כל מתחמי האירוח" }
+  ];
+  /* שם הסוג בחיפוש: "מתחמי אירוח" כמו בתפריט, שאר הסוגים בשם הרגיל */
+  const typePlural = (k) => (NAV_TYPES.find((x) => x.key === k) || {}).label || T.typeOf(k).plural;
+  function typeMenu(key) {
+    const t = NAV_TYPES.find((x) => x.key === key);
+    const of = S.listings.filter((l) => l.type === key);
+    const n = (c) => (c ? `<span>${c}</span>` : "");
+    return `<a href="#type-${key}" class="tdd-all"><b>${esc(t.all)}</b>${n(of.length)}</a>` +
+      Object.entries(T.AREAS).map(([a, name]) => `<a href="#type-${key}/${a}">${esc(t.label)} ב${esc(name)}${n(of.filter((l) => T.regionOf(l.region).area === a).length)}</a>`).join("");
   }
   function header() {
     const n = S.saved.size;
     const nv = S.viewedList.filter((id) => byId(id)).length;
     const cur = location.hash.slice(1);
-    const nav = [["search", "חיפוש"], ["type-villa", "וילות"], ["deals", "דילים"], ["weekend", "פנויים לסופ״ש"]];
+    const nav = [["deals", "דילים"], ["weekend", "פנויים לסופ״ש"]];
     const me = S.me.user && S.me.user.email ? String(S.me.user.name || S.me.user.email).split(/[\s@]/)[0] : "";
     return `<header class="topbar wrap" id="topbar"><div class="topbar-in">
       <a class="brand" href="#" aria-label="${esc(S.settings.site_name)} – לדף הבית"><img src="${LOGO}" alt="${esc(S.settings.site_name)} – ${esc(S.settings.site_tagline)}"></a>
-      <nav class="mainnav" aria-label="ניווט ראשי"><a href="#search" ${cur === "search" ? 'aria-current="page"' : ""}>חיפוש</a><button class="mega-btn" type="button" data-act="mega" aria-expanded="false" aria-controls="mega">צימרים${I("chev-d")}</button>${nav.slice(1).map(([h, t]) => `<a href="#${h}" ${cur === h ? 'aria-current="page"' : ""}>${t}</a>`).join("")}</nav>
+      <nav class="mainnav" aria-label="ניווט ראשי"><a href="#search" ${cur === "search" ? 'aria-current="page"' : ""}>חיפוש</a>${NAV_TYPES.map((x) => `<div class="nav-dd"><button class="nav-dd-btn" type="button" data-act="tdd" aria-expanded="false" aria-controls="tdd-${x.key}" ${cur === "type-" + x.key || cur.startsWith("type-" + x.key + "/") ? 'data-cur="1"' : ""}>${esc(x.label)}${I("chev-d")}</button><div class="tdd" id="tdd-${x.key}" hidden>${typeMenu(x.key)}</div></div>`).join("")}${nav.map(([h, t]) => `<a href="#${h}" ${cur === h ? 'aria-current="page"' : ""}>${t}</a>`).join("")}</nav>
       <div class="top-actions">
         <a class="icon-btn saved-count viewed-count hide-s" href="#me-viewed" aria-label="נצפו לאחרונה (${nv})" title="נצפו לאחרונה" ${nv ? `data-n="${nv}"` : ""}>${I("history")}</a>
         <a class="icon-btn saved-count" href="#me" aria-label="המועדפים שלי (${n})" title="המועדפים שלי" ${n ? `data-n="${n}"` : ""}>${I("heart")}</a>
         <a class="me-pill hide-s" href="#me-leads" aria-label="האזור האישי">${I("user")}<span>${me ? esc(me) : "האזור האישי"}</span></a>
         <button class="icon-btn menu-btn" type="button" data-act="menu" aria-expanded="false" aria-controls="mobile-nav" aria-label="תפריט">${I("menu")}</button>
       </div></div>
-      ${megaHTML()}
       <nav class="mobile-nav" id="mobile-nav" aria-label="תפריט נייד">
-        <a href="#search">חיפוש</a><a href="#type-villa">וילות</a><a href="#deals">דילים ודקה 90</a><a href="#weekend">פנויים לסופ״ש</a>
+        <a href="#search">חיפוש</a><a href="#deals">דילים ודקה 90</a><a href="#weekend">פנויים לסופ״ש</a>
+        <details><summary>סוגי אירוח</summary>${T.TYPES.map((t) => `<a href="#type-${t.key}">${esc(typePlural(t.key))}</a>`).join("")}</details>
         <details><summary>צימרים לפי אזור</summary>${T.REGIONS.map((r) => `<a href="#region-${r.key}">${esc(r.name)}</a>`).join("")}</details>
-        <details><summary>סוגי אירוח</summary>${T.TYPES.map((t) => `<a href="#type-${t.key}">${esc(t.plural)}</a>`).join("")}</details>
         <details><summary>גולשים מחפשים</summary>${T.QUICK_FILTERS.map((q, i) => `<a href="#quick-${i}">${esc(q.label)}</a>`).join("")}</details>
         <a href="#me-leads">האזור האישי</a><a href="#me">המועדפים שלי</a><a href="#me-viewed">נצפו לאחרונה</a><a href="#top">הכי מומלצים</a><a href="#contact">צרו קשר</a><a class="mn-host" href="#join">${I("megaphone")}פרסמו אצלנו</a>
       </nav>
@@ -325,38 +329,43 @@
   }
   /* דף הבית – בנייה מחדש בהדרגה (נובמבר 2026): כרגע רק הפתיח עם החיפוש, הרשמה לדילים והפס למארחים.
      שאר הקטעים (מסלולים, אזורים, מגזין וכו') הוסרו מדף הבית; הפונקציות שלהם נשארו בקוד לשימוש בהמשך. */
-  /* לשונית הסוגים בראש הפתיח: כל סוג נפתח לרשימה לפי אזור (כמו "צימרים" בתפריט העליון) */
-  const HF_TYPES = [
-    { key: "zimmer", label: "צימרים", all: "כל הצימרים" },
-    { key: "villa", label: "וילות", all: "כל הווילות" },
-    { key: "cabin", label: "בקתות עץ", short: "בקתות", all: "כל בקתות העץ" },
-    { key: "suite", label: "סוויטות", all: "כל הסוויטות" },
-    { key: "compound", label: "מתחמי אירוח", short: "מתחמים", all: "כל מתחמי האירוח" }
-  ];
-  function hfMenu(key) {
-    const t = HF_TYPES.find((x) => x.key === key);
-    if (!t) return "";
-    const of = S.listings.filter((l) => l.type === key);
-    const n = (c) => (c ? `<span>${c}</span>` : "");
-    return `<a href="#type-${key}" class="hf-all"><b>${esc(t.all)}</b>${n(of.length)}</a>` +
-      Object.entries(T.AREAS).map(([a, name]) => `<a href="#type-${key}/${a}">${esc(t.label)} ב${esc(name)}${n(of.filter((l) => T.regionOf(l.region).area === a).length)}</a>`).join("");
+  /* בחירה בתיבת החיפוש: חלון קטן עם פינות עגולות במקום רשימה נפתחת של הדפדפן */
+  const placeName = (v) => (!v ? "כל הארץ" : v.startsWith("area:") ? T.AREAS[v.slice(5)] : T.regionOf(v).name);
+  const TYPE_ICON = { zimmer: "home", villa: "pool", cabin: "tree", suite: "bed", compound: "users", boutique: "star", loft: "door", apartment: "key", cave: "mountain" };
+  function typePick(sel) {
+    const c = (k) => S.listings.filter((l) => l.type === k).length;
+    return `<details class="field pick pick-type"><summary><span>מה מחפשים?</span><b class="psum">${esc(sel ? typePlural(sel) : "כל סוגי האירוח")}</b></summary>
+      <div class="pop pick-pop"><input type="hidden" name="type" value="${esc(sel || "")}">
+        <div class="pick-grid" role="listbox" aria-label="סוג אירוח">
+          <button type="button" class="pick-opt${sel ? "" : " on"}" data-act="pick" data-v="" data-l="כל סוגי האירוח" role="option" aria-selected="${!sel}">${I("sparkle")}<span>הכל</span></button>
+          ${T.TYPES.map((x) => `<button type="button" class="pick-opt${sel === x.key ? " on" : ""}" data-act="pick" data-v="${x.key}" data-l="${esc(typePlural(x.key))}" role="option" aria-selected="${sel === x.key}">${I(TYPE_ICON[x.key] || "home")}<span>${esc(typePlural(x.key))}</span>${c(x.key) ? `<small>${c(x.key)}</small>` : ""}</button>`).join("")}
+        </div></div></details>`;
   }
-  const heroPhrases = () => String(S.settings.hero_phrases || T.DEFAULT_SETTINGS.hero_phrases || "").split(/\n+/).map((x) => x.trim()).filter(Boolean).slice(0, 8);
+  function placePick(sel) {
+    const inArea = (a) => S.listings.filter((l) => T.regionOf(l.region).area === a).length;
+    const opt = (v, label, extra) => `<button type="button" class="pick-opt${sel === v ? " on" : ""}" data-act="pick" data-v="${v}" data-l="${esc(label)}" role="option" aria-selected="${sel === v}">${extra || ""}<span>${esc(label)}</span></button>`;
+    const openArea = (a) => sel === "area:" + a || T.REGIONS.some((r) => r.area === a && r.key === sel);
+    return `<details class="field pick pick-place"><summary><span>לאן נוסעים?</span><b class="psum">${esc(placeName(sel))}</b></summary>
+      <div class="pop pick-pop"><input type="hidden" name="place" value="${esc(sel || "")}">
+        <div class="pick-list" role="listbox" aria-label="אזור">
+          ${opt("", "כל הארץ", I("map"))}
+          ${Object.entries(T.AREAS).map(([a, name]) => `<div class="pick-area${openArea(a) ? " open" : ""}">
+            <div class="pick-row">${opt("area:" + a, name, I("pin"))}<small class="pick-n">${inArea(a) || ""}</small><button type="button" class="pick-exp" data-act="pick-exp" aria-expanded="${openArea(a)}" aria-label="אזורים ב${esc(name)}">${I("chev-d")}</button></div>
+            <div class="pick-sub"><div>${T.REGIONS.filter((r) => r.area === a).map((r) => opt(r.key, r.name)).join("")}</div></div>
+          </div>`).join("")}
+        </div></div></details>`;
+  }
+  const heroHeadline = () => String(S.settings.hero_headline || String(S.settings.hero_phrases || "").split(/\n/)[0] || T.DEFAULT_SETTINGS.hero_headline).trim();
   function viewHome() {
     const f = S.filters;
-    const ph = heroPhrases();
     return `<div class="view home-lean">
       <section class="hf${S.homeAgain ? " hf-again" : ""}" aria-label="חיפוש">
         <div class="hf-media"><div class="hf-par"><img src="${esc(S.settings.hero_image || T.HERO_DEFAULT)}" alt="" fetchpriority="high"></div></div>
-        <div class="hf-tab">
-          <div class="hf-tabs" role="group" aria-label="סוגי אירוח">${HF_TYPES.map((x, i) => `<button type="button" class="hf-dd" data-act="hf-dd" data-t="${x.key}" aria-expanded="false" aria-controls="hf-menu" style="--i:${i}">${x.short ? `<span class="hf-l">${esc(x.label)}</span><span class="hf-s">${esc(x.short)}</span>` : esc(x.label)}${I("chev-d")}</button>`).join("")}</div>
-          <div class="hf-menu" id="hf-menu" hidden></div>
-        </div>
         <div class="hf-inner">
-          <h1 class="hf-title"><span class="sr">${esc(S.settings.hero_title)}</span><span class="hf-phr" aria-hidden="true">${ph.map((x, i) => `<span class="${i ? "" : "on"}">${esc(x)}</span>`).join("")}</span>
-            <svg class="hf-swash" viewBox="0 0 320 24" aria-hidden="true" focusable="false"><path d="M6 16c38-9 92-13 150-11 54 2 104 7 158 1" /></svg></h1>
+          <h1 class="hf-title"><span class="sr">${esc(S.settings.hero_title)} – </span>${esc(heroHeadline())}</h1>
           <form class="searchbox" data-form="hero-search" role="search">
-            <label class="field f-region"><span>לאן נוסעים?</span><select class="select" name="place">${placeOptions(f.place)}</select></label>
+            ${typePick(f.type)}
+            ${placePick(f.place)}
             <label class="field"><span>הגעה</span><input class="input" type="date" name="ci" min="${minDate()}" value="${esc(f.ci)}"></label>
             <label class="field"><span>עזיבה</span><input class="input" type="date" name="co" min="${minDate()}" value="${esc(f.co)}"></label>
             ${guestsPop(f)}
@@ -1394,7 +1403,6 @@
     $("#footer").innerHTML = footer();
     floating();
     reveal();
-    heroMotion();
   }
   /* תנועה (v6): קטעים וכרטיסים נכנסים בעדינות כשמגיעים אליהם, בהשהיה קטנה בין כרטיס לכרטיס.
      בלי תנועה למי שביקש (הגדרת מערכת או ״עצירת אנימציות״ בתפריט הנגישות). */
@@ -1413,58 +1421,17 @@
     });
   }
 
-  /* פתיח דף הבית: הכותרת "נכתבת" בכתב יד אחרי שהגופן נטען, ומתחלפת בין המשפטים שנקבעו בהגדרות.
-     עוצרים כשהלשונית מוסתרת, כשעוברים דף, ולמי שביקש בלי תנועה. */
-  let heroTimer = 0;
-  function heroMotion() {
-    clearInterval(heroTimer);
-    const box = $(".hf");
-    if (!box) return;
-    const go = () => box.classList.add("hf-go");
-    if (box.classList.contains("hf-again")) go();
-    const fonts = document.fonts && document.fonts.load ? document.fonts.load('1em "Gveret Levin"', "אב") : Promise.resolve();
-    Promise.race([fonts, new Promise((r) => setTimeout(r, 900))]).then(go, go);
-    const still = document.documentElement.classList.contains("a11y-still") || (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    /* בנייד, אם הסוגים לא נכנסים בשורה: גלילה הצידה עם דהייה בקצה */
-    const tb = $(".hf-tabs", box);
-    if (tb) tb.classList.toggle("ovf", tb.scrollWidth > tb.clientWidth + 2);
-    const items = $$(".hf-phr > span", box);
-    if (still || items.length < 2) return;
-    let i = 0;
-    heroTimer = setInterval(() => {
-      if (!box.isConnected) { clearInterval(heroTimer); return; }
-      if (document.hidden || box.contains(document.activeElement) && document.activeElement.matches("input, select")) return;
-      const cur = items[i];
-      i = (i + 1) % items.length;
-      cur.classList.remove("on");
-      cur.classList.add("off");
-      setTimeout(() => cur.classList.remove("off"), 700);
-      items[i].classList.add("on");
-    }, 5600);
-  }
-  const closeHf = (focus) => {
-    const m = $("#hf-menu");
-    if (!m || m.hidden) return;
-    m.hidden = true;
-    const b = $(".hf-dd[aria-expanded=true]");
-    if (b) { b.setAttribute("aria-expanded", "false"); if (focus) b.focus(); }
+  /* חלונות הבחירה בחיפוש (סוג, אזור, אורחים): אחד פתוח בכל פעם; לחיצה בחוץ או Esc סוגרים */
+  const closePicks = (except) => $$("details.pick[open], details.guests-pop[open]").forEach((d) => { if (d !== except) d.removeAttribute("open"); });
+  document.addEventListener("toggle", (e) => { const d = e.target; if (d.matches && d.matches("details.pick, details.guests-pop") && d.open) closePicks(d); }, true);
+  const closeTdd = (focus) => {
+    const b = $(".nav-dd-btn[aria-expanded=true]");
+    if (!b) return false;
+    b.setAttribute("aria-expanded", "false");
+    $("#" + b.getAttribute("aria-controls")).hidden = true;
+    if (focus) b.focus();
+    return true;
   };
-  function openHf(btn) {
-    const m = $("#hf-menu");
-    const was = btn.getAttribute("aria-expanded") === "true";
-    closeHf();
-    if (was) return;
-    m.innerHTML = hfMenu(btn.dataset.t);
-    m.hidden = false;
-    btn.setAttribute("aria-expanded", "true");
-    /* במחשב: הרשימה נפתחת מתחת לסוג שנלחץ; בנייד: לכל הרוחב */
-    m.style.removeProperty("--x");
-    if (window.innerWidth > 720) {
-      const tab = m.parentElement.getBoundingClientRect(), b = btn.getBoundingClientRect();
-      const x = b.left + b.width / 2 - tab.left - m.offsetWidth / 2;
-      m.style.setProperty("--x", Math.round(Math.max(8 - tab.left, Math.min(x, window.innerWidth - tab.left - m.offsetWidth - 8))) + "px");
-    }
-  }
 
   /* ---------------------------------------------------------------- events */
   const closeMega = () => { const m = $("#mega"); if (m && !m.hidden) { m.hidden = true; const b = $(".mega-btn"); if (b) b.setAttribute("aria-expanded", "false"); } };
@@ -1473,7 +1440,8 @@
     const tr = e.target.closest("[data-track]");
     if (tr && S.stay.id && location.hash.startsWith("#stay-")) T.store.track(S.stay.id, tr.dataset.track);
     if (!e.target.closest("#mega, .mega-btn")) closeMega();
-    if (!e.target.closest(".hf-tab")) closeHf();
+    if (!e.target.closest(".nav-dd")) closeTdd();
+    if (!e.target.closest("details.pick, details.guests-pop")) closePicks();
     const el = e.target.closest("[data-act]");
     if (!el) {
       const pnl = $("#a11y-panel");
@@ -1483,7 +1451,27 @@
     }
     const act = el.dataset.act;
     const st = S.stay;
-    if (act === "hf-dd") { openHf(el); return; }
+    if (act === "tdd") {
+      const open = el.getAttribute("aria-expanded") === "true";
+      closeTdd();
+      if (!open) { el.setAttribute("aria-expanded", "true"); $("#" + el.getAttribute("aria-controls")).hidden = false; }
+      return;
+    }
+    if (act === "pick") {
+      const d = el.closest("details.pick");
+      $("input[type=hidden]", d).value = el.dataset.v;
+      $(".psum", d).textContent = el.dataset.l;
+      $$(".pick-opt", d).forEach((o) => { o.classList.toggle("on", o === el); o.setAttribute("aria-selected", o === el); });
+      d.removeAttribute("open");
+      $("summary", d).focus();
+      return;
+    }
+    if (act === "pick-exp") {
+      const a = el.closest(".pick-area");
+      a.classList.toggle("open");
+      el.setAttribute("aria-expanded", a.classList.contains("open"));
+      return;
+    }
     if (act === "save") {
       e.preventDefault();
       const id = el.dataset.id;
@@ -1618,7 +1606,8 @@
     else if (e.key === "Escape") {
       if ($("#modal")) { $("#modal").remove(); if (S.bigMap) { S.bigMap.remove(); S.bigMap = null; } return; }
       const m = $("#mega"); if (m && !m.hidden) { closeMega(); $(".mega-btn").focus(); return; }
-      const hm = $("#hf-menu"); if (hm && !hm.hidden) { closeHf(true); return; }
+      if (closeTdd(true)) return;
+      const pk = $("details.pick[open], details.guests-pop[open]"); if (pk) { pk.removeAttribute("open"); $("summary", pk).focus(); return; }
       const f = $("#filters.open"); if (f) { f.classList.remove("open"); document.body.style.overflow = ""; }
       const p = $("#a11y-panel"); if (p && !p.hidden) { p.hidden = true; $("#a11y-btn").focus(); }
     }
@@ -1685,7 +1674,7 @@
     const remember = (g) => { S.guest = g; T.storage.set("tamara.guest", g); };
     const pushMine = (lead, saved) => { S.myLeads = [Object.assign({ id: (saved && saved.id) || lead.id || T.uid("q"), created_at: new Date().toISOString(), status: "new" }, { listing_id: lead.listing_id, listing_name: lead.listing_name, check_in: lead.check_in, check_out: lead.check_out, guests: lead.guests, children: lead.children })].concat(S.myLeads).slice(0, 50); T.storage.set("tamara.myleads", S.myLeads); };
     if (kind === "hero-search") {
-      Object.assign(S.filters, defaultFilters(), { place: fd.get("place") || "", ci: fd.get("ci") || "", co: fd.get("co") || "", guests: Number(fd.get("guests")) || 0, children: Number(fd.get("children")) || 0 });
+      Object.assign(S.filters, defaultFilters(), { type: fd.get("type") || "", place: fd.get("place") || "", ci: fd.get("ci") || "", co: fd.get("co") || "", guests: Number(fd.get("guests")) || 0, children: Number(fd.get("children")) || 0 });
       if (S.filters.co && S.filters.co <= S.filters.ci) S.filters.co = "";
       S.page = 1;
       rememberSearch();
