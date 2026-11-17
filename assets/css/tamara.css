@@ -2363,3 +2363,63 @@ html.glass .dk-btn { background: radial-gradient(100% 100% at 30% 0%, rgba(255, 
 @keyframes dmOpenEnd { from { clip-path: inset(0 calc(100% - 150px) calc(100% - 46px) 0 round 23px); opacity: .4; } 60% { opacity: 1; } to { clip-path: inset(0 0 0 0 round var(--dm-r, 22px)); } }
 .pick-pop { animation: dmOpenStart .7s var(--spring) backwards; }
 @media (max-width: 980px) { .hf .searchbox .pick-place .pick-pop { animation-name: dmOpenEnd; } }
+
+/* ההמלצות: טקסט גדול ומלא יותר ליד החפיסה */
+.recs-copy .eyebrow { font-size: var(--t-s); }
+.recs-copy h2 { font-size: clamp(2.2rem, 4.4vw, 3.6rem); line-height: 1.05; margin: 10px 0 18px; letter-spacing: -.03em; }
+.recs-copy h2 em { font-style: normal; color: var(--copper); }
+.recs-lead { font-size: clamp(1.05rem, 1.4vw, 1.25rem); line-height: 1.6; color: var(--ink-2) !important; max-width: 40ch !important; }
+.recs-how { list-style: none; padding: 0; margin: 26px 0 0; display: grid; gap: 14px; font-size: inherit; }
+.recs-how li { display: flex; align-items: center; gap: 14px; animation: dmItem .6s var(--spring) backwards; }
+.recs-how li:nth-child(2) { animation-delay: .08s; } .recs-how li:nth-child(3) { animation-delay: .16s; }
+.recs-how b { display: block; font-size: 1.02rem; color: var(--ink); }
+.recs-how div { color: var(--muted); font-size: var(--t-s); line-height: 1.45; }
+.rh-ic { flex: none; width: 46px; height: 46px; border-radius: 16px; display: grid; place-items: center; background: var(--sky-50); border: 1px solid var(--line); color: var(--navy); }
+.rh-ic .ic { width: 20px; height: 20px; }
+.rh-love { color: var(--copper); background: color-mix(in srgb, var(--copper) 10%, var(--white)); border-color: color-mix(in srgb, var(--copper) 25%, var(--white)); }
+.recs-btns { margin-top: 28px; }
+.recs-btns .btn { height: 56px; padding-inline: 26px; font-size: 1rem; }
+@media (max-width: 860px) { .recs-how { max-width: 360px; margin-inline: auto; text-align: start; } }
+
+/* עוד מקומות: כרטיסיות בעומק (Parallax Ticket) */
+.tk-grid { display: grid; gap: 28px 22px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); }
+.tk-stage { height: 404px; perspective: 900px; }
+.tk { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; cursor: pointer; outline: none; will-change: transform; border-radius: 26px; }
+.tk:focus-visible { box-shadow: 0 0 0 3px var(--focus); }
+.tk-side { position: absolute; inset: 0; border-radius: 26px; overflow: hidden; backface-visibility: hidden; -webkit-backface-visibility: hidden; box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 6%, transparent), 0 30px 60px -32px color-mix(in srgb, var(--ink) 70%, transparent); }
+.tk-front { background: var(--ink); }
+.tk-layer { position: absolute; inset: 0; will-change: transform; pointer-events: none; }
+.tk-bg { inset: -20px; }
+.tk-bg img { width: 100%; height: 100%; object-fit: cover; }
+.tk-shade { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, color-mix(in srgb, var(--ink-deep) 25%, transparent) 0%, transparent 30%, transparent 45%, color-mix(in srgb, var(--ink-deep) 78%, transparent) 100%); }
+.tk-text { padding: 20px 22px; color: #fff; }
+.tk-chip { position: absolute; top: 18px; inset-inline-start: 18px; padding: 5px 11px; border-radius: 999px; font-size: var(--t-xs); font-weight: 600; background: rgba(255, 255, 255, .2); border: 1px solid rgba(255, 255, 255, .35); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.tk-title { position: absolute; inset-inline: 22px; bottom: 62px; font-size: clamp(1.7rem, 2.4vw, 2.1rem); line-height: 1; font-weight: 800; letter-spacing: -.03em; text-shadow: 0 2px 18px rgba(0, 0, 0, .35); }
+.tk-meta { position: absolute; inset-inline: 22px; bottom: 24px; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: var(--t-s); color: rgba(255, 255, 255, .82); }
+.tk-meta span { display: inline-flex; align-items: center; gap: 5px; }
+.tk-meta .ic { width: 15px; height: 15px; }
+.tk-meta b { color: #fff; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tk-meta small { font-weight: 400; opacity: .8; }
+.tk-glare { position: absolute; inset: 0; pointer-events: none; opacity: var(--g, 0); background: radial-gradient(260px circle at var(--gx, 50%) var(--gy, 30%), rgba(255, 255, 255, .26), transparent 60%); mix-blend-mode: screen; }
+.tk-back { transform: rotateY(180deg); background: var(--white); padding: 22px; display: flex; flex-direction: column; gap: 12px; }
+.tk-back-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.tk-back-head b { font-size: 1.2rem; letter-spacing: -.01em; }
+.tk-rate { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: var(--t-s); white-space: nowrap; }
+.tk-rate .ic { width: 14px; height: 14px; color: var(--copper); }
+.tk-rate small { color: var(--muted); font-weight: 400; }
+.tk-line { flex: none; color: var(--muted); font-size: var(--t-s); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tk-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+.tk-facts div { padding: 8px 4px; border-radius: 14px; background: var(--sky-50); border: 1px solid var(--line); font-size: var(--t-xs); color: var(--muted); }
+.tk-facts b { display: block; color: var(--ink); font-size: .92rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tk-am { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: var(--t-xs); color: var(--ink-2); }
+.tk-am li { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tk-am .pic, .tk-am .ic { width: 22px; height: 22px; flex: none; }
+.tk-price { display: flex; gap: 16px; margin-top: auto; font-size: var(--t-xs); color: var(--muted); }
+.tk-price b { display: block; color: var(--ink); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.tk-acts { display: flex; gap: 8px; align-items: center; }
+.tk-acts .btn { flex: 1; justify-content: center; }
+.tk-acts .save-btn { position: static; width: 46px; height: 46px; border: 1.5px solid var(--line-2); background: var(--white); }
+.tk-hint { text-align: center; font-size: var(--t-xs); color: var(--muted); }
+html.glass .tk-back { background: radial-gradient(120% 70% at 20% -20%, rgba(255, 255, 255, .6), rgba(255, 255, 255, 0) 55%), var(--cream-2); }
+@media (prefers-reduced-motion: reduce) { .recs-how li { animation: none; } }
+.tk-back > * { flex-shrink: 0; }

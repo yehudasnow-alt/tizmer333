@@ -430,9 +430,13 @@
     const list = recList().slice(0, 10);
     if (list.length < 2) return "";
     return `<section class="wrap page home-recs" aria-labelledby="recs-h"><div class="recs">
-      <div class="recs-copy"><span class="eyebrow">${I("sparkle")} ההמלצות שלנו</span><h2 id="recs-h">מקומות שבחרנו בשבילכם</h2>
-        <p>מקומות שאורחים אוהבים, לצד מקומות חדשים שכדאי להכיר. הרשימה מתחלפת כל יום.</p>
-        <p class="recs-how">גררו ימינה כדי לשמור למועדפים, שמאלה כדי לראות את הבא.</p>
+      <div class="recs-copy"><span class="eyebrow">${I("sparkle")} ההמלצות שלנו</span><h2 id="recs-h">מקומות שבחרנו <em>בשבילכם</em></h2>
+        <p class="recs-lead">מקומות שאורחים אוהבים, לצד מקומות חדשים שכדאי להכיר. הרשימה מתחלפת כל יום, אז שווה לחזור.</p>
+        <ul class="recs-how">
+          <li><span class="rh-ic rh-love">${I("heart")}</span><div><b>גררו ימינה</b>שומרים למועדפים וממשיכים</div></li>
+          <li><span class="rh-ic">${I("x")}</span><div><b>גררו שמאלה</b>לא מתאים? מגיע מקום חדש מתחת</div></li>
+          <li><span class="rh-ic">${I("chev-l")}</span><div><b>לחיצה על הכרטיס</b>פותחת את כל הפרטים והתמונות</div></li>
+        </ul>
         <div class="recs-btns"><button class="dk-btn" type="button" data-act="deck" data-d="-1" aria-label="הבא">${I("x")}</button><button class="dk-btn dk-love" type="button" data-act="deck" data-d="1" aria-label="שמירה למועדפים">${I("heart")}</button><a class="btn btn-primary" id="deck-open" href="#stay-${esc(list[0].id)}">לפרטים${I("chev-l")}</a></div>
         <p class="recs-count" id="deck-count" aria-live="polite">1 מתוך ${list.length} · ${esc(list[0].name)}</p></div>
       <div class="deck-wrap"><div class="deck" id="deck">${list.map(deckCard).join("")}</div></div>
@@ -444,8 +448,81 @@
     let list = S.listings.filter((l) => !skip.has(l.id) && (!S.moreType || l.type === S.moreType));
     if (list.length < 4) list = S.listings.filter((l) => !S.moreType || l.type === S.moreType);
     list = list.sort((a, b) => daySeed(b.id) + (T.isNewListing(b) ? 0.6 : 0) - daySeed(a.id) - (T.isNewListing(a) ? 0.6 : 0)).slice(0, 8);
-    return list.length ? `<div class="grid">${list.map((l) => card(l)).join("")}</div>` : emptyState("עוד אין מקומות מהסוג הזה", "", "");
+    return list.length ? `<div class="tk-grid">${list.map(ticketCard).join("")}</div>` : emptyState("עוד אין מקומות מהסוג הזה", "", "");
   }
+  /* כרטיס "כרטיסייה" (כמו Parallax Ticket): נוטה לעבר העכבר בשכבות עומק, ברק שעוקב, ולחיצה הופכת לצד האחורי עם הפרטים */
+  function ticketCard(l) {
+    const r = ratingOf(l.id), from = T.fromPrice(l), we = T.weekendFrom(l), reg = T.regionOf(l.region), typ = T.typeOf(l.type), units = T.unitsOf(l), saved = S.saved.has(l.id);
+    const am = (l.amenities || []).slice(0, 4).map((k) => T.amenityOf(k));
+    return `<div class="tk-stage"><div class="tk" role="button" tabindex="0" aria-pressed="false" aria-label="${esc(l.name)}, ${esc(typ.name)} ב${esc(l.settlement || reg.name)}. לחיצה להצגת הפרטים">
+      <div class="tk-side tk-front">
+        <div class="tk-layer tk-bg" data-depth=".25"><img src="${esc(T.thumbOf(l))}" alt="" loading="lazy" draggable="false"></div>
+        <div class="tk-shade"></div>
+        <div class="tk-layer tk-text" data-depth=".9">
+          <span class="tk-chip">${esc(typ.name)}${T.isNewListing(l) ? " · חדש באתר" : ""}</span>
+          <div class="tk-title">${esc(l.name)}</div>
+          <div class="tk-meta"><span>${I("pin")}${esc(l.settlement || reg.name)}</span>${from ? `<b>${T.money(from)}<small> ללילה</small></b>` : ""}</div>
+        </div>
+        <div class="tk-glare"></div>
+      </div>
+      <div class="tk-side tk-back">
+        <div class="tk-back-head"><b>${esc(l.name)}</b>${r ? `<span class="tk-rate">${I("star")}${r.avg.toFixed(1)} <small>(${r.n})</small></span>` : ""}</div>
+        <p class="tk-line">${esc(l.tagline || reg.name)}</p>
+        <div class="tk-facts"><div>סוג<b>${esc(typ.name)}</b></div><div>אורחים<b>עד ${T.capacity(l)}</b></div><div>${units.length > 1 ? "יחידות" : "אזור"}<b>${units.length > 1 ? units.length : esc(reg.name)}</b></div></div>
+        ${am.length ? `<ul class="tk-am">${am.map((a) => `<li>${a.pic ? T.pic(a.pic) : I(a.icon)}${esc(a.name)}</li>`).join("")}</ul>` : ""}
+        <div class="tk-price">${from ? `<span>אמצע שבוע<b>${T.money(from)}</b></span>` : ""}${we && we !== from ? `<span>סופ״ש<b>${T.money(we)}</b></span>` : ""}</div>
+        <div class="tk-acts"><a class="btn btn-primary" href="#stay-${esc(l.id)}">לדף המקום${I("chev-l")}</a><button class="icon-btn save-btn${saved ? " on" : ""}" type="button" data-act="save" data-id="${esc(l.id)}" aria-pressed="${saved}" aria-label="שמירה למועדפים">${I("heart")}</button></div>
+        <span class="tk-hint">לחיצה להפוך חזרה</span>
+      </div>
+    </div></div>`;
+  }
+  /* מנוע הכרטיסיות: קפיצים לכל כרטיס, לולאה אחת שרצה רק כשהקטע על המסך */
+  const TK = { tilt: 12, depth: 14 };
+  const tks = new Map();
+  let tkRaf = 0, tkLast = 0, tkClock = 0, tkIO = null;
+  function tkInit(root) {
+    if (!("IntersectionObserver" in window)) return;
+    if (!tkIO) tkIO = new IntersectionObserver((list) => list.forEach((en) => { const o = tks.get(en.target); if (o) { o.vis = en.isIntersecting; if (o.vis) tkKick(); } }), { rootMargin: "80px" });
+    (root || document).querySelectorAll(".tk-stage").forEach((st, i) => {
+      if (tks.has(st)) return;
+      const tk = st.querySelector(".tk");
+      const o = { st, tk, glare: st.querySelector(".tk-glare"), layers: [...st.querySelectorAll(".tk-layer")].map((el) => ({ el, d: parseFloat(el.dataset.depth) })), RX: spring(0, [220, 18]), RY: spring(0, [220, 18]), F: spring(0, [170, 15]), G: spring(0, [300, 26]), L: spring(1, [300, 18]), hover: false, nx: 0, ny: 0, ph: i * 1.3, flipped: false, vis: false };
+      o.sp = [o.RX, o.RY, o.F, o.G, o.L];
+      tks.set(st, o);
+      tkIO.observe(st);
+      st.addEventListener("pointermove", (e) => { if (e.pointerType !== "mouse") return; const r = st.getBoundingClientRect(); o.nx = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width) * 2 - 1)); o.ny = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height) * 2 - 1)); o.hover = true; tkKick(); });
+      st.addEventListener("pointerleave", () => { o.hover = false; tkKick(); });
+      st.addEventListener("pointerdown", () => { o.L.t = 0.97; tkKick(); });
+      st.addEventListener("pointerup", () => { o.L.t = 1; tkKick(); });
+      const flip = () => { o.flipped = !o.flipped; o.F.t = o.flipped ? 180 : 0; o.L.v += 1.5; tk.setAttribute("aria-pressed", o.flipped); tk.classList.toggle("is-flipped", o.flipped); tkKick(); };
+      tk.addEventListener("click", (e) => { if (e.target.closest("a, button")) return; flip(); });
+      tk.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === tk) { e.preventDefault(); flip(); } });
+    });
+    tkKick();
+  }
+  function tkLoop(now) {
+    const dt = Math.min((now - (tkLast || now)) / 1000, 1 / 30); tkLast = now; tkClock += dt;
+    let any = false;
+    const calm = stillMotion();
+    tks.forEach((o, st) => {
+      if (!st.isConnected) { tks.delete(st); if (tkIO) tkIO.unobserve(st); return; }
+      if (!o.vis) return;
+      any = true;
+      if (o.hover && !calm) { o.RX.t = -o.ny * TK.tilt; o.RY.t = o.nx * TK.tilt; o.G.t = 1; }
+      else if (!calm) { o.RX.t = Math.sin(tkClock * 0.9 + o.ph) * 3; o.RY.t = Math.cos(tkClock * 0.7 + o.ph) * 5; o.G.t = 0.25; }
+      else { o.RX.t = o.RY.t = 0; o.G.t = 0; }
+      for (let k = 0; k < 4; k++) o.sp.forEach((q) => { const a = -q.k * (q.x - q.t) - q.c * q.v; q.v += (a * dt) / 4; q.x += (q.v * dt) / 4; });
+      o.tk.style.transform = `rotateX(${o.RX.x.toFixed(2)}deg) rotateY(${(o.RY.x + o.F.x).toFixed(2)}deg) scale(${o.L.x.toFixed(4)})`;
+      const ox = o.RY.x / TK.tilt, oy = -o.RX.x / TK.tilt;
+      o.layers.forEach((l) => { l.el.style.transform = `translate(${(ox * TK.depth * l.d).toFixed(2)}px, ${(oy * TK.depth * l.d).toFixed(2)}px)`; });
+      o.glare.style.setProperty("--g", Math.max(0, Math.min(1, o.G.x)).toFixed(3));
+      o.glare.style.setProperty("--gx", (o.hover ? (o.nx + 1) * 50 : 50 + ox * 30).toFixed(1) + "%");
+      o.glare.style.setProperty("--gy", (o.hover ? (o.ny + 1) * 50 : 30 + oy * 30).toFixed(1) + "%");
+    });
+    tkRaf = any ? requestAnimationFrame(tkLoop) : 0;
+    if (!any) tkLast = 0;
+  }
+  const tkKick = () => { if (!tkRaf) tkRaf = requestAnimationFrame(tkLoop); };
   function homeMore() {
     if (S.listings.length < 3) return "";
     const types = NAV_TYPES.filter((x) => has.type(x.key));
@@ -1636,6 +1713,7 @@
     heroVideo();
     motion();
     if ($("#deck")) deckInit();
+    if ($(".tk-stage")) tkInit();
     markReady();
   }
   /* תצוגה מקדימה מפאנל הניהול (בתוך מסגרת): מקבלים צבעים ומצב זכוכית בזמן אמת, בלי לשמור כלום */
@@ -2020,7 +2098,7 @@
     } else if (act === "quick") { e.preventDefault(); location.hash = "quick-" + el.dataset.i; }
     else if (act === "show") { S.showIdx += Number(el.dataset.d); $("#showcase").innerHTML = showcase(S.listings.filter((l) => l.featured)); }
     else if (act === "deck") { deckInit(); deckFling(Number(el.dataset.d)); }
-    else if (act === "more-type") { S.moreType = el.dataset.v; $$('[data-act="more-type"]').forEach((b) => b.setAttribute("aria-pressed", b === el)); const g = $("#more-grid"); if (g) g.innerHTML = homeMoreGrid(); motion(g); }
+    else if (act === "more-type") { S.moreType = el.dataset.v; $$('[data-act="more-type"]').forEach((b) => b.setAttribute("aria-pressed", b === el)); const g = $("#more-grid"); if (g) { g.innerHTML = homeMoreGrid(); motion(g); tkInit(g); } }
     else if (act === "cimg") {
       e.preventDefault();
       const box = el.closest(".card-media"), o = box && pagerOf(box, { touchOnly: true });
