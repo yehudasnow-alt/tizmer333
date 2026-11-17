@@ -11,21 +11,21 @@ const TITLES = {
   "pl-banias": ["שמורת נחל חרמון", "מפל הבניאס", "Banias"],
   "pl-meshushim": ["בריכת המשושים", "Hexagon Pool"],
   "pl-bental": ["הר בנטל", "Mount Bental"],
-  "pl-hermon": ["אתר החרמון", "הר החרמון", "Mount Hermon"],
-  "pl-katzrin": ["קצרין העתיקה", "Qatzrin"],
+  "pl-hermon": ["הר החרמון", "Mount Hermon"],
+  "pl-katzrin": ["קצרין העתיקה", "פארק קצרין העתיקה", "Ancient Qatzrin Park", "Qatzrin Ancient Village"],
   "pl-nimrod": ["מבצר נמרוד", "Nimrod Fortress"],
-  "pl-gamla": ["גמלא", "Gamla"],
-  "pl-golan-winery": ["יקבי רמת הגולן", "Golan Heights Winery"],
+  "pl-gamla": ["גמלא", "שמורת גמלא", "מפל גמלא", "Gamla", "Gamla Nature Reserve"],
+  "pl-golan-winery": ["יקבי רמת הגולן", "Golan Heights Winery", "Golan Heights wine"],
   "pl-gadot": ["מצפה גדות", "גדות"],
   "pl-tanur": ["מפל התנור", "נחל עיון", "Ayun Stream"],
   "pl-tel-dan": ["שמורת תל דן", "תל דן", "Tel Dan"],
   "pl-hula-reserve": ["שמורת החולה", "Hula Nature Reserve"],
   "pl-agamon": ["אגמון החולה", "Agamon Hula"],
   "pl-safed": ["העיר העתיקה של צפת", "צפת", "Safed"],
-  "pl-rosh-pina": ["ראש פינה", "Rosh Pinna"],
+  "pl-rosh-pina": ["ראש פינה", "ראש פינה (מושבה)", "Rosh Pinna", "Rosh Pina"],
   "pl-meron": ["הר מירון", "Mount Meron"],
   "pl-amud": ["נחל עמוד", "Nahal Amud"],
-  "pl-dalton": ["דלתון", "Dalton, Israel"],
+  "pl-dalton": ["Dalton, Israel", "רמת דלתון"],
   "pl-hanikra": ["נקרות ראש הנקרה", "ראש הנקרה", "Rosh HaNikra grottoes"],
   "pl-akko": ["העיר העתיקה של עכו", "Old City of Acre", "Acre, Israel"],
   "pl-montfort": ["מבצר מונפור", "Montfort Castle"],
@@ -42,16 +42,16 @@ const TITLES = {
   "pl-kursi": ["כורסי", "Kursi, Golan Heights"],
   "pl-ginosar-boat": ["הסירה מגינוסר", "Ancient Galilee Boat"],
   "pl-zichron": ["זכרון יעקב", "Zikhron Ya'akov"],
-  "pl-carmel-winery": ["יקבי כרמל", "Carmel Winery"],
+  "pl-carmel-winery": ["יקבי כרמל", "Carmel Winery", "Carmel Wine"],
   "pl-ramat-hanadiv": ["רמת הנדיב", "Ramat HaNadiv"],
-  "pl-ein-hod": ["עין הוד", "Ein Hod"],
+  "pl-ein-hod": ["עין הוד", "עין הוד (כפר אמנים)", "Ein Hod", "Ein Hod artists' village", "Janco Dada Museum"],
   "pl-nahal-mearot": ["שמורת נחל מערות", "Nahal Me'arot Nature Reserve"],
-  "pl-muhraka": ["המוחרקה", "Muhraka"],
+  "pl-muhraka": ["המוחרקה", "מנזר המוחרקה", "Muhraka", "Muhraqa", "El-Muhraqa"],
   "pl-bahai": ["הגנים הבהאיים", "המקדש הבהאי", "Terraces of the Baháʼí Faith"],
-  "pl-dor-habonim": ["שמורת חוף דור הבונים", "Dor HaBonim Beach Nature Reserve"],
+  "pl-dor-habonim": ["שמורת חוף דור הבונים", "חוף דור הבונים", "Dor HaBonim Beach Nature Reserve", "Dor Habonim Beach", "Tel Dor"],
   "pl-soreq": ["מערת הנטיפים", "Avshalom Cave"],
   "pl-ein-karem": ["עין כרם", "Ein Karem"],
-  "pl-ein-hania": ["עין חנייה", "Ein Hanya"],
+  "pl-ein-hania": ["עין חנייה", "עין חניה", "Ein Hanya", "Ein Haniya", "Ein Hanya spring"],
   "pl-sataf": ["סטף", "Sataf"],
   "pl-old-city": ["העיר העתיקה (ירושלים)", "העיר העתיקה של ירושלים", "Old City (Jerusalem)"],
   "pl-city-of-david": ["עיר דוד", "City of David"],
@@ -65,16 +65,16 @@ const TITLES = {
   "pl-einot-tzukim": ["עינות צוקים", "Einot Tzukim"],
   "pl-sodom": ["הר סדום", "Mount Sodom"],
   "pl-ramon-visitor": ["מכתש רמון", "Makhtesh Ramon"],
-  "pl-ein-avdat": ["עין עבדת", "Ein Avdat"],
+  "pl-ein-avdat": ["עין עבדת", "גן לאומי עין עבדת", "Ein Avdat", "Ein Avdat National Park", "Nahal Zin"],
   "pl-avdat": ["עבדת", "Avdat"],
   "pl-ben-gurion": ["צריף בן-גוריון", "Ben-Gurion's Desert Home", "Ben-Gurion's Tomb"],
   "pl-alpaca": ["חוות האלפקות", "Alpaca Farm (Israel)"],
   "pl-ramon-stars": ["מצפה רמון", "Mitzpe Ramon"],
   "pl-coral-beach": ["שמורת חוף האלמוגים", "Coral Beach Nature Reserve"],
-  "pl-underwater": ["המצפה התת-ימי באילת", "Coral World Underwater Observatory"],
+  "pl-underwater": ["המצפה התת-ימי באילת", "המצפה התת ימי", "Coral World Underwater Observatory", "Underwater Observatory Marine Park", "Coral World Eilat"],
   "pl-timna": ["פארק תמנע", "Timna Valley"],
   "pl-red-canyon": ["הקניון האדום", "Red Canyon (Israel)"],
-  "pl-hai-bar": ["שמורת חי-בר יטבתה", "Hai-Bar Yotvata Nature Reserve"]
+  "pl-hai-bar": ["שמורת חי-בר יטבתה", "חי-בר יטבתה", "Hai-Bar Yotvata Nature Reserve", "Yotvata Hai-Bar Nature Reserve"]
 };
 
 const UA = { "User-Agent": "TamaraSiteBuild/1.0 (zimmer listing site; build-time photo credits)" };
@@ -120,9 +120,12 @@ async function fileInfo(files) {
       const m = ii.extmetadata || {};
       const lic = strip(m.LicenseShortName && m.LicenseShortName.value);
       if ((m.NonFree && String(m.NonFree.value) === "true") || !FREE.test(lic)) return;
-      let artist = strip(m.Artist && m.Artist.value) || "Wikimedia Commons";
+      let artist = strip(m.Artist && m.Artist.value);
+      if (!artist || /no machine-readable|unknown/i.test(artist)) artist = "Wikimedia Commons";
+      artist = artist.replace(/^This file is a work by\s+/i, "");
       if (artist.length > 42) artist = artist.slice(0, 40).replace(/\s+\S*$/, "") + "…";
       const name = (back[p.title] || p.title).replace(/^File:/, "");
+      if (/logo|לוגו|סמל|emblem|coat[_ ]of|flag|map|מפה|locator|diagram|\.svg$/i.test(name) || /drachen|kite/i.test(name)) return;
       out[name] = { url: ii.thumburl || ii.url, page: ii.descriptionurl, artist, license: lic };
     });
   }
@@ -136,9 +139,11 @@ export async function placePhotos(places, OUT) {
   const cand = Object.fromEntries(want.map((p) => [p.id, TITLES[p.id] || [String(p.name || "").replace(/\s*\(.*\)\s*$/, ""), p.name].filter(Boolean)]));
   const all = Object.values(cand).flat();
   const [he, en] = await Promise.all([leadImages("he.wikipedia.org", all.filter(heb)), leadImages("en.wikipedia.org", all.filter((t) => !heb(t)))]);
+  /* לכל מקום כל התמונות האפשריות לפי הסדר; נבחרת הראשונה שעוברת את בדיקת הרישיון (ולא לוגו/מפה) */
+  const opts = Object.fromEntries(want.map((p) => [p.id, cand[p.id].map((x) => (heb(x) ? he : en)[x]).filter(Boolean)]));
+  const info = await fileInfo(Object.values(opts).flat());
   const pick = {};
-  for (const p of want) { const t = cand[p.id].find((x) => (heb(x) ? he : en)[x]); if (t) pick[p.id] = (heb(t) ? he : en)[t]; }
-  const info = await fileInfo(Object.values(pick));
+  for (const id in opts) { const f = opts[id].find((x) => info[x]); if (f) pick[id] = f; }
   const dir = path.join(OUT, "assets/places");
   fs.mkdirSync(dir, { recursive: true });
   const res = {};
