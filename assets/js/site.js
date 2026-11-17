@@ -160,7 +160,8 @@
       const n = cntKey(el.dataset.cnt);
       el.textContent = n;
       const input = el.closest("label") && el.closest("label").querySelector("input");
-      if (input) { const off = n === 0 && !input.checked; input.disabled = off; el.closest("label").classList.toggle("off", off); }
+      /* אפשרות בלי אף מקום מתאים לא מוצגת בכלל (רק אם לא נבחרה) */
+      if (input) { const off = n === 0 && !input.checked; input.disabled = off; el.closest("label").classList.toggle("off", off); el.closest("label").hidden = off && input.type === "checkbox"; }
     });
   }
 
