@@ -12,6 +12,7 @@
   const LOGO_S = "assets/img/brand/logo-stacked-ink.svg";
 
   const A = {
+    sideMini: (() => { try { return !!localStorage.getItem("tm-side-mini"); } catch (e) { return false; } })(),
     ready: false, authed: false, loginMsg: null, loginMode: "login", gate: "", needPassword: false, invite: false, mfaFactor: null, lastEmail: "",
     af: { tab: "all", q: "" }, authInfo: {}, audit: undefined, actF: "", acct: null, enroll: null, daily: null, cleanup: null, welcome: false, app: null, linkFor: null, clientAudit: null, route: "",
     listings: [], advertisers: [], leads: [], applications: [], reviews: [], articles: [], places: [], subscribers: [], stats: {}, settings: T.clone(T.DEFAULT_SETTINGS),
@@ -91,12 +92,12 @@
         ["advertisers", "briefcase", "לקוחות", A.advertisers.filter(renewalAsked).length], ["billing", "receipt", "חיובים"], ["applications", "user-plus", "בקשות הצטרפות", A.applications.filter((a) => a.status === "new").length], ["places", "map", "מה עושים באזור"], ["articles", "book", "מגזין"], ["subscribers", "mail", "מנויי דיוור"], ["activity", "history", "יומן פעולות"], ["site-settings", "sliders", "הגדרות"], ["system", "shield", "בדיקת מערכת", T.isLive && T.schemaIssues && T.schemaIssues.size ? "!" : 0]]
       : [["my", "home", "המתחמים שלי"], ["calendar", "calendar", "יומן"], ["leads", "inbox", "פניות", newLeads]].concat(A.calls.length || A.listings.some((l) => l.tracking_phone) ? [["calls", "phone", "שיחות", missedNew()]] : [], [["reviews", "star", "חוות דעת"], ["account", "user", "החשבון שלי", A.advertisers[0] && A.advertisers[0].pending ? "!" : 0]]);
     const isCur = (k) => cur === k || (k === "listings" && (cur.startsWith("edit-") || cur === "new")) || (k === "my" && cur.startsWith("edit-")) || (k === "advertisers" && cur.startsWith("client-"));
-    return `<div class="app">
+    return `<div class="app${A.sideMini ? " side-mini" : ""}">
       <aside class="side">
-        <a class="brand" href="${siteURL()}" title="לאתר"><img src="${LOGO_W}" alt="${esc(A.settings.site_name)}"></a>
+        <div class="side-top"><a class="brand" href="${siteURL()}" title="לאתר"><img src="${LOGO_W}" alt="${esc(A.settings.site_name)}"></a><button class="side-col" type="button" data-act="side-col" aria-expanded="${!A.sideMini}" aria-label="${A.sideMini ? "פתיחת התפריט" : "כיווץ התפריט"}">${I("chev-r")}</button></div>
         <div class="panel-name">${IS_ADMIN ? "ניהול האתר" : "ממשק מארחים"}</div>
         ${T.isLive ? "" : `<div class="mode-tag"><b>מצב הדגמה</b><br>הנתונים נשמרים בדפדפן הזה בלבד.</div>`}
-        <nav aria-label="ניווט בפאנל">${items.map(([k, ic, t, n]) => `<a href="#${k}" ${isCur(k) ? 'aria-current="page"' : ""} title="${t}">${I(ic)}<span class="lbl">${t}</span>${n ? `<span class="count">${n}</span>` : ""}</a>`).join("")}</nav>
+        <nav aria-label="ניווט בפאנל">${items.map(([k, ic, t, n], idx) => `<a href="#${k}" style="--n:${idx}" ${isCur(k) ? 'aria-current="page"' : ""} title="${t}">${I(ic)}<span class="lbl">${t}</span>${n ? `<span class="count">${n}</span>` : ""}</a>`).join("")}</nav>
         <div class="side-foot">
           <a href="${siteURL()}" target="_blank" rel="noopener">${I("external")}<span>צפייה באתר</span></a>
           ${IS_ADMIN ? `<a href="#account" ${cur === "account" ? 'aria-current="page"' : ""}>${I("user")}<span>החשבון שלי</span></a><a href="owner.html">${I("users")}<span>ממשק מארחים</span></a>` : ""}
@@ -1178,8 +1179,10 @@
       <div class="lk-presets">${T.PALETTES.map((x) => `<button type="button" class="lk-preset" data-act="pal-preset" data-v="${x.key}" aria-pressed="${cur && cur.key === x.key}"><span>${T.PALETTE_KEYS.map(([k]) => `<i style="background:${x[k]}"></i>`).join("")}</span>${esc(x.name)}</button>`).join("")}</div>
       <div class="lk-colors">${T.PALETTE_KEYS.map(([k, name]) => `<label class="lk-color"><input type="color" name="pal_${k}" value="${esc(p[k])}"><span><b>${esc(name)}</b><small dir="ltr">${esc(p[k].toUpperCase())}</small></span></label>`).join("")}</div>
       <h3 class="hd-h">צבע האייקונים <span class="hint">האייקונים המצוירים (מתקנים, סוגי מקומות, אזורים ועוד)</span></h3>
-      <div class="lk-modes lk-ic-modes" role="radiogroup" aria-label="צבע האייקונים">${[["original", "כמו שצוירו", "ירוק זית מקורי"], ["palette", "לפי הפלטה", "מתעדכן לבד כשמחליפים פלטה"], ["custom", "צבעים שלי", "בוחרים קו, מילוי וגוון בהיר"]].map(([v, b, sm]) => `<label class="lk-mode"><input type="radio" name="icon_mode" value="${v}" ${(s.icon_mode || "original") === v ? "checked" : ""}><span><b>${b}</b><small>${sm}</small></span></label>`).join("")}</div>
+      <div class="lk-modes lk-ic-modes" role="radiogroup" aria-label="צבע האייקונים">${[["original", "כמו שצוירו", "ירוק זית מקורי"], ["palette", "לפי הפלטה", "מתעדכן לבד כשמחליפים פלטה"], ["custom", "צבעים שלי", "בוחרים קו, מילוי וגוון בהיר"], ["line", "קווים בלבד", "צבע אחד, בלי מילוי"]].map(([v, b, sm]) => `<label class="lk-mode"><input type="radio" name="icon_mode" value="${v}" ${(s.icon_mode || "original") === v ? "checked" : ""}><span><b>${b}</b><small>${sm}</small></span></label>`).join("")}</div>
       <div class="lk-colors lk-ic-colors" ${s.icon_mode === "custom" ? "" : "hidden"}>${[["icon_line", "קווים", p.ink], ["icon_main", "מילוי", p.olive], ["icon_light", "גוון בהיר", "#D2D2B1"]].map(([k, n, d]) => `<label class="lk-color"><input type="color" name="${k}" value="${esc(/^#[0-9a-f]{6}$/i.test(s[k] || "") ? s[k] : d)}"><span><b>${n}</b><small dir="ltr">${esc(String(s[k] || d).toUpperCase())}</small></span></label>`).join("")}</div>
+      <div class="lk-ic-line" ${s.icon_mode === "line" ? "" : "hidden"}><label class="lk-color"><input type="color" name="icon_stroke" value="${esc(/^#[0-9a-f]{6}$/i.test(s.icon_stroke || "") ? s.icon_stroke : p.ink)}"><span><b>צבע הקווים</b><small dir="ltr">${esc(String(s.icon_stroke || p.ink).toUpperCase())}</small></span></label>
+        <span class="seg-tabs" role="radiogroup" aria-label="עובי הקווים">${[["thin", "דק"], ["", "רגיל"], ["bold", "עבה"]].map(([v, t]) => `<label class="lk-w"><input type="radio" name="icon_weight" value="${v}" ${(s.icon_weight || "") === v ? "checked" : ""}><span>${t}</span></label>`).join("")}</span></div>
       <div class="lk-ic-row" aria-hidden="true">${["type-zimmer", "am-private_pool", "am-jacuzzi", "fact-guests", "place-water", "region-golan", "am-fireplace", "fact-bedrooms"].map((k) => T.pic(k, "pic-l")).join("")}</div>
       <div class="lk-prev-bar"><span class="seg-tabs" role="group" aria-label="איזה דף"><button type="button" data-act="lk-page" data-v="" aria-pressed="${!A.lkPage}">דף הבית</button><button type="button" data-act="lk-page" data-v="search" aria-pressed="${A.lkPage === "search"}">חיפוש</button><button type="button" data-act="lk-page" data-v="stay" aria-pressed="${A.lkPage === "stay"}">דף מקום</button></span></div>
       <div class="lk-prev" id="lk-prev"><iframe id="lk-frame" title="תצוגה מקדימה של האתר" loading="lazy" src="${lkSrc()}"></iframe></div>
@@ -1194,19 +1197,21 @@
     ["glass_strength", "glass_tint"].forEach((k) => { const el = $(`[name="${k}"]`, root); if (el) A.settings[k] = Number(el.value); });
     const im = $('input[name="icon_mode"]:checked', root);
     if (im) A.settings.icon_mode = im.value;
-    ["icon_line", "icon_main", "icon_light"].forEach((k) => { const el = $(`[name="${k}"]`, root); if (el) A.settings[k] = el.value.toUpperCase(); });
+    ["icon_line", "icon_main", "icon_light", "icon_stroke"].forEach((k) => { const el = $(`[name="${k}"]`, root); if (el) A.settings[k] = el.value.toUpperCase(); });
+    const iw = $('input[name="icon_weight"]:checked', root); if (iw) A.settings.icon_weight = iw.value;
     A.settings.palette = {};
     T.PALETTE_KEYS.forEach(([k]) => { const el = $(`[name="pal_${k}"]`, root); if (el) A.settings.palette[k] = el.value.toUpperCase(); });
   }
-  const lookPick = () => ({ palette: A.settings.palette, design_mode: A.settings.design_mode, glass_strength: A.settings.glass_strength, glass_tint: A.settings.glass_tint, icon_mode: A.settings.icon_mode, icon_line: A.settings.icon_line, icon_main: A.settings.icon_main, icon_light: A.settings.icon_light });
+  const lookPick = () => ({ palette: A.settings.palette, design_mode: A.settings.design_mode, glass_strength: A.settings.glass_strength, glass_tint: A.settings.glass_tint, icon_mode: A.settings.icon_mode, icon_line: A.settings.icon_line, icon_main: A.settings.icon_main, icon_light: A.settings.icon_light, icon_stroke: A.settings.icon_stroke, icon_weight: A.settings.icon_weight });
   function lookPreview() {
     const root = $("#look-design");
     if (!root) return;
     const sl = $(".lk-sliders", root); if (sl) sl.hidden = A.settings.design_mode !== "glass";
     $$(".lk-val", root).forEach((b) => { b.textContent = A.settings[b.dataset.for]; });
     T.PALETTE_KEYS.forEach(([k]) => { const el = $(`[name="pal_${k}"]`, root); if (el) el.parentElement.querySelector("small").textContent = el.value.toUpperCase(); });
-    ["icon_line", "icon_main", "icon_light"].forEach((k) => { const el = $(`[name="${k}"]`, root); if (el) el.parentElement.querySelector("small").textContent = el.value.toUpperCase(); });
+    ["icon_line", "icon_main", "icon_light", "icon_stroke"].forEach((k) => { const el = $(`[name="${k}"]`, root); if (el) el.parentElement.querySelector("small").textContent = el.value.toUpperCase(); });
     const icc = $(".lk-ic-colors", root); if (icc) icc.hidden = A.settings.icon_mode !== "custom";
+    const icl = $(".lk-ic-line", root); if (icl) icl.hidden = A.settings.icon_mode !== "line";
     const p = T.paletteOf(A.settings);
     $$(".lk-preset", root).forEach((b) => { const x = T.PALETTES.find((y) => y.key === b.dataset.v); b.setAttribute("aria-pressed", T.PALETTE_KEYS.every(([k]) => x[k].toLowerCase() === p[k].toLowerCase())); });
     T.applyTheme(A.settings, { glass: false, cache: false });
@@ -2437,6 +2442,13 @@
     else if (act === "cpn-del") settingsRows("coupons", (rows) => rows.splice(Number(el.dataset.i), 1));
     else if (act === "pal-preset") { const x = T.PALETTES.find((y) => y.key === el.dataset.v); if (x) { T.PALETTE_KEYS.forEach(([k]) => { const i = $(`#look-design [name="pal_${k}"]`); if (i) i.value = x[k]; }); readLookForm(); lookPreview(); } }
     else if (act === "lk-page") { A.lkPage = el.dataset.v; $$('[data-act="lk-page"]').forEach((b) => b.setAttribute("aria-pressed", b === el)); const f = $("#lk-frame"); if (f) f.src = lkSrc(); }
+    else if (act === "side-col") {
+      /* כיווץ התפריט הצדדי לפס אייקונים (כמו Sidebar Collapse): השמות נעלמים יחד, וחוזרים אחד אחרי השני */
+      A.sideMini = !A.sideMini;
+      try { localStorage.setItem("tm-side-mini", A.sideMini ? "1" : ""); } catch (ex) {}
+      const app = $(".app"); if (app) app.classList.toggle("side-mini", A.sideMini);
+      el.setAttribute("aria-expanded", !A.sideMini); el.setAttribute("aria-label", A.sideMini ? "פתיחת התפריט" : "כיווץ התפריט");
+    }
     else if (act === "hd-mode") { A.hdMode = el.dataset.v; $$('[data-act="hd-mode"]').forEach((b) => b.setAttribute("aria-pressed", b === el)); heroPreview(); }
     else if (act === "hd-reset") { readSettingsForm(); A.settings.hero_style = {}; rerenderKeepScroll(); T.toast("חזרנו לעיצוב הרגיל. לחצו ״שמירה״ כדי שזה יתעדכן באתר."); }
     else if (act === "hp-split" || act === "hp-add" || act === "hp-del" || act === "hp-move") {

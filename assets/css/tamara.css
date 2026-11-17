@@ -2199,3 +2199,92 @@ html.icons-tint img.pic, html.icons-tint .pic img { filter: url(#tm-icons); }
 .stay-tabs, html.glass .stay-tabs { position: relative !important; top: auto !important; }
 .lk-ic-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 12px; padding: 12px 16px; border-radius: 16px; background: var(--sky-50); border: 1px solid var(--line); }
 .lk-ic-row .pic { width: 46px; height: 46px; }
+
+/* ================================================================ גלילת תמונות (Pagination Dots) */
+.pg-strip { display: flex; height: 100%; width: 100%; will-change: transform; }
+.pg-strip > img { flex: none; width: 100%; height: 100%; object-fit: cover; -webkit-user-drag: none; user-select: none; }
+.card-media.has-pg { touch-action: pan-y; }
+.pg-dots { position: relative; display: flex; align-items: center; justify-content: center; gap: 10px; height: 14px; }
+.pg-dots b { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, .55); flex: none; }
+.pg-dots .pg-act { position: absolute; left: 0; top: 4px; height: 6px; border-radius: 3px; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .25); will-change: transform, width; pointer-events: none; }
+.card-media > .pg-dots { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 2; padding: 0 2px; }
+.card-media > .pg-dots::before { content: ""; position: absolute; inset: -5px -8px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 28%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: -1; }
+.lb-dots { gap: 14px; height: 20px; }
+.lb-dots b { width: 8px; height: 8px; background: rgba(255, 255, 255, .35); }
+.lb-dots .pg-act { top: 6px; height: 8px; border-radius: 4px; }
+
+/* חלון התמונות כפס שגולש */
+.lightbox .lb-stage { display: block; position: relative; overflow: hidden; touch-action: pan-y; cursor: zoom-out; user-select: none; }
+.lightbox .lb-slide { flex: none; width: 100%; height: 100%; display: grid; place-items: center; padding: 0 clamp(8px, 4vw, 64px); }
+.lightbox .lb-slide img { max-width: 100%; max-height: 100%; margin: 0; object-fit: contain; cursor: default; -webkit-user-drag: none; }
+.lightbox .lb-stage.pg-drag, .lightbox .lb-stage.pg-drag img { cursor: grabbing; }
+.lightbox .lb-nav { align-items: center; gap: 18px; }
+.lightbox .lb-stage .lb-slide img { animation: none; }
+.lightbox:not(.again) .lb-stage { animation: lbIn .55s var(--spring) both; }
+.lightbox.closing { animation: fadeOut .22s ease forwards; pointer-events: none; }
+@keyframes fadeOut { to { opacity: 0; } }
+
+/* ================================================================ פתיחת חלונות (Dynamic Menu)
+   החלון נפתח מגלולה קטנה בראשו: נרחב ומתארך על קפיץ, והפריטים עולים אחד אחרי השני */
+@keyframes dmOpen { from { clip-path: inset(0 calc(50% - 64px) calc(100% - 46px) calc(50% - 64px) round 23px); opacity: .4; } 60% { opacity: 1; } to { clip-path: inset(0 0 0 0 round var(--dm-r, 20px)); } }
+@keyframes dmDrop { from { clip-path: inset(0 0 calc(100% - 4px) 0 round 0 0 24px 24px); } to { clip-path: inset(0 0 0 0 round 0); } }
+@keyframes dmItem { from { opacity: 0; transform: translateY(16px); } }
+.tdd:not([hidden]) { animation: dmOpen .62s var(--spring) backwards; --dm-r: 20px; }
+.pick-pop { animation: dmOpen .62s var(--spring) backwards; --dm-r: 22px; }
+.guests-pop[open] .pop { animation: dmOpen .62s var(--spring) backwards; --dm-r: var(--r-l); }
+.a11y-panel:not([hidden]) { animation: dmOpen .6s var(--spring) backwards; --dm-r: 18px; transform-origin: 100% 100%; }
+.tdd:not([hidden]) > *, .guests-pop[open] .pop > *, .a11y-panel:not([hidden]) > *, .pick-pop .pick-area { animation: dmItem .5s calc(.07s + var(--n, 0) * 45ms) var(--spring) backwards; }
+.tdd > :nth-child(1), .guests-pop .pop > :nth-child(1), .a11y-panel > :nth-child(1), .pick-pop .pick-area:nth-child(1), .mobile-nav > :nth-child(1) { --n: 0; }
+.tdd > :nth-child(2), .guests-pop .pop > :nth-child(2), .a11y-panel > :nth-child(2), .pick-pop .pick-area:nth-child(2), .mobile-nav > :nth-child(2) { --n: 1; }
+.tdd > :nth-child(3), .guests-pop .pop > :nth-child(3), .a11y-panel > :nth-child(3), .pick-pop .pick-area:nth-child(3), .mobile-nav > :nth-child(3) { --n: 2; }
+.tdd > :nth-child(4), .guests-pop .pop > :nth-child(4), .a11y-panel > :nth-child(4), .pick-pop .pick-area:nth-child(4), .mobile-nav > :nth-child(4) { --n: 3; }
+.tdd > :nth-child(5), .guests-pop .pop > :nth-child(5), .a11y-panel > :nth-child(5), .pick-pop .pick-area:nth-child(5), .mobile-nav > :nth-child(5) { --n: 4; }
+.tdd > :nth-child(6), .guests-pop .pop > :nth-child(6), .a11y-panel > :nth-child(6), .pick-pop .pick-area:nth-child(6), .mobile-nav > :nth-child(6) { --n: 5; }
+.tdd > :nth-child(7), .guests-pop .pop > :nth-child(7), .a11y-panel > :nth-child(7), .pick-pop .pick-area:nth-child(7), .mobile-nav > :nth-child(7) { --n: 6; }
+.tdd > :nth-child(8), .guests-pop .pop > :nth-child(8), .a11y-panel > :nth-child(8), .pick-pop .pick-area:nth-child(8), .mobile-nav > :nth-child(8) { --n: 7; }
+.tdd > :nth-child(9), .guests-pop .pop > :nth-child(9), .a11y-panel > :nth-child(9), .pick-pop .pick-area:nth-child(9), .mobile-nav > :nth-child(9) { --n: 8; }
+.tdd > :nth-child(10), .guests-pop .pop > :nth-child(10), .a11y-panel > :nth-child(10), .pick-pop .pick-area:nth-child(10), .mobile-nav > :nth-child(10) { --n: 9; }
+.tdd > :nth-child(11), .guests-pop .pop > :nth-child(11), .a11y-panel > :nth-child(11), .pick-pop .pick-area:nth-child(11), .mobile-nav > :nth-child(11) { --n: 10; }
+.tdd > :nth-child(12), .guests-pop .pop > :nth-child(12), .a11y-panel > :nth-child(12), .pick-pop .pick-area:nth-child(12), .mobile-nav > :nth-child(12) { --n: 11; }
+.tdd > :nth-child(13), .guests-pop .pop > :nth-child(13), .a11y-panel > :nth-child(13), .pick-pop .pick-area:nth-child(13), .mobile-nav > :nth-child(13) { --n: 12; }
+.tdd > :nth-child(14), .guests-pop .pop > :nth-child(14), .a11y-panel > :nth-child(14), .pick-pop .pick-area:nth-child(14), .mobile-nav > :nth-child(14) { --n: 13; }
+.tdd > :nth-child(15), .guests-pop .pop > :nth-child(15), .a11y-panel > :nth-child(15), .pick-pop .pick-area:nth-child(15), .mobile-nav > :nth-child(15) { --n: 14; }
+.tdd > :nth-child(16), .guests-pop .pop > :nth-child(16), .a11y-panel > :nth-child(16), .pick-pop .pick-area:nth-child(16), .mobile-nav > :nth-child(16) { --n: 15; }
+.mobile-nav.open { animation: dmDrop .6s var(--spring) backwards; }
+.mobile-nav.open > * { animation: dmItem .48s calc(.05s + var(--n, 0) * 40ms) var(--spring) backwards; }
+
+/* כפתור התפריט בנייד: שני קווים שנפגשים באמצע והופכים לאיקס */
+.menu-btn .tog { position: relative; display: block; width: 20px; height: 20px; }
+.menu-btn .tog i { position: absolute; left: 2px; right: 2px; top: 9px; height: 2px; border-radius: 2px; background: currentColor; transition: transform .55s var(--spring); }
+.menu-btn .tog i:first-child { transform: translateY(-4px); }
+.menu-btn .tog i:last-child { transform: translateY(4px); }
+.menu-btn[aria-expanded="true"] .tog i:first-child { transform: rotate(45deg); }
+.menu-btn[aria-expanded="true"] .tog i:last-child { transform: rotate(-45deg); }
+
+/* פאנל: כיווץ התפריט הצדדי לפס אייקונים (Sidebar Collapse) */
+.side-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.side-col { flex: none; width: 34px; height: 34px; border: 0; border-radius: 11px; background: rgba(255, 255, 255, .08); color: var(--on-ink); display: grid; place-items: center; cursor: pointer; }
+.side-col .ic { width: 17px; height: 17px; transition: transform .55s var(--spring); }
+.side-col:hover { background: rgba(255, 255, 255, .14); }
+@media (min-width: 901px) {
+  .app { transition: grid-template-columns .6s var(--spring); }
+  .side { overflow: hidden; }
+  .side nav a, .side .side-foot a, .side .side-foot button { white-space: nowrap; }
+  .side .lbl, .side nav .count, .side .side-foot span, .side .brand, .side .panel-name, .side .mode-tag { transition: opacity .3s ease, transform .5s var(--spring); transition-delay: calc(.06s + var(--n, 0) * 40ms); }
+  .app.side-mini { grid-template-columns: 78px minmax(0, 1fr); }
+  .side-mini .side .lbl, .side-mini .side nav .count, .side-mini .side .side-foot span, .side-mini .side .brand, .side-mini .side .panel-name, .side-mini .side .mode-tag { opacity: 0; transform: translateX(10px); transition-delay: 0s; pointer-events: none; }
+  .side-mini .side .brand { position: absolute; }
+  .side-mini .side-top { justify-content: center; }
+  .side-mini .side-col .ic { transform: rotate(180deg); }
+  .side-mini .side .panel-name, .side-mini .side .mode-tag { height: 0; padding: 0; margin: 0; overflow: hidden; }
+}
+@media (max-width: 900px) { .side-col { display: none; } }
+@media (prefers-reduced-motion: reduce) { .app, .side .lbl { transition: none; } }
+.lk-ic-modes { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.lk-ic-line { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+.lk-ic-line .lk-color { min-width: 200px; }
+.lk-w { position: relative; cursor: pointer; }
+.lk-w input { position: absolute; opacity: 0; }
+.lk-w span { display: inline-block; padding: 7px 15px; border-radius: 999px; font-size: var(--t-xs); font-weight: 500; color: var(--ink-2); }
+.lk-w input:checked + span { background: var(--white); color: var(--navy); box-shadow: 0 1px 4px color-mix(in srgb, var(--navy) 16%, transparent); }
+.lk-w input:focus-visible + span { outline: 2.5px solid var(--focus); }

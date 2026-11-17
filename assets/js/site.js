@@ -208,11 +208,11 @@
     const freeN = freeU.length, freeCap = freeU.reduce((s, u) => s + (Number(u.guests_max) || 0), 0);
     const km = opts.km != null ? opts.km : S.geo ? T.distKm(S.geo, T.coordsOf(l)) : null;
     return `<article class="card">
-      <div class="card-media"><img src="${esc(src)}" alt="${photos[i].real ? esc(imgAlt(photos[i], l, i)) : ""}" loading="lazy">
+      <div class="card-media${n > 1 ? " has-pg" : ""}">${n > 1 ? `<div class="pg-strip" style="transform:translateX(${i * 100}%)">${photos.map((p, j) => { const u = esc(j === 0 ? T.thumbOf(l) : p.thumb); return `<img ${j === i ? `src="${u}"` : `data-src="${u}"`} alt="${p.real ? esc(imgAlt(p, l, j)) : ""}" loading="lazy" draggable="false">`; }).join("")}</div>` : `<img src="${esc(src)}" alt="${photos[i].real ? esc(imgAlt(photos[i], l, i)) : ""}" loading="lazy">`}
         <span class="chips-top"><span class="chip">${I("pin")}${esc(l.settlement || reg.name)}</span>${T.isSponsored(l) ? `<span class="chip chip-sp">${I("megaphone")}ממומן</span>` : ""}</span>
         ${ribbon ? `<span class="ribbon">${esc(ribbon)}</span>` : ""}
         ${lm ? `<span class="chip chip-lm">${I("bolt")}דקה 90 · ‎-${l.lastminute_pct}%</span>` : l.deal_label ? `<span class="chip chip-deal">${I("tag")}${esc(l.deal_label)}</span>` : ""}
-        ${n > 1 ? `<span class="cm-nav"><button type="button" data-act="cimg" data-id="${esc(l.id)}" data-d="-1" aria-label="התמונה הקודמת של ${esc(l.name)}">${I("chev-r")}</button><button type="button" data-act="cimg" data-id="${esc(l.id)}" data-d="1" aria-label="התמונה הבאה של ${esc(l.name)}">${I("chev-l")}</button></span><span class="cm-count" aria-hidden="true">${i + 1}/${n}</span>` : ""}
+        ${n > 1 ? `<span class="cm-nav"><button type="button" data-act="cimg" data-id="${esc(l.id)}" data-d="-1" aria-label="התמונה הקודמת של ${esc(l.name)}">${I("chev-r")}</button><button type="button" data-act="cimg" data-id="${esc(l.id)}" data-d="1" aria-label="התמונה הבאה של ${esc(l.name)}">${I("chev-l")}</button></span>${n <= 8 ? `<span class="pg-dots" data-w="14" aria-hidden="true"><i class="pg-act"></i>${photos.map((_, j) => `<b class="${j === i ? "on" : ""}"></b>`).join("")}</span>` : `<span class="cm-count" aria-hidden="true">${i + 1}/${n}</span>`}` : ""}
       </div>
       <button class="save-btn" type="button" data-act="save" data-id="${esc(l.id)}" aria-pressed="${saved}" aria-label="${saved ? "הסרה מהמועדפים" : "הוספה למועדפים"}: ${esc(l.name)}">${I("heart")}</button>
       <div class="card-body">
@@ -273,7 +273,7 @@
         <a class="icon-btn saved-count viewed-count hide-s" href="#me-viewed" aria-label="נצפו לאחרונה (${nv})" title="נצפו לאחרונה" ${nv ? `data-n="${nv}"` : ""}>${I("history")}</a>
         <a class="icon-btn saved-count" href="#me" aria-label="המועדפים שלי (${n})" title="המועדפים שלי" ${n ? `data-n="${n}"` : ""}>${I("heart")}</a>
         <a class="me-pill hide-s" href="#me-leads" aria-label="האזור האישי">${I("user")}<span>${me ? esc(me) : "האזור האישי"}</span></a>
-        <button class="icon-btn menu-btn" type="button" data-act="menu" aria-expanded="false" aria-controls="mobile-nav" aria-label="תפריט">${I("menu")}</button>
+        <button class="icon-btn menu-btn" type="button" data-act="menu" aria-expanded="false" aria-controls="mobile-nav" aria-label="תפריט"><span class="tog" aria-hidden="true"><i></i><i></i></span></button>
       </div></div>
       <nav class="mobile-nav" id="mobile-nav" aria-label="תפריט נייד">
         <a href="#search">חיפוש</a><a href="#deals">דילים ודקה 90</a><a href="#weekend">פנויים לסופ״ש</a>
@@ -1067,31 +1067,34 @@
   function lightbox(i, cat) {
     const l = stayL();
     const old = $("#lb");
-    /* מעבר בין תמונות: התמונה החדשה נכנסת מהכיוון של הלחיצה, בלי לנגן שוב את פתיחת החלון */
-    const dir = old && S.stay.lb != null && i != null ? Math.sign(i - S.stay.lb) : 0;
+    if (i == null || !l) { if (old) { old.classList.add("closing"); old.id = ""; setTimeout(() => old.remove(), stillMotion() ? 0 : 230); } return; }
+    /* בתוך החלון: גלילה לתמונה הבאה בלי לבנות את החלון מחדש */
+    if (old && cat === undefined && old._pg) { old._pg.go(i); return; }
     if (old) old.remove();
-    if (i == null || !l) return;
     if (cat !== undefined) S.stay.lbCat = cat;
     const all = T.photosOf(l, true);
     const tabs = [["all", "הכל", all.length]];
     T.PHOTO_CATS.forEach((c) => { const n = all.filter((p) => p.cat === c.key).length; if (n && n < all.length) tabs.push([c.key, c.name, n]); });
     T.unitsOf(l).forEach((u) => { const n = all.filter((p) => p.cat === "unit:" + u.id).length; if (n) tabs.push(["unit:" + u.id, u.name, n]); });
-    const photos = S.stay.lbCat === "all" ? all : all.filter((p) => p.cat === S.stay.lbCat);
-    const n = photos.length || 1;
+    const photos = (S.stay.lbCat === "all" ? all : all.filter((p) => p.cat === S.stay.lbCat)).filter(Boolean);
+    if (!photos.length) photos.push(all[0]);
+    const n = photos.length;
     const k = ((i % n) + n) % n;
     S.stay.lb = k;
-    const p = photos[k] || all[0];
     const el = document.createElement("div");
-    el.className = "lightbox" + (old ? " again" : "") + (dir > 0 ? " go-next" : dir < 0 ? " go-prev" : "");
+    el.className = "lightbox" + (old ? " again" : "");
     el.id = "lb";
     el.setAttribute("role", "dialog");
     el.setAttribute("aria-modal", "true");
     el.setAttribute("aria-label", "גלריית תמונות");
-    el.innerHTML = `<div class="lb-top"><span>${esc(l.name)}${p.unit ? " · " + esc(p.unit) : ""} · ${k + 1}/${n}</span><button class="icon-btn" type="button" data-act="lb-close" aria-label="סגירה">${I("x")}</button></div>
+    const top = (j) => `${esc(l.name)}${photos[j].unit ? " · " + esc(photos[j].unit) : ""} · ${j + 1}/${n}`;
+    el.innerHTML = `<div class="lb-top"><span class="lb-count" aria-live="polite">${top(k)}</span><button class="icon-btn" type="button" data-act="lb-close" aria-label="סגירה">${I("x")}</button></div>
       ${tabs.length > 1 ? `<div class="lb-tabs" role="group" aria-label="קטגוריות תמונות">${tabs.map(([key, name, c]) => `<button type="button" data-act="lb-cat" data-v="${esc(key)}" aria-pressed="${S.stay.lbCat === key}">${esc(name)} · ${c}</button>`).join("")}</div>` : ""}
-      <div class="lb-stage"><img src="${esc(p.src)}" alt="${esc(imgAlt(p, l, k)) || "איור להמחשה"}"></div>
-      <div class="lb-nav"><button class="icon-btn" type="button" data-act="lb-go" data-d="-1" aria-label="הקודמת">${I("chev-r")}</button><button class="icon-btn" type="button" data-act="lb-go" data-d="1" aria-label="הבאה">${I("chev-l")}</button></div>`;
+      <div class="lb-stage" title="לחיצה ליד התמונה סוגרת"><div class="pg-strip" style="transform:translateX(${k * 100}%)">${photos.map((p, j) => `<div class="lb-slide"><img ${Math.abs(j - k) <= 1 ? "src" : "data-src"}="${esc(p.src)}" alt="${esc(imgAlt(p, l, j)) || "איור להמחשה"}" draggable="false"></div>`).join("")}</div></div>
+      <div class="lb-nav"><button class="icon-btn" type="button" data-act="lb-go" data-d="-1" aria-label="הקודמת">${I("chev-r")}</button>${n > 1 && n <= 30 ? `<span class="pg-dots lb-dots" data-w="20" aria-hidden="true"><i class="pg-act"></i>${photos.map((_, j) => `<b class="${j === k ? "on" : ""}"></b>`).join("")}</span>` : ""}<button class="icon-btn" type="button" data-act="lb-go" data-d="1" aria-label="הבאה">${I("chev-l")}</button></div>`;
     document.body.appendChild(el);
+    el._pg = pagerOf($(".lb-stage", el), { dots: $(".lb-dots", el), onChange: (j) => { S.stay.lb = j; const c = $(".lb-count", el); if (c) c.innerHTML = top(j); } });
+    if (el._pg) el._pg.go(k, true);
     $('[data-act="lb-close"]', el).focus();
   }
   /* חלונות: שיתוף, דיווח, מפה גדולה */
@@ -1563,14 +1566,94 @@
   /* כרטיס מתחם: התמונה נוטה מעט אחרי העכבר */
   if (matchMedia("(hover: hover) and (pointer: fine)").matches) {
     document.addEventListener("pointermove", (e) => {
-      const m = e.target.closest && e.target.closest(".card-media");
+      const m = e.target.closest && (e.target.closest(".card-media") || mediaAt(e));
       if (!m || stillMotion()) return;
       const r = m.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
       m.style.setProperty("--rx", (-y * 5).toFixed(2) + "deg"); m.style.setProperty("--ry", (x * 6).toFixed(2) + "deg");
       m.style.setProperty("--gx", (x * 100 + 50).toFixed(1) + "%"); m.style.setProperty("--gy", (y * 100 + 50).toFixed(1) + "%");
     }, { passive: true });
-    document.addEventListener("pointerout", (e) => { const m = e.target.closest && e.target.closest(".card-media"); if (m && !m.contains(e.relatedTarget)) { m.style.removeProperty("--rx"); m.style.removeProperty("--ry"); } });
+    document.addEventListener("pointerout", (e) => { const c = e.target.closest && e.target.closest(".card"), m = c && c.querySelector(".card-media"); if (m && !c.contains(e.relatedTarget)) { m.style.removeProperty("--rx"); m.style.removeProperty("--ry"); } });
   }
+  /* ---------------------------------------------------------------- גלילת תמונות (כמו Pagination Dots)
+     הפס של התמונות זז על קפיץ; הנקודה הפעילה היא גלולה שהקצה הקדמי שלה רץ קודם והאחורי מגיע אחריו,
+     אז היא נמתחת בין הנקודות. אפשר גם לגרור באצבע. תמונות נטענות רק כשמתקרבים אליהן. */
+  const pagers = new WeakMap();
+  function pagerOf(box, opts) {
+    let o = pagers.get(box);
+    if (o) return o;
+    const strip = box.querySelector(".pg-strip");
+    if (!strip) return null;
+    const op = opts || {}, slides = [...strip.children], n = slides.length;
+    const dots = op.dots || box.querySelector(".pg-dots"), act = dots && dots.querySelector(".pg-act"), btns = dots ? [...dots.children].filter((x) => x !== act) : [];
+    const m = /translateX\((-?[\d.]+)%\)/.exec(strip.style.transform), start = m ? Math.round(parseFloat(m[1]) / 100) : 0;
+    o = { n, cur: start, box, op, P: spring(start, [230, 28]), A: spring(0, SPR.lead), B: spring(0, SPR.lead) };
+    o.sp = [o.P, o.A, o.B];
+    o.W = () => box.clientWidth || 1;
+    o.draw = () => { strip.style.transform = `translateX(${(o.P.x * 100).toFixed(3)}%)`; if (act) { act.style.transform = `translateX(${o.A.x.toFixed(2)}px)`; act.style.width = Math.max(4, o.B.x - o.A.x).toFixed(2) + "px"; } };
+    const pill = (i) => { const b = btns[i]; if (!b) return [0, 0]; const w = Number(dots.dataset.w) || 16, c = b.offsetLeft + b.offsetWidth / 2; return [c - w / 2, c + w / 2]; };
+    o.load = (i) => [i - 1, i, i + 1].forEach((j) => { const sl = slides[(j + n) % n], im = sl && (sl.tagName === "IMG" ? sl : sl.querySelector("img")); if (im && im.dataset.src) { im.src = im.dataset.src; im.removeAttribute("data-src"); } });
+    o.go = (i, instant) => {
+      const k = ((i % n) + n) % n;
+      o.cur = k; o.load(k);
+      o.P.t = k;
+      const [a, b] = pill(k);
+      if (a < o.A.t) { [o.A.k, o.A.c] = SPR.lead; [o.B.k, o.B.c] = SPR.trail; } else { [o.B.k, o.B.c] = SPR.lead; [o.A.k, o.A.c] = SPR.trail; }
+      o.A.t = a; o.B.t = b;
+      btns.forEach((x, j) => x.classList.toggle("on", j === k));
+      if (instant || stillMotion()) { o.sp.forEach((q) => { q.x = q.t; q.v = 0; }); o.draw(); } else kick(o);
+      if (op.onChange) op.onChange(k);
+    };
+    const [a0, b0] = pill(start);
+    o.A.x = o.A.t = a0; o.B.x = o.B.t = b0; o.draw();
+    pagers.set(box, o);
+    return o;
+  }
+  /* הקישור של הכרטיס מכסה את כל הכרטיס, אז בודקים לפי המיקום אם הנגיעה הייתה על התמונה */
+  const mediaAt = (e) => {
+    const c = e.target.closest(".card"), m = c && c.querySelector(".card-media");
+    if (!m) return null;
+    const r = m.getBoundingClientRect();
+    return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom ? m : null;
+  };
+  /* אחרי גרירה של תמונות בכרטיס לא פותחים את דף המקום */
+  document.addEventListener("click", (e) => { const m = e.target.closest && mediaAt(e); if (m && Date.now() - (m._dragged || 0) < 400) { e.preventDefault(); e.stopPropagation(); } }, true);
+  /* גרירה באצבע (ובחלון התמונות גם בעכבר) */
+  document.addEventListener("pointerdown", (e) => {
+    let box = e.target.closest && e.target.closest(".has-pg, .lb-stage");
+    if (!box && e.target.closest) box = mediaAt(e);
+    if (!box || e.button > 0 || e.target.closest("button")) return;
+    const isLb = box.classList.contains("lb-stage");
+    if (!isLb && e.pointerType === "mouse") return;
+    const o = pagerOf(box, isLb ? undefined : { touchOnly: true });
+    if (!o || o.n < 2) return;
+    const x0 = e.clientX, y0 = e.clientY, p0 = o.cur;
+    let drag = false, done = false;
+    const mv = (ev) => {
+      const dx = ev.clientX - x0, dy = ev.clientY - y0;
+      if (!drag) { if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) return end(); if (Math.abs(dx) < 8) return; drag = true; box.classList.add("pg-drag"); o.load(p0); }
+      o.P.x = o.P.t = p0 + dx / o.W(); o.P.v = 0; o.draw();
+    };
+    const end = (ev) => {
+      if (done) return; done = true;
+      window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", end); window.removeEventListener("pointercancel", end);
+      box.classList.remove("pg-drag");
+      if (!drag) return;
+      box._dragged = Date.now();
+      const dx = ev && ev.clientX != null ? ev.clientX - x0 : 0;
+      o.go(p0 + (Math.abs(dx) > o.W() * 0.15 ? Math.sign(dx) : 0));
+      if (!isLb) S.cardIdx[(box.closest(".card") && (box.closest(".card").querySelector("[data-act=save]") || {}).dataset || {}).id] = o.cur;
+    };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", end); window.addEventListener("pointercancel", end);
+  });
+  /* חלון התמונות: לחיצה על השטח הריק ליד התמונה סוגרת */
+  document.addEventListener("click", (e) => {
+    const lb = $("#lb");
+    if (!lb || !lb.contains(e.target)) return;
+    const st = $(".lb-stage", lb);
+    if (st && Date.now() - (st._dragged || 0) < 300) return;
+    if (e.target === lb || e.target.classList.contains("lb-slide") || e.target.classList.contains("lb-stage") || e.target.classList.contains("pg-strip")) lightbox(null);
+  });
+
   /* ---------------------------------------------------------------- זכוכית נוזלית: שבירת אור בשולי הזכוכית
      מפת הזזה לכל צורה (מלבן מעוגל): ליד השוליים התמונה שמאחור "נשברת" פנימה, כמו בעדשה עבה, עם הפרדת צבעים עדינה.
      עובד בדפדפני Chromium (כרום, אדג׳, רוב האנדרואיד); בשאר הדפדפנים נשארת זכוכית מטושטשת רגילה. */
@@ -1771,11 +1854,8 @@
     else if (act === "show") { S.showIdx += Number(el.dataset.d); $("#showcase").innerHTML = showcase(S.listings.filter((l) => l.featured)); }
     else if (act === "cimg") {
       e.preventDefault();
-      const id = el.dataset.id;
-      S.cardIdx[id] = (S.cardIdx[id] || 0) + Number(el.dataset.d);
-      const l = byId(id);
-      const cardEl = el.closest(".card");
-      if (l && cardEl) { const isRail = !!cardEl.closest(".rail"); const km = cardEl.querySelector(".card-meta") && /מכאן/.test(cardEl.querySelector(".card-meta").textContent) ? T.distKm(T.coordsOf(stayL()), T.coordsOf(l)) : null; cardEl.outerHTML = card(l, { noFree: isRail, km: km != null ? km : undefined }); const nb = $(`.card [data-act="cimg"][data-id="${CSS.escape(id)}"][data-d="${el.dataset.d}"]`); if (nb) nb.focus(); }
+      const box = el.closest(".card-media"), o = box && pagerOf(box, { touchOnly: true });
+      if (o) { o.go(o.cur + Number(el.dataset.d)); S.cardIdx[el.dataset.id] = o.cur; }
     } else if (act === "quick-dates") {
       const l = byId(el.closest(".card").querySelector("[data-act=save]").dataset.id);
       S.filters.ci = el.dataset.ci; S.filters.co = el.dataset.co;

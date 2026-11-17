@@ -418,6 +418,11 @@
     const light = m === "custom" ? ok(s.icon_light, mixHex(p.cream, p.olive, 0.28)) : mixHex(p.cream, p.olive, 0.28);
     return [line, line, main, mixHex(main, light, 0.5), light, "#ffffff"];
   };
+  T.iconLine = (s) => {
+    if (!s || s.icon_mode !== "line") return null;
+    const c = hexRgb(s.icon_stroke) ? s.icon_stroke : T.paletteOf(s).ink;
+    return { color: c, weight: { thin: -0.25, bold: 0.35 }[s.icon_weight] || 0 };
+  };
   /* opts.glass=false: רק צבעים (פאנל הניהול נשאר בעיצוב הרגיל); opts.cache=false: בלי לזכור לטעינה הבאה */
   T.applyTheme = (s, opts) => {
     if (typeof document === "undefined") return;
@@ -429,15 +434,17 @@
     const glass = o.glass !== false && !!s && s.design_mode === "glass";
     document.documentElement.classList.toggle("glass", glass);
     /* צבע האייקונים: מפת צבעים לפי בהירות (קו כהה → מילוי → גוון בהיר → לבן), בלי לגעת בשקיפות */
-    const ic = T.iconColors(s);
+    const ic = T.iconColors(s), il = T.iconLine(s);
     let svg = document.getElementById("tm-icon-svg");
-    if (ic && !svg) { svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.id = "tm-icon-svg"; svg.setAttribute("aria-hidden", "true"); svg.setAttribute("style", "position:absolute;width:0;height:0;overflow:hidden"); document.body.appendChild(svg); }
+    if ((ic || il) && !svg) { svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.id = "tm-icon-svg"; svg.setAttribute("aria-hidden", "true"); svg.setAttribute("style", "position:absolute;width:0;height:0;overflow:hidden"); document.body.appendChild(svg); }
     if (svg) {
-      const html = ic ? `<filter id="tm-icons" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values=".2126 .7152 .0722 0 0 .2126 .7152 .0722 0 0 .2126 .7152 .0722 0 0 0 0 0 1 0"/><feComponentTransfer>${["R", "G", "B"].map((c, i) => `<feFunc${c} type="table" tableValues="${ic.map((h) => (hexRgb(h)[i] / 255).toFixed(3)).join(" ")}"/>`).join("")}</feComponentTransfer></filter>` : "";
+      /* קווים בלבד: רק הפיקסלים הכהים (הקווים) נשארים, בצבע שנבחר; המילוי והלבן נעלמים */
+      const line = il ? `<filter id="tm-icons" color-interpolation-filters="sRGB"><feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1.637 -5.507 -0.556 0 2.54" result="mask"/><feComposite in="mask" in2="SourceAlpha" operator="in" result="m2"/>${il.weight ? `<feMorphology in="m2" operator="${il.weight > 0 ? "dilate" : "erode"}" radius="${Math.abs(il.weight)}" result="m3"/>` : ""}<feFlood flood-color="${il.color}" result="c"/><feComposite in="c" in2="${il.weight ? "m3" : "m2"}" operator="in"/></filter>` : "";
+      const html = line || ic ? line || `<filter id="tm-icons" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values=".2126 .7152 .0722 0 0 .2126 .7152 .0722 0 0 .2126 .7152 .0722 0 0 0 0 0 1 0"/><feComponentTransfer>${["R", "G", "B"].map((c, i) => `<feFunc${c} type="table" tableValues="${ic.map((h) => (hexRgb(h)[i] / 255).toFixed(3)).join(" ")}"/>`).join("")}</feComponentTransfer></filter>` : "";
       if (svg.innerHTML !== html) svg.innerHTML = html;
     }
-    document.documentElement.classList.toggle("icons-tint", !!ic);
-    if (o.cache !== false) { try { localStorage.setItem("tm-look", JSON.stringify({ css, glass, icons: !!ic })); } catch (e) {} }
+    document.documentElement.classList.toggle("icons-tint", !!(ic || il));
+    if (o.cache !== false) { try { localStorage.setItem("tm-look", JSON.stringify({ css, glass, icons: !!(ic || il) })); } catch (e) {} }
   };
   /* ---------------------------------------------------------------- עיצוב הכותרת בפתיח (נשלט מפאנל הניהול)
      hero_style = { base: {font,size,size_m,weight,color,line,track,align,shadow}, parts: [{text,br,font,size,size_m,weight,color,italic,track}],
