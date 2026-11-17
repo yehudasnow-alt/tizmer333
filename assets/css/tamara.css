@@ -2288,3 +2288,8 @@ html.icons-tint img.pic, html.icons-tint .pic img { filter: url(#tm-icons); }
 .lk-w span { display: inline-block; padding: 7px 15px; border-radius: 999px; font-size: var(--t-xs); font-weight: 500; color: var(--ink-2); }
 .lk-w input:checked + span { background: var(--white); color: var(--navy); box-shadow: 0 1px 4px color-mix(in srgb, var(--navy) 16%, transparent); }
 .lk-w input:focus-visible + span { outline: 2.5px solid var(--focus); }
+
+/* היומן בשורת החיפוש נפתח כמו שאר החלונות (Dynamic Menu); בטלפון הוא עולה מלמטה כמו קודם */
+@media (min-width: 641px) { .dp { animation: dmOpen .62s var(--spring) backwards; --dm-r: 22px; } }
+@keyframes dmSheet { from { transform: translateY(100%); } }
+@media (max-width: 640px) { .dp { animation: dmSheet .55s var(--spring) backwards; } }
