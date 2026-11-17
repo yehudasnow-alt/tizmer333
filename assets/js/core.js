@@ -373,6 +373,52 @@
   T.statusName = (list, k) => (list.find((s) => s.key === k) || { name: k || "" }).name;
 
   /* ------------------------------------------------------------------ כלים */
+  /* ---------------------------------------------------------------- פלטת צבעים ומצב זכוכית (נשלט מפאנל הניהול)
+     palette = {ink, olive, copper, caramel, cream} · design_mode = "classic" | "glass" · glass_strength / glass_tint = 0..100 */
+  T.PALETTE_KEYS = [["ink", "כהה (טקסט וכותרות)"], ["olive", "ראשי (כפתורים)"], ["copper", "הדגשה"], ["caramel", "הדגשה רכה"], ["cream", "רקע בהיר"]];
+  T.PALETTES = [
+    { key: "tamara", name: "תמרה", ink: "#283618", olive: "#606C38", copper: "#BC6C25", caramel: "#DDA15E", cream: "#FEFAE0" },
+    { key: "sea", name: "ים וחול", ink: "#12303F", olive: "#2F6F7E", copper: "#D9822B", caramel: "#E9C46A", cream: "#FBF7EE" },
+    { key: "terra", name: "טרקוטה ומרווה", ink: "#2E2A24", olive: "#6F8466", copper: "#C0583A", caramel: "#E6B17E", cream: "#FAF4EC" },
+    { key: "lilac", name: "לילך ערב", ink: "#2B2340", olive: "#6C5B9E", copper: "#C2577A", caramel: "#E7B8C8", cream: "#FBF7FD" },
+    { key: "night", name: "יער לילה", ink: "#1C2B24", olive: "#3E6B57", copper: "#B8893D", caramel: "#D8C08A", cream: "#F6F4EC" }
+  ];
+  const hexRgb = (h) => { h = String(h || "").replace("#", ""); if (h.length === 3) h = h.replace(/./g, "$&$&"); const n = parseInt(h, 16); return /^[0-9a-f]{6}$/i.test(h) ? [n >> 16, (n >> 8) & 255, n & 255] : null; };
+  const mixHex = (a, b, t) => { const x = hexRgb(a), y = hexRgb(b); return "#" + x.map((v, i) => Math.round(v * (1 - t) + y[i] * t).toString(16).padStart(2, "0")).join(""); };
+  T.paletteOf = (s) => {
+    const d = T.PALETTES[0], p = (s && s.palette) || {};
+    const o = {};
+    T.PALETTE_KEYS.forEach(([k]) => { o[k] = hexRgb(p[k]) ? p[k] : d[k]; });
+    return o;
+  };
+  T.themeCSS = (s) => {
+    const p = T.paletteOf(s), d = T.PALETTES[0];
+    const same = T.PALETTE_KEYS.every(([k]) => p[k].toLowerCase() === d[k].toLowerCase());
+    const n = (v, def) => { const x = Number(v); return Number.isFinite(x) && v !== "" && v != null ? Math.min(100, Math.max(0, x)) / 100 : def; };
+    const g = `--gs:${n(s && s.glass_strength, 0.6)};--gt:${n(s && s.glass_tint, 0.35)};`;
+    if (same) return `:root{${g}}`;
+    const rgb = (h) => hexRgb(h).join(", ");
+    const v = {
+      "--ink": p.ink, "--navy": p.olive, "--navy-deep": p.ink, "--copper": p.copper, "--focus": p.copper, "--blue": mixHex(p.copper, "#000000", 0.12),
+      "--sky": p.caramel, "--sky-50": p.cream, "--sky-100": mixHex(p.cream, p.caramel, 0.22), "--line": mixHex(p.cream, p.olive, 0.1), "--line-2": mixHex(p.cream, p.olive, 0.22),
+      "--ink-2": mixHex(p.ink, p.olive, 0.3), "--muted": mixHex(p.ink, p.cream, 0.3), "--ink-deep": mixHex(p.ink, "#000000", 0.25), "--on-ink": p.cream, "--on-ink-2": mixHex(p.cream, p.ink, 0.22),
+      "--cream-2": mixHex(p.cream, "#ffffff", 0.6), "--cream-3": mixHex(p.cream, p.caramel, 0.06),
+      "--shadow-1": `0 1px 2px rgba(${rgb(p.ink)}, .05), 0 8px 24px rgba(${rgb(p.ink)}, .07)`, "--shadow-2": `0 2px 6px rgba(${rgb(p.ink)}, .08), 0 22px 48px rgba(${rgb(p.olive)}, .16)`
+    };
+    return `:root:not(.a11y-contrast){${Object.entries(v).map(([k, x]) => `${k}:${x}`).join(";")};${g}}`;
+  };
+  /* opts.glass=false: רק צבעים (פאנל הניהול נשאר בעיצוב הרגיל); opts.cache=false: בלי לזכור לטעינה הבאה */
+  T.applyTheme = (s, opts) => {
+    if (typeof document === "undefined") return;
+    const o = opts || {};
+    const css = T.themeCSS(s);
+    let st = document.getElementById("tm-theme");
+    if (!st) { st = document.createElement("style"); st.id = "tm-theme"; document.head.appendChild(st); }
+    if (st.textContent !== css) st.textContent = css;
+    const glass = o.glass !== false && !!s && s.design_mode === "glass";
+    document.documentElement.classList.toggle("glass", glass);
+    if (o.cache !== false) { try { localStorage.setItem("tm-look", JSON.stringify({ css, glass })); } catch (e) {} }
+  };
   /* ---------------------------------------------------------------- עיצוב הכותרת בפתיח (נשלט מפאנל הניהול)
      hero_style = { base: {font,size,size_m,weight,color,line,track,align,shadow}, parts: [{text,br,font,size,size_m,weight,color,italic,track}],
                     search: {top,top_m,gap,width,height} }  ·  custom_fonts = [{name,url}]

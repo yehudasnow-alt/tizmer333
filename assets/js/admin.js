@@ -1160,6 +1160,51 @@
   }
 
   /* ================================================================ settings */
+  /* ---------------------------------------------------------------- עיצוב: פלטת צבעים ומצב זכוכית, עם תצוגה חיה של האתר עצמו */
+  function lookPanel(s) {
+    const p = T.paletteOf(s), mode = s.design_mode === "glass" ? "glass" : "classic";
+    const gs = s.glass_strength == null || s.glass_strength === "" ? 60 : s.glass_strength, gt = s.glass_tint == null || s.glass_tint === "" ? 35 : s.glass_tint;
+    const cur = T.PALETTES.find((x) => T.PALETTE_KEYS.every(([k]) => x[k].toLowerCase() === p[k].toLowerCase()));
+    return `<section class="panel" ${tabAttr("settings", "design")} id="look-design"><h2>עיצוב וצבעים <span class="hint">התצוגה למטה היא האתר עצמו. השינויים נשמרים באתר בלחיצה על ״שמירה״.</span></h2>
+      <div class="lk-modes" role="radiogroup" aria-label="סגנון העיצוב">
+        <label class="lk-mode"><input type="radio" name="design_mode" value="classic" ${mode === "classic" ? "checked" : ""}><span><b>רגיל</b><small>משטחים לבנים ונקיים, כמו היום</small></span></label>
+        <label class="lk-mode"><input type="radio" name="design_mode" value="glass" ${mode === "glass" ? "checked" : ""}><span><b>זכוכית</b><small>זכוכית צבעונית לפי הפלטה, עם טשטוש וברק</small></span></label>
+      </div>
+      <div class="lk-sliders" ${mode === "glass" ? "" : "hidden"}>
+        <label class="field"><span>עוצמת הזכוכית <b class="lk-val" data-for="glass_strength">${gs}</b></span><input type="range" min="0" max="100" step="1" name="glass_strength" value="${esc(gs)}"><small class="hint">נמוך: כמעט אטום · גבוה: שקוף ומטושטש יותר</small></label>
+        <label class="field"><span>כמות הצבע בזכוכית <b class="lk-val" data-for="glass_tint">${gt}</b></span><input type="range" min="0" max="100" step="1" name="glass_tint" value="${esc(gt)}"><small class="hint">כמה מהקרמל של הפלטה נכנס למשטחים</small></label>
+      </div>
+      <h3 class="hd-h">פלטת צבעים</h3>
+      <div class="lk-presets">${T.PALETTES.map((x) => `<button type="button" class="lk-preset" data-act="pal-preset" data-v="${x.key}" aria-pressed="${cur && cur.key === x.key}"><span>${T.PALETTE_KEYS.map(([k]) => `<i style="background:${x[k]}"></i>`).join("")}</span>${esc(x.name)}</button>`).join("")}</div>
+      <div class="lk-colors">${T.PALETTE_KEYS.map(([k, name]) => `<label class="lk-color"><input type="color" name="pal_${k}" value="${esc(p[k])}"><span><b>${esc(name)}</b><small dir="ltr">${esc(p[k].toUpperCase())}</small></span></label>`).join("")}</div>
+      <div class="lk-prev-bar"><span class="seg-tabs" role="group" aria-label="איזה דף"><button type="button" data-act="lk-page" data-v="" aria-pressed="${!A.lkPage}">דף הבית</button><button type="button" data-act="lk-page" data-v="search" aria-pressed="${A.lkPage === "search"}">חיפוש</button><button type="button" data-act="lk-page" data-v="stay" aria-pressed="${A.lkPage === "stay"}">דף מקום</button></span></div>
+      <div class="lk-prev" id="lk-prev"><iframe id="lk-frame" title="תצוגה מקדימה של האתר" loading="lazy" src="${lkSrc()}"></iframe></div>
+    </section>`;
+  }
+  const lkSrc = () => { const id = A.lkPage === "stay" ? ((A.listings.find((l) => l.active) || A.listings[0] || {}).id || "") : ""; return `index.html?preview=1#${A.lkPage === "stay" && id ? "stay-" + encodeURIComponent(id) : A.lkPage || ""}`; };
+  function readLookForm() {
+    const root = $("#look-design");
+    if (!root) return;
+    const m = $('input[name="design_mode"]:checked', root);
+    if (m) A.settings.design_mode = m.value;
+    ["glass_strength", "glass_tint"].forEach((k) => { const el = $(`[name="${k}"]`, root); if (el) A.settings[k] = Number(el.value); });
+    A.settings.palette = {};
+    T.PALETTE_KEYS.forEach(([k]) => { const el = $(`[name="pal_${k}"]`, root); if (el) A.settings.palette[k] = el.value.toUpperCase(); });
+  }
+  const lookPick = () => ({ palette: A.settings.palette, design_mode: A.settings.design_mode, glass_strength: A.settings.glass_strength, glass_tint: A.settings.glass_tint });
+  function lookPreview() {
+    const root = $("#look-design");
+    if (!root) return;
+    const sl = $(".lk-sliders", root); if (sl) sl.hidden = A.settings.design_mode !== "glass";
+    $$(".lk-val", root).forEach((b) => { b.textContent = A.settings[b.dataset.for]; });
+    T.PALETTE_KEYS.forEach(([k]) => { const el = $(`[name="pal_${k}"]`, root); if (el) el.parentElement.querySelector("small").textContent = el.value.toUpperCase(); });
+    const p = T.paletteOf(A.settings);
+    $$(".lk-preset", root).forEach((b) => { const x = T.PALETTES.find((y) => y.key === b.dataset.v); b.setAttribute("aria-pressed", T.PALETTE_KEYS.every(([k]) => x[k].toLowerCase() === p[k].toLowerCase())); });
+    T.applyTheme(A.settings, { glass: false, cache: false });
+    const f = $("#lk-frame");
+    if (f && f.contentWindow) f.contentWindow.postMessage({ type: "tm-look", look: lookPick() }, location.origin);
+  }
+
   /* ---------------------------------------------------------------- עיצוב הכותרת ושורת החיפוש בפתיח */
   const HD_W = { desk: 1320, mob: 390 }, HD_H = { desk: 760, mob: 780 };
   function heroDesignPanel(s) {
@@ -1186,7 +1231,7 @@
           <label class="hd-chk"><input type="checkbox" ${at("italic")} ${p.italic ? "checked" : ""}>נטוי</label>
         </div></div>`;
     };
-    return `<section class="panel" ${tabAttr("settings", "site")} id="hero-design"><h2>עיצוב הכותרת ושורת החיפוש <span class="hint">כל שינוי נראה מיד בתצוגה, ונשמר באתר בלחיצה על ״שמירה״</span></h2>
+    return `<section class="panel" ${tabAttr("settings", "design")} id="hero-design"><h2>עיצוב הכותרת ושורת החיפוש <span class="hint">כל שינוי נראה מיד בתצוגה, ונשמר באתר בלחיצה על ״שמירה״</span></h2>
       <div class="hd-prev-bar"><span class="seg-tabs" role="group" aria-label="תצוגה"><button type="button" data-act="hd-mode" data-v="desk" aria-pressed="${(A.hdMode || "desk") === "desk"}">${I("grid")}מחשב</button><button type="button" data-act="hd-mode" data-v="mob" aria-pressed="${A.hdMode === "mob"}">${I("phone")}טלפון</button></span><button class="btn btn-ghost btn-sm" type="button" data-act="hd-reset">איפוס לעיצוב הרגיל</button></div>
       <div class="hd-prev" id="hd-prev"><div class="hd-stage"></div></div>
       <h3 class="hd-h">כל הכותרת</h3>
@@ -1259,7 +1304,7 @@
   function viewSettings() {
     const s = A.settings;
     const p = s.plan_prices || {};
-    return ph("הגדרות האתר", "") + tabsNav("settings", [["site", "האתר ועמוד הבית", "home"], ["prices", "מחירים, חגים וקופונים", "tag"], ["hosts", "מארחים ואישורים", "users"], ["calls", "מעקב שיחות", "phone"], ["mail", "מיילים", "mail"], ["legal", "פרטים משפטיים", "shield"], ["system", "תחזוקה וגיבוי", "sliders"]], "קטגוריות הגדרות") + `
+    return ph("הגדרות האתר", "") + tabsNav("settings", [["site", "האתר ועמוד הבית", "home"], ["design", "עיצוב וצבעים", "sparkle"], ["prices", "מחירים, חגים וקופונים", "tag"], ["hosts", "מארחים ואישורים", "users"], ["calls", "מעקב שיחות", "phone"], ["mail", "מיילים", "mail"], ["legal", "פרטים משפטיים", "shield"], ["system", "תחזוקה וגיבוי", "sliders"]], "קטגוריות הגדרות") + `
       <div class="set-grid ${A.tabs.settings === "all" ? "tabs-all" : ""}" data-tabpanel="settings">
       <form data-form="settings" id="settings-form" class="set-form" novalidate>
             <section class="panel" ${tabAttr("settings", "site")}><h2>שם ויצירת קשר</h2><div class="form-grid">
@@ -1284,6 +1329,7 @@
               <div style="display:grid;grid-template-columns:minmax(0,240px) 1fr;gap:14px;align-items:center">
                 <div class="photo" style="aspect-ratio:16/9;cursor:default"><img src="${esc(s.hero_image || T.HERO_DEFAULT)}" alt="הבאנר הנוכחי"></div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap"><label class="btn btn-line">${I("upload")}העלאת תמונה<input type="file" accept="image/*" class="sr" id="hero-input"></label>${s.hero_image ? `<button class="btn btn-ghost" type="button" data-act="hero-clear">חזרה לתמונת ברירת המחדל</button>` : ""}<span class="hint" style="width:100%">מומלץ צילום רוחבי, לפחות 2000 פיקסלים ברוחב.</span></div></div></section>
+            ${lookPanel(s)}
             ${heroDesignPanel(s)}
             <section class="panel" ${tabAttr("settings", "prices")}><h2>חגים (לילות במחיר חג)</h2><div class="rows-edit">${(s.holidays || []).map((h, i) => `<div class="row-edit"><label class="field"><span>חג</span><input class="input" data-hol="${i}" data-k="label" value="${esc(h.label)}"></label><label class="field"><span>מהלילה של</span><input class="input" type="date" data-hol="${i}" data-k="from" value="${esc(h.from)}"></label><label class="field"><span>עד הלילה של</span><input class="input" type="date" data-hol="${i}" data-k="to" value="${esc(h.to)}"></label><button class="mini-btn" type="button" data-act="hol-del" data-i="${i}" aria-label="הסרה">${I("trash")}</button></div>`).join("")}
               <button class="btn btn-line btn-sm" type="button" data-act="hol-add" style="justify-self:start">${I("plus")}חג</button></div><p class="hint" style="margin-top:8px">התאריכים חושבו לפי הלוח העברי (ישראל). אפשר להוסיף גם ימי שיא משלכם.</p></section>
@@ -1943,6 +1989,13 @@
     app.innerHTML = shell(html);
     if ($("#editor")) bindEditor();
     if ($("#hd-prev")) heroPreview();
+    T.applyTheme(A.settings, { glass: false, cache: false });
+    const lf = $("#lk-frame");
+    if (lf) {
+      lf.addEventListener("load", () => { lookPreview(); setTimeout(lookPreview, 400); setTimeout(lookPreview, 1500); });
+      const box = $("#lk-prev"), fit = () => { const k = Math.min(1, box.clientWidth / 1320); lf.style.transform = `scale(${k})`; box.style.height = Math.round(820 * k) + "px"; };
+      fit(); if ("ResizeObserver" in window) new ResizeObserver(fit).observe(box);
+    }
     if (IS_ADMIN && h === "system" && !A.sys && !A.sysBusy) setTimeout(() => { const b = $('[data-act="sys-run"]'); if (b) b.click(); }, 0);
     document.title = (IS_ADMIN ? "ניהול" : "ממשק מארחים") + " | " + A.settings.site_name;
   }
@@ -2025,6 +2078,7 @@
     const form = $("#settings-form");
     if (!form) return;
     readHeroForm();
+    readLookForm();
     $$("[data-hol]", form).forEach((el) => { const h = A.settings.holidays[Number(el.dataset.hol)]; if (h) h[el.dataset.k] = el.value; });
     $$("[data-cpn]", form).forEach((el) => { const c = A.settings.coupons[Number(el.dataset.cpn)]; if (c) c[el.dataset.k] = el.dataset.k === "pct" ? Number(el.value) || 0 : el.dataset.k === "code" ? el.value.trim().toUpperCase() : el.value; });
     $$("[data-col]", form).forEach((el) => { const c = (A.settings.collections || [])[Number(el.dataset.col)]; if (c) c[el.dataset.k] = el.value; });
@@ -2372,6 +2426,8 @@
     else if (act === "hol-del") settingsRows("holidays", (rows) => rows.splice(Number(el.dataset.i), 1));
     else if (act === "cpn-add") settingsRows("coupons", (rows) => rows.push({ code: "", pct: 10, until: "", active: true }));
     else if (act === "cpn-del") settingsRows("coupons", (rows) => rows.splice(Number(el.dataset.i), 1));
+    else if (act === "pal-preset") { const x = T.PALETTES.find((y) => y.key === el.dataset.v); if (x) { T.PALETTE_KEYS.forEach(([k]) => { const i = $(`#look-design [name="pal_${k}"]`); if (i) i.value = x[k]; }); readLookForm(); lookPreview(); } }
+    else if (act === "lk-page") { A.lkPage = el.dataset.v; $$('[data-act="lk-page"]').forEach((b) => b.setAttribute("aria-pressed", b === el)); const f = $("#lk-frame"); if (f) f.src = lkSrc(); }
     else if (act === "hd-mode") { A.hdMode = el.dataset.v; $$('[data-act="hd-mode"]').forEach((b) => b.setAttribute("aria-pressed", b === el)); heroPreview(); }
     else if (act === "hd-reset") { readSettingsForm(); A.settings.hero_style = {}; rerenderKeepScroll(); T.toast("חזרנו לעיצוב הרגיל. לחצו ״שמירה״ כדי שזה יתעדכן באתר."); }
     else if (act === "hp-split" || act === "hp-add" || act === "hp-del" || act === "hp-move") {
@@ -2411,6 +2467,7 @@
   document.addEventListener("input", (e) => {
     const t = e.target;
     if (t.name === "pw1") { const ul = t.form && t.form.querySelector(".pw-rules"); if (ul) ul.innerHTML = pwRules(t.value); }
+    else if (t.closest("#look-design")) { readLookForm(); lookPreview(); }
     else if (t.closest("#hero-design") || t.name === "hero_headline") { readHeroForm(); if (t.name === "hero_headline") A.settings.hero_headline = t.value; heroPreviewSoon(); }
     else if (t.closest("#editor")) { readEditor(); markDirty(); }
     else if (t.id === "af-q") { A.af.q = t.value.trim(); debouncedAdv(); }

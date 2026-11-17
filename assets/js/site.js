@@ -1408,6 +1408,8 @@
     /* לפני שהנתונים הגיעו מסך הפתיחה מכסה את הדף, אז לא מציירים "טוען…" שיקפוץ */
     if (!S.loaded) { if (document.body.classList.contains("ready")) main.innerHTML = `<div class="wrap" style="padding-block:120px;text-align:center;color:var(--muted)">טוען…</div>`; return; }
     if (S.error) { main.innerHTML = `<div class="wrap page">${emptyState("לא הצלחנו לטעון את האתר", esc(S.error), `<button class="btn btn-primary" type="button" onclick="location.reload()">ניסיון נוסף</button>`)}</div>`; markReady(); return; }
+    if (LOOK) Object.assign(S.settings, LOOK);
+    T.applyTheme(S.settings, { cache: !PREVIEW });
     /* רענון נתונים כשהפתיח כבר מוצג: בלי לנגן שוב את אנימציית הפתיחה */
     S.homeAgain = !!$(".hf", main);
     let html, title = S.settings.site_name + " – " + S.settings.site_tagline;
@@ -1465,6 +1467,18 @@
     heroVideo();
     motion();
     markReady();
+  }
+  /* תצוגה מקדימה מפאנל הניהול (בתוך מסגרת): מקבלים צבעים ומצב זכוכית בזמן אמת, בלי לשמור כלום */
+  const PREVIEW = /[?&]preview=1\b/.test(location.search) && window.parent !== window;
+  let LOOK = null;
+  if (PREVIEW) {
+    document.documentElement.classList.add("tm-preview");
+    window.addEventListener("message", (e) => {
+      if (e.origin !== location.origin || !e.data || e.data.type !== "tm-look") return;
+      LOOK = e.data.look || null;
+      Object.assign(S.settings, LOOK || {});
+      T.applyTheme(S.settings, { cache: false });
+    });
   }
   /* ---------------------------------------------------------------- תנועה: מחוון שזז בין לשוניות, כפתור חיפוש "מגנטי" */
   const stillMotion = () => document.documentElement.classList.contains("a11y-still") || !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);

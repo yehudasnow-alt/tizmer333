@@ -16,17 +16,19 @@
 <link rel="stylesheet" href="assets/css/fonts.css">
 <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="assets/css/tamara.css">
-<script>document.documentElement.className += " js";</script>
+<script>document.documentElement.className += " js";
+/* הצבעים ומצב הזכוכית מהביקור הקודם, כדי שהדף לא יהבהב בצבעים הישנים */
+try { var tl = JSON.parse(localStorage.getItem("tm-look") || "null"); if (tl && !/[?&]preview=1/.test(location.search)) { var ts = document.createElement("style"); ts.id = "tm-theme"; ts.textContent = tl.css || ""; document.head.appendChild(ts); if (tl.glass) document.documentElement.className += " glass"; } } catch (e) {}</script>
 <style>
 /* עד שהמסך הראשון מוכן: מסך פתיחה במקום תוכן גולמי שקופץ */
 html.js body:not(.ready) #chrome, html.js body:not(.ready) #main, html.js body:not(.ready) #footer, html.js body:not(.ready) .seo-nav, html.js body:not(.ready) .a11y-btn { visibility: hidden; }
 html.js body:not(.ready) #main * { animation-play-state: paused !important; }
 #splash { display: none; }
-html.js #splash { display: grid; position: fixed; inset: 0; z-index: 9999; place-items: center; background: #283618; transition: opacity .6s cubic-bezier(.25,.9,.3,1), visibility 0s .6s; }
+html.js #splash { display: grid; position: fixed; inset: 0; z-index: 9999; place-items: center; background: var(--ink, #283618); transition: opacity .6s cubic-bezier(.25,.9,.3,1), visibility 0s .6s; }
 #splash div { display: grid; justify-items: center; gap: 22px; }
 #splash img { width: 62px; height: 62px; animation: spBreath 1.8s ease-in-out infinite; }
 #splash i { display: block; width: 92px; height: 2px; border-radius: 2px; background: rgba(254,250,224,.18); overflow: hidden; position: relative; }
-#splash i::after { content: ""; position: absolute; inset: 0; width: 40%; border-radius: 2px; background: #DDA15E; animation: spLine 1.25s cubic-bezier(.65,0,.35,1) infinite; }
+#splash i::after { content: ""; position: absolute; inset: 0; width: 40%; border-radius: 2px; background: var(--sky, #DDA15E); animation: spLine 1.25s cubic-bezier(.65,0,.35,1) infinite; }
 body.ready #splash { opacity: 0; visibility: hidden; pointer-events: none; }
 body.ready #splash div { transform: scale(.92); transition: transform .6s cubic-bezier(.25,.9,.3,1); }
 @keyframes spBreath { 50% { transform: scale(1.07); opacity: .82; } }
