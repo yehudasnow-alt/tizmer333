@@ -43,11 +43,21 @@
   const DOW = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
   const fmtDay = (iso) => { const d = T.parseISO(iso); return `${DOW[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}`; };
   const placeLabel = (v) => (!v ? "" : v.startsWith("area:") ? "כל ה" + T.AREAS[v.slice(5)] : T.regionOf(v).name);
+  /* רק מה שיש במלאי: סוג, אזור, מתקן או קהל מופיעים באפשרויות רק אם יש לפחות מתחם פעיל אחד שמתאים.
+     כשמארח יוסיף למשל מערה, האפשרות תופיע לבד. מה שכבר נבחר נשאר מוצג כדי שאפשר יהיה לבטל אותו. */
+  const has = {
+    type: (k) => S.listings.some((l) => l.type === k),
+    region: (k) => S.listings.some((l) => l.region === k),
+    area: (a) => S.listings.some((l) => T.regionOf(l.region).area === a),
+    amen: (k) => S.listings.some((l) => (l.amenities || []).includes(k)),
+    aud: (k) => S.listings.some((l) => (l.audience || []).includes(k))
+  };
   const placeOptions = (sel, allLabel) => {
     let h = `<option value="">${allLabel || "כל הארץ"}</option>`;
     Object.entries(T.AREAS).forEach(([k, name]) => {
+      if (!has.area(k) && sel !== "area:" + k && !T.REGIONS.some((r) => r.area === k && r.key === sel)) return;
       h += `<optgroup label="${name}"><option value="area:${k}" ${sel === "area:" + k ? "selected" : ""}>כל ה${name}</option>`;
-      T.REGIONS.filter((r) => r.area === k).forEach((r) => (h += `<option value="${r.key}" ${sel === r.key ? "selected" : ""}>${esc(r.name)}</option>`));
+      T.REGIONS.filter((r) => r.area === k && (has.region(r.key) || r.key === sel)).forEach((r) => (h += `<option value="${r.key}" ${sel === r.key ? "selected" : ""}>${esc(r.name)}</option>`));
       h += `</optgroup>`;
     });
     return h;
@@ -228,6 +238,8 @@
     S.listings.forEach((l) => { if (l.settlement) m[l.settlement] = (m[l.settlement] || 0) + 1; });
     return Object.entries(m).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "he")).slice(0, 12);
   };
+  /* חיפוש מהיר מופיע רק אם יש לו לפחות תוצאה אחת (פנוי הלילה/בסופ״ש תלויים ביומן ונשארים תמיד) */
+  const quickOk = (q) => (q.amenity ? has.amen(q.amenity) : q.audience ? has.aud(q.audience) : q.benefit ? S.listings.some((l) => T.benefitsOf(l).some((b) => b.key === q.benefit)) : true);
   const quickIdx = (pred) => T.QUICK_FILTERS.findIndex(pred);
   /* סוגי האירוח בתפריט העליון: כל סוג נפתח לרשימה (הכול, צפון, מרכז, דרום) */
   const NAV_TYPES = [
@@ -244,7 +256,7 @@
     const of = S.listings.filter((l) => l.type === key);
     const n = (c) => (c ? `<span>${c}</span>` : "");
     return `<a href="#type-${key}" class="tdd-all">${T.pic("type-" + key)}<b>${esc(t.all)}</b>${n(of.length)}</a>` +
-      Object.entries(T.AREAS).map(([a, name]) => `<a href="#type-${key}/${a}">${T.pic(T.AREA_PIC[a])}${esc(t.label)} ב${esc(name)}${n(of.filter((l) => T.regionOf(l.region).area === a).length)}</a>`).join("");
+      Object.entries(T.AREAS).filter(([a]) => of.some((l) => T.regionOf(l.region).area === a)).map(([a, name]) => `<a href="#type-${key}/${a}">${T.pic(T.AREA_PIC[a])}${esc(t.label)} ב${esc(name)}${n(of.filter((l) => T.regionOf(l.region).area === a).length)}</a>`).join("");
   }
   function header() {
     const n = S.saved.size;
@@ -254,7 +266,7 @@
     const me = S.me.user && S.me.user.email ? String(S.me.user.name || S.me.user.email).split(/[\s@]/)[0] : "";
     return `<header class="topbar wrap" id="topbar"><div class="topbar-in">
       <a class="brand" href="#" aria-label="${esc(S.settings.site_name)} – לדף הבית"><img src="${LOGO}" alt="${esc(S.settings.site_name)} – ${esc(S.settings.site_tagline)}"></a>
-      <nav class="mainnav" aria-label="ניווט ראשי"><a href="#search" ${cur === "search" ? 'aria-current="page"' : ""}>חיפוש</a>${NAV_TYPES.map((x) => `<div class="nav-dd"><button class="nav-dd-btn" type="button" data-act="tdd" aria-expanded="false" aria-controls="tdd-${x.key}" ${cur === "type-" + x.key || cur.startsWith("type-" + x.key + "/") ? 'data-cur="1"' : ""}>${esc(x.label)}${I("chev-d")}</button><div class="tdd" id="tdd-${x.key}" hidden>${typeMenu(x.key)}</div></div>`).join("")}${nav.map(([h, t]) => `<a href="#${h}" ${cur === h ? 'aria-current="page"' : ""}>${t}</a>`).join("")}</nav>
+      <nav class="mainnav" aria-label="ניווט ראשי"><a href="#search" ${cur === "search" ? 'aria-current="page"' : ""}>חיפוש</a>${NAV_TYPES.filter((x) => has.type(x.key)).map((x) => `<div class="nav-dd"><button class="nav-dd-btn" type="button" data-act="tdd" aria-expanded="false" aria-controls="tdd-${x.key}" ${cur === "type-" + x.key || cur.startsWith("type-" + x.key + "/") ? 'data-cur="1"' : ""}>${esc(x.label)}${I("chev-d")}</button><div class="tdd" id="tdd-${x.key}" hidden>${typeMenu(x.key)}</div></div>`).join("")}${nav.map(([h, t]) => `<a href="#${h}" ${cur === h ? 'aria-current="page"' : ""}>${t}</a>`).join("")}</nav>
       <div class="top-actions">
         <a class="icon-btn saved-count viewed-count hide-s" href="#me-viewed" aria-label="נצפו לאחרונה (${nv})" title="נצפו לאחרונה" ${nv ? `data-n="${nv}"` : ""}>${I("history")}</a>
         <a class="icon-btn saved-count" href="#me" aria-label="המועדפים שלי (${n})" title="המועדפים שלי" ${n ? `data-n="${n}"` : ""}>${I("heart")}</a>
@@ -263,9 +275,9 @@
       </div></div>
       <nav class="mobile-nav" id="mobile-nav" aria-label="תפריט נייד">
         <a href="#search">חיפוש</a><a href="#deals">דילים ודקה 90</a><a href="#weekend">פנויים לסופ״ש</a>
-        <details><summary>סוגי אירוח</summary>${T.TYPES.map((t) => `<a href="#type-${t.key}">${esc(typePlural(t.key))}</a>`).join("")}</details>
-        <details><summary>צימרים לפי אזור</summary>${T.REGIONS.map((r) => `<a href="#region-${r.key}">${esc(r.name)}</a>`).join("")}</details>
-        <details><summary>גולשים מחפשים</summary>${T.QUICK_FILTERS.map((q, i) => `<a href="#quick-${i}">${esc(q.label)}</a>`).join("")}</details>
+        <details><summary>סוגי אירוח</summary>${T.TYPES.filter((t) => has.type(t.key)).map((t) => `<a href="#type-${t.key}">${esc(typePlural(t.key))}</a>`).join("")}</details>
+        <details><summary>צימרים לפי אזור</summary>${T.REGIONS.filter((r) => has.region(r.key)).map((r) => `<a href="#region-${r.key}">${esc(r.name)}</a>`).join("")}</details>
+        <details><summary>גולשים מחפשים</summary>${T.QUICK_FILTERS.map((q, i) => (quickOk(q) ? `<a href="#quick-${i}">${esc(q.label)}</a>` : "")).join("")}</details>
         <a href="#me-leads">האזור האישי</a><a href="#me">המועדפים שלי</a><a href="#me-viewed">נצפו לאחרונה</a><a href="#top">הכי מומלצים</a><a href="#contact">צרו קשר</a><a class="mn-host" href="#join">${I("megaphone")}פרסמו אצלנו</a>
       </nav>
     </header>`;
@@ -286,9 +298,9 @@
       <div class="footer-in wrap">
       <div class="about-col"><a href="#" aria-label="לדף הבית"><img src="${LOGO_FOOT}" alt="${esc(s.site_name)}"></a><p>צימרים, וילות ובקתות מהגולן ועד הערבה. פונים ישירות למארחים, בלי עמלת הזמנה.</p>
         ${s.phone ? `<p><a href="tel:${esc(s.phone)}" dir="ltr">${esc(s.phone)}</a></p>` : ""}${s.email ? `<p>${esc(s.email)}</p>` : ""}${socialLinks()}</div>
-      <div><h4>צימרים לפי אזור</h4><ul>${T.REGIONS.map((r) => `<li><a href="#region-${r.key}">צימרים ${esc(T.inPlace(r.name))}</a></li>`).join("")}</ul></div>
-      <div><h4>חיפושים פופולריים</h4><ul>${T.QUICK_FILTERS.slice(0, 7).map((q, i) => `<li><a href="#quick-${i}">${esc(q.label)}</a></li>`).join("")}${combos.slice(0, 5).map((c) => `<li><a href="#region-${c.r.key}/${c.f.key}">צימרים ${esc(c.f.phrase)} ${esc(T.inPlace(c.r.name))}</a></li>`).join("")}</ul></div>
-      <div><h4>סוגי אירוח</h4><ul>${T.TYPES.map((t) => `<li><a href="#type-${t.key}">${esc(t.plural)}</a></li>`).join("")}<li><a href="#deals">דילים ודקה 90</a></li><li><a href="#weekend">פנויים לסופ״ש הקרוב</a></li></ul></div>
+      <div><h4>צימרים לפי אזור</h4><ul>${T.REGIONS.filter((r) => has.region(r.key)).map((r) => `<li><a href="#region-${r.key}">צימרים ${esc(T.inPlace(r.name))}</a></li>`).join("")}</ul></div>
+      <div><h4>חיפושים פופולריים</h4><ul>${T.QUICK_FILTERS.map((q, i) => [q, i]).filter(([q]) => quickOk(q)).slice(0, 7).map(([q, i]) => `<li><a href="#quick-${i}">${esc(q.label)}</a></li>`).join("")}${combos.slice(0, 5).map((c) => `<li><a href="#region-${c.r.key}/${c.f.key}">צימרים ${esc(c.f.phrase)} ${esc(T.inPlace(c.r.name))}</a></li>`).join("")}</ul></div>
+      <div><h4>סוגי אירוח</h4><ul>${T.TYPES.filter((t) => has.type(t.key)).map((t) => `<li><a href="#type-${t.key}">${esc(t.plural)}</a></li>`).join("")}<li><a href="#deals">דילים ודקה 90</a></li><li><a href="#weekend">פנויים לסופ״ש הקרוב</a></li></ul></div>
       <div><h4>מידע</h4><ul>
         <li><a href="#about">אודות</a></li><li><a href="#contact">צרו קשר</a></li><li><a href="#places">אטרקציות ומסעדות</a></li><li><a href="#magazine">מגזין</a></li><li><a href="#top">המומלצים ביותר</a></li>
         <li><a href="#join">פרסום מתחם באתר</a></li><li><a href="owner.html">כניסת מארחים</a></li><li><a href="#terms-hosts">הסכם פרסום למארחים</a></li><li><a href="#accessibility">הצהרת נגישות</a></li><li><a href="#terms">תנאי שימוש, פרטיות ועוגיות</a></li></ul></div>
@@ -339,7 +351,7 @@
       <div class="pop pick-pop"><input type="hidden" name="type" value="${esc(sel || "")}">
         <div class="pick-grid" role="listbox" aria-label="סוג אירוח">
           <button type="button" class="pick-opt${sel ? "" : " on"}" data-act="pick" data-v="" data-l="כל סוגי האירוח" role="option" aria-selected="${!sel}">${T.pic("type-all", "pic-l")}<span>הכל</span></button>
-          ${T.TYPES.map((x) => `<button type="button" class="pick-opt${sel === x.key ? " on" : ""}" data-act="pick" data-v="${x.key}" data-l="${esc(typePlural(x.key))}" role="option" aria-selected="${sel === x.key}">${T.pic(x.pic, "pic-l")}<span>${esc(typePlural(x.key))}</span>${c(x.key) ? `<small>${c(x.key)}</small>` : ""}</button>`).join("")}
+          ${T.TYPES.filter((x) => has.type(x.key) || sel === x.key).map((x) => `<button type="button" class="pick-opt${sel === x.key ? " on" : ""}" data-act="pick" data-v="${x.key}" data-l="${esc(typePlural(x.key))}" role="option" aria-selected="${sel === x.key}">${T.pic(x.pic, "pic-l")}<span>${esc(typePlural(x.key))}</span>${c(x.key) ? `<small>${c(x.key)}</small>` : ""}</button>`).join("")}
         </div></div></details>`;
   }
   function placePick(sel) {
@@ -350,9 +362,9 @@
       <div class="pop pick-pop"><input type="hidden" name="place" value="${esc(sel || "")}">
         <div class="pick-list" role="listbox" aria-label="אזור">
           ${opt("", "כל הארץ", T.pic("area-all", "pic-l"))}
-          ${Object.entries(T.AREAS).map(([a, name]) => `<div class="pick-area${openArea(a) ? " open" : ""}">
+          ${Object.entries(T.AREAS).filter(([a]) => has.area(a) || openArea(a)).map(([a, name]) => `<div class="pick-area${openArea(a) ? " open" : ""}">
             <div class="pick-row">${opt("area:" + a, name, T.pic(T.AREA_PIC[a], "pic-l"))}<small class="pick-n">${inArea(a) || ""}</small><button type="button" class="pick-exp" data-act="pick-exp" aria-expanded="${openArea(a)}" aria-label="אזורים ב${esc(name)}">${I("chev-d")}</button></div>
-            <div class="pick-sub"><div>${T.REGIONS.filter((r) => r.area === a).map((r) => opt(r.key, r.name, T.pic(r.pic))).join("")}</div></div>
+            <div class="pick-sub"><div>${T.REGIONS.filter((r) => r.area === a && (has.region(r.key) || r.key === sel)).map((r) => opt(r.key, r.name, T.pic(r.pic))).join("")}</div></div>
           </div>`).join("")}
         </div></div></details>`;
   }
@@ -429,7 +441,8 @@
     const f = S.filters;
     const maxPrice = Math.max(1000, Math.ceil(Math.max(0, ...S.listings.map(T.fromPrice)) / 500) * 500);
     const groups = T.AMENITY_GROUPS.map((g, gi) => {
-      const items = T.AMENITIES.filter((a) => a.group === g.key);
+      const items = T.AMENITIES.filter((a) => a.group === g.key && (has.amen(a.key) || f.amenities.includes(a.key)));
+      if (!items.length) return "";
       const open = gi < 2 || items.some((a) => f.amenities.includes(a.key));
       return `<details class="fgroup" ${open ? "open" : ""}><summary>${T.pic(g.pic)}${esc(g.name)}</summary>${items.map((a) => chk("amenities", a.key, f.amenities.includes(a.key), T.pic(a.pic) + esc(a.name), "amenities:" + a.key)).join("")}</details>`;
     }).join("");
@@ -445,9 +458,9 @@
           <fieldset><legend>מי מגיע</legend><div class="row2">
             <div class="field"><span id="fa-lbl">מבוגרים</span><div class="stepper" role="group" aria-labelledby="fa-lbl"><button type="button" data-act="step" data-d="-1" aria-label="פחות">${I("minus")}</button><input name="guests" type="number" min="0" max="40" value="${f.guests || 0}" aria-labelledby="fa-lbl" inputmode="numeric"><button type="button" data-act="step" data-d="1" aria-label="יותר">${I("plus")}</button></div></div>
             <div class="field"><span id="fk-lbl">ילדים</span><div class="stepper" role="group" aria-labelledby="fk-lbl"><button type="button" data-act="step" data-d="-1" aria-label="פחות">${I("minus")}</button><input name="children" type="number" min="0" max="20" value="${f.children || 0}" aria-labelledby="fk-lbl" inputmode="numeric"><button type="button" data-act="step" data-d="1" aria-label="יותר">${I("plus")}</button></div></div></div>
-            ${T.AUDIENCE.map((a) => chk("audience", a.key, f.audience.includes(a.key), T.pic(a.pic) + a.name, "audience:" + a.key)).join("")}${chk("couplesOnly", "1", f.couplesOnly, "לזוגות בלבד (בלי ילדים)", "couplesOnly")}${chk("quiet", "1", f.quiet, "סביבה שקטה", "quiet")}${chk("party", "1", f.party, "מותר להרעיש (מוזיקה, קריוקי, מסיבות)", "party")}</fieldset>
-          <fieldset><legend>הטבה שמגיעה לכם</legend><select class="select" name="benefit" aria-label="הטבה"><option value="">ללא</option>${T.BENEFITS.map((b) => `<option value="${b.key}" ${f.benefit === b.key ? "selected" : ""}>${esc(b.name)} (${cntKey("benefit:" + b.key)})</option>`).join("")}</select><span class="hint">המחירים בתוצאות יכללו את ההנחה</span></fieldset>
-          <fieldset><legend>סוג אירוח</legend><label class="check"><input type="radio" name="type" value="" ${!f.type ? "checked" : ""}><span>הכל</span></label>${T.TYPES.map((t) => `<label class="check"><input type="radio" name="type" value="${t.key}" ${f.type === t.key ? "checked" : ""}><span>${esc(t.plural)}</span>${cnt("type:" + t.key)}</label>`).join("")}</fieldset>
+            ${T.AUDIENCE.filter((a) => has.aud(a.key) || f.audience.includes(a.key)).map((a) => chk("audience", a.key, f.audience.includes(a.key), T.pic(a.pic) + a.name, "audience:" + a.key)).join("")}${chk("couplesOnly", "1", f.couplesOnly, "לזוגות בלבד (בלי ילדים)", "couplesOnly")}${chk("quiet", "1", f.quiet, "סביבה שקטה", "quiet")}${chk("party", "1", f.party, "מותר להרעיש (מוזיקה, קריוקי, מסיבות)", "party")}</fieldset>
+          <fieldset><legend>הטבה שמגיעה לכם</legend><select class="select" name="benefit" aria-label="הטבה"><option value="">ללא</option>${T.BENEFITS.filter((b) => f.benefit === b.key || S.listings.some((l) => T.benefitsOf(l).some((x) => x.key === b.key))).map((b) => `<option value="${b.key}" ${f.benefit === b.key ? "selected" : ""}>${esc(b.name)} (${cntKey("benefit:" + b.key)})</option>`).join("")}</select><span class="hint">המחירים בתוצאות יכללו את ההנחה</span></fieldset>
+          <fieldset><legend>סוג אירוח</legend><label class="check"><input type="radio" name="type" value="" ${!f.type ? "checked" : ""}><span>הכל</span></label>${T.TYPES.filter((t) => has.type(t.key) || f.type === t.key).map((t) => `<label class="check"><input type="radio" name="type" value="${t.key}" ${f.type === t.key ? "checked" : ""}><span>${esc(t.plural)}</span>${cnt("type:" + t.key)}</label>`).join("")}</fieldset>
           <fieldset><legend>מספר יחידות במתחם</legend><div class="pill-pick"><label><input type="radio" name="units" value="0" ${!f.units ? "checked" : ""}><span>הכל</span></label>${T.UNIT_COUNTS.map((u) => `<label><input type="radio" name="units" value="${u}" ${f.units === u ? "checked" : ""}><span>${u}+</span></label>`).join("")}</div></fieldset>
           <fieldset><legend>מחיר ללילה באמצע שבוע</legend><input type="range" name="priceMax" min="300" max="${maxPrice}" step="50" value="${f.priceMax || maxPrice}" aria-label="מחיר מקסימלי ללילה"><span class="hint">עד <span class="range-out" id="price-out">${f.priceMax && f.priceMax < maxPrice ? T.money(f.priceMax) : "ללא הגבלה"}</span></span></fieldset>
           <fieldset><legend>מה חשוב לכם</legend>${groups}</fieldset>
@@ -539,9 +552,9 @@
     const related = [];
     if (r) {
       T.SEO_FEATURES.forEach((sf) => { const n = S.listings.filter((l) => l.region === r.key && (sf.audience ? (l.audience || []).includes(sf.key) : hasAmen(l, sf.key))).length; if (n) related.push([`#region-${r.key}/${sf.key}`, `צימרים ${sf.phrase} ${T.inPlace(r.name)}`]); });
-      T.REGIONS.filter((x) => x.area === r.area && x.key !== r.key).forEach((x) => related.push([`#region-${x.key}`, `צימרים ${T.inPlace(x.name)}`]));
+      T.REGIONS.filter((x) => x.area === r.area && x.key !== r.key && has.region(x.key)).forEach((x) => related.push([`#region-${x.key}`, `צימרים ${T.inPlace(x.name)}`]));
     } else {
-      T.REGIONS.forEach((x) => related.push([`#region-${x.key}`, `צימרים ${T.inPlace(x.name)}`]));
+      T.REGIONS.filter((x) => has.region(x.key)).forEach((x) => related.push([`#region-${x.key}`, `צימרים ${T.inPlace(x.name)}`]));
     }
     const avgPrice = res.length ? Math.round(res.reduce((s, l) => s + T.fromPrice(l), 0) / res.length / 10) * 10 : 0;
     return `<section class="seo-block">${r ? `<h2>${esc(searchTitle(f))}</h2><p>${esc(r.blurb)}. ${res.length ? `באזור ${plural.stays(res.length)} שמתאימים לחיפוש, במחיר ממוצע של כ־${T.money(avgPrice)} ללילה באמצע שבוע. ` : ""}לכל מתחם יש יומן זמינות, מחירון מלא ואפשרות לשלוח בקשה ישירות למארחים, בלי עמלה.</p>` : ""}
