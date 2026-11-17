@@ -2293,3 +2293,17 @@ html.icons-tint img.pic, html.icons-tint .pic img { filter: url(#tm-icons); }
 @media (min-width: 641px) { .dp { animation: dmOpen .62s var(--spring) backwards; --dm-r: 22px; } }
 @keyframes dmSheet { from { transform: translateY(100%); } }
 @media (max-width: 640px) { .dp { animation: dmSheet .55s var(--spring) backwards; } }
+
+/* הפתיח מעל המקטע שאחריו, כדי שחלונות הבחירה (סוג, אזור, אורחים) לא ייחתכו כששורת החיפוש נמוכה */
+.hf { z-index: 3; }
+
+/* הכותרת העליונה: התפריט בדיוק באמצע המסך, הלוגו והכפתורים בשני הצדדים בסימטריה */
+@media (min-width: 1041px) {
+  .topbar-in { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 22px; }
+  .topbar-in > .brand { justify-self: start; }
+  .topbar-in > .mainnav { justify-self: center; margin: 0; }
+  .topbar-in > .top-actions { justify-self: end; margin: 0; }
+}
+/* כל פריטי התפריט העליון על אותו קו וגובה (קישורים וכפתורים עם חץ) */
+.mainnav > a, .mainnav .nav-dd-btn { display: inline-flex; align-items: center; height: 38px; line-height: 1.3; }
+.mainnav .nav-dd { display: inline-flex; align-items: center; }
