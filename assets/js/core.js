@@ -407,6 +407,17 @@
     };
     return `:root:not(.a11y-contrast){${Object.entries(v).map(([k, x]) => `${k}:${x}`).join(";")};${g}}`;
   };
+  /* צבעי האייקונים: original = כמו שצוירו; palette = לפי הפלטה; custom = שלושה צבעים שבוחרים */
+  T.iconColors = (s) => {
+    const m = s && s.icon_mode;
+    if (m !== "palette" && m !== "custom") return null;
+    const p = T.paletteOf(s);
+    const ok = (v, d) => (hexRgb(v) ? v : d);
+    const line = m === "custom" ? ok(s.icon_line, p.ink) : p.ink;
+    const main = m === "custom" ? ok(s.icon_main, p.olive) : p.olive;
+    const light = m === "custom" ? ok(s.icon_light, mixHex(p.cream, p.olive, 0.28)) : mixHex(p.cream, p.olive, 0.28);
+    return [line, line, main, mixHex(main, light, 0.5), light, "#ffffff"];
+  };
   /* opts.glass=false: רק צבעים (פאנל הניהול נשאר בעיצוב הרגיל); opts.cache=false: בלי לזכור לטעינה הבאה */
   T.applyTheme = (s, opts) => {
     if (typeof document === "undefined") return;
@@ -417,7 +428,16 @@
     if (st.textContent !== css) st.textContent = css;
     const glass = o.glass !== false && !!s && s.design_mode === "glass";
     document.documentElement.classList.toggle("glass", glass);
-    if (o.cache !== false) { try { localStorage.setItem("tm-look", JSON.stringify({ css, glass })); } catch (e) {} }
+    /* צבע האייקונים: מפת צבעים לפי בהירות (קו כהה → מילוי → גוון בהיר → לבן), בלי לגעת בשקיפות */
+    const ic = T.iconColors(s);
+    let svg = document.getElementById("tm-icon-svg");
+    if (ic && !svg) { svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.id = "tm-icon-svg"; svg.setAttribute("aria-hidden", "true"); svg.setAttribute("style", "position:absolute;width:0;height:0;overflow:hidden"); document.body.appendChild(svg); }
+    if (svg) {
+      const html = ic ? `<filter id="tm-icons" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values=".2126 .7152 .0722 0 0 .2126 .7152 .0722 0 0 .2126 .7152 .0722 0 0 0 0 0 1 0"/><feComponentTransfer>${["R", "G", "B"].map((c, i) => `<feFunc${c} type="table" tableValues="${ic.map((h) => (hexRgb(h)[i] / 255).toFixed(3)).join(" ")}"/>`).join("")}</feComponentTransfer></filter>` : "";
+      if (svg.innerHTML !== html) svg.innerHTML = html;
+    }
+    document.documentElement.classList.toggle("icons-tint", !!ic);
+    if (o.cache !== false) { try { localStorage.setItem("tm-look", JSON.stringify({ css, glass, icons: !!ic })); } catch (e) {} }
   };
   /* ---------------------------------------------------------------- עיצוב הכותרת בפתיח (נשלט מפאנל הניהול)
      hero_style = { base: {font,size,size_m,weight,color,line,track,align,shadow}, parts: [{text,br,font,size,size_m,weight,color,italic,track}],

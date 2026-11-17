@@ -1478,6 +1478,7 @@
       LOOK = e.data.look || null;
       Object.assign(S.settings, LOOK || {});
       T.applyTheme(S.settings, { cache: false });
+      lgSoon();
     });
   }
   /* ---------------------------------------------------------------- תנועה: מחוון שזז בין לשוניות, כפתור חיפוש "מגנטי" */
@@ -1526,6 +1527,7 @@
     kick(o);
   }
   function motion(root) {
+    requestAnimationFrame(() => liquid());
     (root || document).querySelectorAll("img:not(.ld)").forEach((im) => { if (im.complete) im.classList.add("ld"); });
     if (!pillRO && "ResizeObserver" in window) pillRO = new ResizeObserver((list) => list.forEach((en) => placePill(en.target)));
     (root || document).querySelectorAll(PILLS).forEach((box) => { if (!box.classList.contains("has-pill")) { box.classList.add("has-pill"); if (pillRO) pillRO.observe(box); } placePill(box); });
@@ -1569,6 +1571,72 @@
     }, { passive: true });
     document.addEventListener("pointerout", (e) => { const m = e.target.closest && e.target.closest(".card-media"); if (m && !m.contains(e.relatedTarget)) { m.style.removeProperty("--rx"); m.style.removeProperty("--ry"); } });
   }
+  /* ---------------------------------------------------------------- זכוכית נוזלית: שבירת אור בשולי הזכוכית
+     מפת הזזה לכל צורה (מלבן מעוגל): ליד השוליים התמונה שמאחור "נשברת" פנימה, כמו בעדשה עבה, עם הפרדת צבעים עדינה.
+     עובד בדפדפני Chromium (כרום, אדג׳, רוב האנדרואיד); בשאר הדפדפנים נשארת זכוכית מטושטשת רגילה. */
+  const LG_OK = !!(navigator.userAgentData && navigator.userAgentData.brands && navigator.userAgentData.brands.some((b) => /Chromium/.test(b.brand)));
+  const LG = [
+    [".hf .searchbox", 1, "panel"], [".pick-pop, .tdd, .dp, .modal, .guests-pop .pop, .a11y-panel", 1, "panel"], [".topbar", 0.55, "panel"],
+    [".stay-tabs, .seg-tabs", 0.8, "panel"], [".stay-tabs > .tab-hl, .seg-tabs > .tab-hl, .a11y-panel .seg > .tab-hl", 1, "lens"],
+    [".book, .box, .fact, .ar-card, .form-card, .news-band, .hf .searchbox > .field", 0.7, "panel"], [".save-btn, .chip-sp, .toast", 0.8, "lens"]
+  ];
+  const LG_SEL = LG.map((x) => x[0]).join(", ");
+  const lgCache = new Map();
+  let lgDefs = null, lgN = 0, lgRO = null;
+  function lgMap(w, h, r, band) {
+    const k = Math.min(1, 220 / Math.max(w, h)), W = Math.max(8, Math.round(w * k)), H = Math.max(8, Math.round(h * k));
+    const R = r * k, B = Math.max(2, band * k), hw = W / 2, hh = H / 2;
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const ctx = c.getContext("2d"), im = ctx.createImageData(W, H), d = im.data;
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      const px = i + 0.5 - hw, py = j + 0.5 - hh, qx = Math.abs(px) - (hw - R), qy = Math.abs(py) - (hh - R);
+      const depth = -(Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - R);
+      let nx = 0, ny = 0;
+      if (qx > 0 && qy > 0) { const L = Math.hypot(qx, qy) || 1; nx = (qx / L) * Math.sign(px); ny = (qy / L) * Math.sign(py); } else if (qx > qy) nx = Math.sign(px); else ny = Math.sign(py);
+      const a = depth < B ? Math.pow(1 - Math.max(depth, 0) / B, 2.2) : 0;
+      const o = (j * W + i) * 4; d[o] = 128 - nx * a * 127; d[o + 1] = 128 - ny * a * 127; d[o + 2] = 128; d[o + 3] = 255;
+    }
+    ctx.putImageData(im, 0, 0);
+    return c.toDataURL();
+  }
+  function lgFilter(el, power, kind, gs) {
+    const w = el.offsetWidth, h = el.offsetHeight;
+    if (w < 24 || h < 20) return "";
+    const cs = getComputedStyle(el), r = Math.min(parseFloat(cs.borderTopLeftRadius) || 0, h / 2, w / 2);
+    const band = kind === "lens" ? Math.max(5, Math.min(h * 0.24, 12)) : Math.min(h / 2.6, 16);
+    const px = (kind === "lens" ? Math.min(18, h * 0.42) : 26) * power * (0.45 + gs * 0.9);
+    const key = [Math.round(w / 6), Math.round(h / 6), Math.round(r), kind, Math.round(px)].join("_");
+    if (lgCache.has(key)) return lgCache.get(key);
+    if (!lgDefs) { lgDefs = document.createElementNS("http://www.w3.org/2000/svg", "svg"); lgDefs.setAttribute("aria-hidden", "true"); lgDefs.setAttribute("style", "position:absolute;width:0;height:0;overflow:hidden"); document.body.appendChild(lgDefs); }
+    const id = "lg" + ++lgN, sc = (m) => ((px * m) / w).toFixed(4);
+    const ch = (m, mat, res) => `<feDisplacementMap in="SourceGraphic" in2="m" scale="${sc(m)}" xChannelSelector="R" yChannelSelector="G" result="d${res}"/><feColorMatrix in="d${res}" type="matrix" values="${mat}" result="${res}"/>`;
+    lgDefs.insertAdjacentHTML("beforeend", `<filter id="${id}" x="0" y="0" width="1" height="1" filterUnits="objectBoundingBox" primitiveUnits="objectBoundingBox" color-interpolation-filters="sRGB"><feImage href="${lgMap(w, h, r, band)}" x="0" y="0" width="1" height="1" preserveAspectRatio="none" result="m"/>${ch(1, "1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0", "r")}${ch(0.94, "0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 0", "g")}${ch(0.88, "0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 0", "b")}<feBlend in="r" in2="g" mode="screen" result="rg"/><feBlend in="rg" in2="b" mode="screen"/></filter>`);
+    lgCache.set(key, id);
+    return id;
+  }
+  function liquid(root) {
+    const on = LG_OK && document.documentElement.classList.contains("glass") && !stillMotion() && !(window.matchMedia && matchMedia("(prefers-reduced-transparency: reduce)").matches);
+    if (!on) { $$("[data-lg]").forEach((el) => { el.style.removeProperty("backdrop-filter"); el.removeAttribute("data-lg"); }); return; }
+    const gs = Math.min(1, Math.max(0, parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--gs")) || 0.6));
+    if (!lgRO && "ResizeObserver" in window) lgRO = new ResizeObserver((list) => list.forEach((en) => { const el = en.target, w0 = Number(el.dataset.lgw) || 0; if (el.isConnected && Math.abs(el.offsetWidth - w0) > Math.max(30, w0 * 0.3)) lgSoon(); }));
+    LG.forEach(([sel, power, kind]) => (root || document).querySelectorAll(sel).forEach((el) => {
+      if (el.offsetParent === null && getComputedStyle(el).position !== "fixed") return;
+      const id = lgFilter(el, power, kind, gs);
+      if (!id) return;
+      const f = kind === "lens" ? `url(#${id}) saturate(1.3) contrast(1.06)` : `url(#${id}) blur(var(--g-blur)) saturate(150%)`;
+      if (el.dataset.lg !== id) { el.style.setProperty("backdrop-filter", f); el.dataset.lg = id; }
+      if (!el.dataset.lgw && lgRO) lgRO.observe(el);
+      el.dataset.lgw = el.offsetWidth;
+    }));
+  }
+  const lgSoon = T.debounce(() => liquid(), 120);
+  /* חלונות שנפתחים (בחירת סוג/אזור, יומן, תפריטים) מקבלים את הזכוכית ברגע שהם מופיעים */
+  document.addEventListener("toggle", () => requestAnimationFrame(() => liquid()), true);
+  new MutationObserver((list) => { if (!document.documentElement.classList.contains("glass")) return; for (const m of list) for (const n of m.addedNodes) if (n.nodeType === 1 && (n.matches(LG_SEL) || n.querySelector(LG_SEL))) { lgSoon(); return; } }).observe(document.body, { childList: true, subtree: true });
+  new MutationObserver(() => lgSoon()).observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  new MutationObserver(() => { if (document.documentElement.classList.contains("glass")) lgSoon(); }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["hidden", "open"] });
+  window.addEventListener("resize", lgSoon);
+
   /* פרץ קטן של נקודות כשמסמנים לב */
   function burst(el) {
     if (stillMotion()) return;

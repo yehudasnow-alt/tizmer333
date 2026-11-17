@@ -1177,6 +1177,10 @@
       <h3 class="hd-h">פלטת צבעים</h3>
       <div class="lk-presets">${T.PALETTES.map((x) => `<button type="button" class="lk-preset" data-act="pal-preset" data-v="${x.key}" aria-pressed="${cur && cur.key === x.key}"><span>${T.PALETTE_KEYS.map(([k]) => `<i style="background:${x[k]}"></i>`).join("")}</span>${esc(x.name)}</button>`).join("")}</div>
       <div class="lk-colors">${T.PALETTE_KEYS.map(([k, name]) => `<label class="lk-color"><input type="color" name="pal_${k}" value="${esc(p[k])}"><span><b>${esc(name)}</b><small dir="ltr">${esc(p[k].toUpperCase())}</small></span></label>`).join("")}</div>
+      <h3 class="hd-h">צבע האייקונים <span class="hint">האייקונים המצוירים (מתקנים, סוגי מקומות, אזורים ועוד)</span></h3>
+      <div class="lk-modes lk-ic-modes" role="radiogroup" aria-label="צבע האייקונים">${[["original", "כמו שצוירו", "ירוק זית מקורי"], ["palette", "לפי הפלטה", "מתעדכן לבד כשמחליפים פלטה"], ["custom", "צבעים שלי", "בוחרים קו, מילוי וגוון בהיר"]].map(([v, b, sm]) => `<label class="lk-mode"><input type="radio" name="icon_mode" value="${v}" ${(s.icon_mode || "original") === v ? "checked" : ""}><span><b>${b}</b><small>${sm}</small></span></label>`).join("")}</div>
+      <div class="lk-colors lk-ic-colors" ${s.icon_mode === "custom" ? "" : "hidden"}>${[["icon_line", "קווים", p.ink], ["icon_main", "מילוי", p.olive], ["icon_light", "גוון בהיר", "#D2D2B1"]].map(([k, n, d]) => `<label class="lk-color"><input type="color" name="${k}" value="${esc(/^#[0-9a-f]{6}$/i.test(s[k] || "") ? s[k] : d)}"><span><b>${n}</b><small dir="ltr">${esc(String(s[k] || d).toUpperCase())}</small></span></label>`).join("")}</div>
+      <div class="lk-ic-row" aria-hidden="true">${["type-zimmer", "am-private_pool", "am-jacuzzi", "fact-guests", "place-water", "region-golan", "am-fireplace", "fact-bedrooms"].map((k) => T.pic(k, "pic-l")).join("")}</div>
       <div class="lk-prev-bar"><span class="seg-tabs" role="group" aria-label="איזה דף"><button type="button" data-act="lk-page" data-v="" aria-pressed="${!A.lkPage}">דף הבית</button><button type="button" data-act="lk-page" data-v="search" aria-pressed="${A.lkPage === "search"}">חיפוש</button><button type="button" data-act="lk-page" data-v="stay" aria-pressed="${A.lkPage === "stay"}">דף מקום</button></span></div>
       <div class="lk-prev" id="lk-prev"><iframe id="lk-frame" title="תצוגה מקדימה של האתר" loading="lazy" src="${lkSrc()}"></iframe></div>
     </section>`;
@@ -1188,16 +1192,21 @@
     const m = $('input[name="design_mode"]:checked', root);
     if (m) A.settings.design_mode = m.value;
     ["glass_strength", "glass_tint"].forEach((k) => { const el = $(`[name="${k}"]`, root); if (el) A.settings[k] = Number(el.value); });
+    const im = $('input[name="icon_mode"]:checked', root);
+    if (im) A.settings.icon_mode = im.value;
+    ["icon_line", "icon_main", "icon_light"].forEach((k) => { const el = $(`[name="${k}"]`, root); if (el) A.settings[k] = el.value.toUpperCase(); });
     A.settings.palette = {};
     T.PALETTE_KEYS.forEach(([k]) => { const el = $(`[name="pal_${k}"]`, root); if (el) A.settings.palette[k] = el.value.toUpperCase(); });
   }
-  const lookPick = () => ({ palette: A.settings.palette, design_mode: A.settings.design_mode, glass_strength: A.settings.glass_strength, glass_tint: A.settings.glass_tint });
+  const lookPick = () => ({ palette: A.settings.palette, design_mode: A.settings.design_mode, glass_strength: A.settings.glass_strength, glass_tint: A.settings.glass_tint, icon_mode: A.settings.icon_mode, icon_line: A.settings.icon_line, icon_main: A.settings.icon_main, icon_light: A.settings.icon_light });
   function lookPreview() {
     const root = $("#look-design");
     if (!root) return;
     const sl = $(".lk-sliders", root); if (sl) sl.hidden = A.settings.design_mode !== "glass";
     $$(".lk-val", root).forEach((b) => { b.textContent = A.settings[b.dataset.for]; });
     T.PALETTE_KEYS.forEach(([k]) => { const el = $(`[name="pal_${k}"]`, root); if (el) el.parentElement.querySelector("small").textContent = el.value.toUpperCase(); });
+    ["icon_line", "icon_main", "icon_light"].forEach((k) => { const el = $(`[name="${k}"]`, root); if (el) el.parentElement.querySelector("small").textContent = el.value.toUpperCase(); });
+    const icc = $(".lk-ic-colors", root); if (icc) icc.hidden = A.settings.icon_mode !== "custom";
     const p = T.paletteOf(A.settings);
     $$(".lk-preset", root).forEach((b) => { const x = T.PALETTES.find((y) => y.key === b.dataset.v); b.setAttribute("aria-pressed", T.PALETTE_KEYS.every(([k]) => x[k].toLowerCase() === p[k].toLowerCase())); });
     T.applyTheme(A.settings, { glass: false, cache: false });
