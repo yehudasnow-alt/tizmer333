@@ -370,14 +370,15 @@
           </div>`).join("")}
         </div></div></details>`;
   }
-  const heroHeadline = () => String(S.settings.hero_headline || String(S.settings.hero_phrases || "").split(/\n/)[0] || T.DEFAULT_SETTINGS.hero_headline).trim();
   function viewHome() {
     const f = S.filters;
+    const ht = T.heroTitle(S.settings);
+    T.applyHeroFonts(S.settings);
     return `<div class="view home-lean">
-      <section class="hf${S.homeAgain ? " hf-again" : ""}" aria-label="חיפוש">
+      <section class="hf${S.homeAgain ? " hf-again" : ""}${ht.align ? " hf-al-" + ht.align : ""}" aria-label="חיפוש" style="${esc(T.heroVars(S.settings))}">
         <div class="hf-media"><div class="hf-par"><img src="assets/video/hero-poster${innerWidth < 900 ? "-720" : ""}.jpg" alt="" fetchpriority="high"><video class="hf-video" muted playsinline loop autoplay preload="auto" aria-hidden="true" tabindex="-1"></video></div></div>
         <div class="hf-inner">
-          <h1 class="hf-title"><span class="sr">${esc(S.settings.hero_title)} – </span>${esc(heroHeadline())}</h1>
+          <h1 class="hf-title" style="${esc(ht.style)}"><span class="sr">${esc(S.settings.hero_title)} – </span>${ht.html}</h1>
           <form class="searchbox" data-form="hero-search" role="search">
             ${typePick(f.type)}
             ${placePick(f.place)}
@@ -834,8 +835,10 @@
   const placeCard = (p, extra) => {
     const k = kindOf(p.kind);
     const min = p.km != null ? driveMin(p.km) : null;
+    /* בלי תמונה משלו: תמונה חופשית מוויקישיתוף (נאספת בבנייה) */
+    const wp = !p.photo && T.PLACE_PHOTOS ? T.PLACE_PHOTOS[p.id] : null;
     return `<article class="ar-card k-${esc(k.key)}">
-      <div class="ar-media">${p.photo ? `<img src="${esc(T.img(p.photo, 520))}" alt="${esc(p.name)}" loading="lazy">${p.photo_credit ? `<small class="ar-credit">צילום: ${esc(p.photo_credit)}</small>` : ""}` : `<span class="ar-art" aria-hidden="true">${I(k.icon)}</span>`}${min ? `<span class="ar-time">${I("car2")}${min} דק׳</span>` : ""}</div>
+      <div class="ar-media">${p.photo ? `<img src="${esc(T.img(p.photo, 520))}" alt="${esc(p.name)}" loading="lazy">${p.photo_credit ? `<small class="ar-credit">צילום: ${esc(p.photo_credit)}</small>` : ""}` : wp ? `<img src="${esc(wp.src)}" alt="${esc(p.name)}" loading="lazy"><a class="ar-credit" href="${esc(wp.link)}" target="_blank" rel="noopener license" title="פרטי התמונה והרישיון בוויקישיתוף">צילום: ${esc(wp.credit)}</a>` : `<span class="ar-art" aria-hidden="true">${I(k.icon)}</span>`}${min ? `<span class="ar-time">${I("car2")}${min} דק׳</span>` : ""}</div>
       <div class="ar-body"><span class="ar-kind">${T.pic(k.pic)}${esc(k.one)}${p.settlement ? ` · ${esc(p.settlement)}` : ""}</span><h3>${esc(p.name)}</h3>${p.blurb ? `<p>${esc(p.blurb)}</p>` : ""}
         ${min ? `<p class="ar-meta">${T.kmText(p.km)} מהמתחם · כ־${min} דקות נסיעה</p>` : ""}${extra || ""}
         <div class="ar-acts"><a href="${esc(T.wazeLink(p.name, p.lat, p.lng))}" target="_blank" rel="noopener" aria-label="ניווט ב־Waze אל ${esc(p.name)}">${I("nav")}Waze</a><a href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank" rel="noopener" aria-label="מסלול ב־Google Maps אל ${esc(p.name)}">${I("pin")}מסלול</a><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name + (p.settlement ? " " + p.settlement : ""))}" target="_blank" rel="noopener" aria-label="תמונות וביקורות על ${esc(p.name)} ב־Google (נפתח בחלון חדש)">${I("image")}תמונות וביקורות</a>${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${I("external")}אתר</a>` : ""}</div></div></article>`;
@@ -1049,7 +1052,11 @@
     const focusName = document.activeElement && document.activeElement.name;
     const keep = {};
     $$("#book input, #book textarea").forEach((el) => { if (["name", "phone", "email", "message"].includes(el.name)) keep[el.name] = el.value; if (el.name === "consent" || el.name === "remember") keep[el.name] = el.checked; });
+    const prevTotal = (($("#book-host .total b") || {}).textContent || "").replace(/\D/g, "");
     host.innerHTML = bookHTML(l);
+    const tb = $("#book-host .total b");
+    if (tb && prevTotal) rollNumber(tb, Number(prevTotal), Number(tb.textContent.replace(/\D/g, "")));
+    else if (tb) tb.classList.add("pop-in");
     Object.entries(keep).forEach(([k, v]) => { const el = $(`#book [name="${k}"]`); if (el) { if (k === "consent" || k === "remember") el.checked = v; else el.value = v; } });
     if (focusName) { const el = $(`#book [name="${focusName}"]`); if (el) { el.focus(); if (el.setSelectionRange && el.type === "text") el.setSelectionRange(el.value.length, el.value.length); } }
     $("#cal").innerHTML = calendarHTML(l);
@@ -1060,8 +1067,10 @@
   function lightbox(i, cat) {
     const l = stayL();
     const old = $("#lb");
+    /* מעבר בין תמונות: התמונה החדשה נכנסת מהכיוון של הלחיצה, בלי לנגן שוב את פתיחת החלון */
+    const dir = old && S.stay.lb != null && i != null ? Math.sign(i - S.stay.lb) : 0;
     if (old) old.remove();
-    if (i < 0 || !l) return;
+    if (i == null || !l) return;
     if (cat !== undefined) S.stay.lbCat = cat;
     const all = T.photosOf(l, true);
     const tabs = [["all", "הכל", all.length]];
@@ -1073,7 +1082,7 @@
     S.stay.lb = k;
     const p = photos[k] || all[0];
     const el = document.createElement("div");
-    el.className = "lightbox";
+    el.className = "lightbox" + (old ? " again" : "") + (dir > 0 ? " go-next" : dir < 0 ? " go-prev" : "");
     el.id = "lb";
     el.setAttribute("role", "dialog");
     el.setAttribute("aria-modal", "true");
@@ -1461,17 +1470,49 @@
   const stillMotion = () => document.documentElement.classList.contains("a11y-still") || !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   const PILLS = ".seg-tabs, .stay-tabs, .a11y-panel .seg";
   let pillRO = null;
+  /* מנוע קפיצים קטן: לכל קפיץ "קשיחות ושיכוך". המחוון עשוי משני קצוות – הקצה שמוביל קשיח והקצה שנגרר רך,
+     כך שבדרך הוא נמתח ונוחת שלם (כמו ב־Plan Switch) */
+  const SPR = { lead: [620, 36], trail: [190, 19], soft: [420, 32] };
+  const springs = new Set();
+  let springRaf = 0, springLast = 0;
+  const spring = (x, kc) => ({ x, v: 0, t: x, k: kc[0], c: kc[1] });
+  function springLoop(now) {
+    const dt = Math.min((now - (springLast || now)) / 1000, 1 / 30); springLast = now;
+    let busy = false;
+    springs.forEach((o) => {
+      for (let i = 0; i < 4; i++) o.sp.forEach((q) => { const a = -q.k * (q.x - q.t) - q.c * q.v; q.v += a * dt / 4; q.x += q.v * dt / 4; });
+      const done = o.sp.every((q) => Math.abs(q.x - q.t) < 0.3 && Math.abs(q.v) < 0.3);
+      if (done) o.sp.forEach((q) => { q.x = q.t; q.v = 0; }); else busy = true;
+      o.draw();
+      if (done) springs.delete(o);
+    });
+    springRaf = busy ? requestAnimationFrame(springLoop) : 0;
+    if (!busy) springLast = 0;
+  }
+  const kick = (o) => { springs.add(o); if (!springRaf) springRaf = requestAnimationFrame(springLoop); };
   function placePill(box) {
     const on = box.querySelector(':scope > [aria-pressed="true"], :scope > [aria-selected="true"]');
-    let p = box.querySelector(":scope > .pill");
+    let p = box.querySelector(":scope > .tab-hl");
     if (!on || !on.offsetWidth) { if (p) p.style.opacity = "0"; return; }
-    if (!p) { p = document.createElement("span"); p.className = "pill"; p.setAttribute("aria-hidden", "true"); box.prepend(p); }
-    const first = !p.style.width;
-    if (first) p.style.transition = "none";
-    Object.assign(p.style, { opacity: "1", width: on.offsetWidth + "px", height: on.offsetHeight + "px", transform: `translate(${on.offsetLeft}px, ${on.offsetTop}px)` });
-    if (first) { p.getBoundingClientRect(); p.style.transition = ""; }
+    const l = on.offsetLeft, r = l + on.offsetWidth, y = on.offsetTop, h = on.offsetHeight;
+    if (!p) {
+      p = document.createElement("span"); p.className = "tab-hl"; p.setAttribute("aria-hidden", "true"); box.prepend(p);
+      const o = { L: spring(l, SPR.lead), R: spring(r, SPR.lead), Y: spring(y, SPR.soft), H: spring(h, SPR.soft) };
+      o.sp = [o.L, o.R, o.Y, o.H];
+      o.draw = () => { p.style.transform = `translate(${o.L.x.toFixed(2)}px, ${o.Y.x.toFixed(2)}px)`; p.style.width = Math.max(12, o.R.x - o.L.x).toFixed(2) + "px"; p.style.height = o.H.x.toFixed(2) + "px"; };
+      p._o = o;
+    }
+    const o = p._o;
+    p.style.opacity = "1";
+    if (stillMotion() || (o.L.t === l && o.R.t === r && o.Y.t === y && o.H.t === h && !springs.has(o))) { o.sp.forEach((q) => { q.x = q.t = q === o.L ? l : q === o.R ? r : q === o.Y ? y : h; q.v = 0; }); o.draw(); return; }
+    const right = l > o.L.t;
+    [o.L.k, o.L.c] = right ? SPR.trail : SPR.lead;
+    [o.R.k, o.R.c] = right ? SPR.lead : SPR.trail;
+    o.L.t = l; o.R.t = r; o.Y.t = y; o.H.t = h;
+    kick(o);
   }
   function motion(root) {
+    (root || document).querySelectorAll("img:not(.ld)").forEach((im) => { if (im.complete) im.classList.add("ld"); });
     if (!pillRO && "ResizeObserver" in window) pillRO = new ResizeObserver((list) => list.forEach((en) => placePill(en.target)));
     (root || document).querySelectorAll(PILLS).forEach((box) => { if (!box.classList.contains("has-pill")) { box.classList.add("has-pill"); if (pillRO) pillRO.observe(box); } placePill(box); });
     const mb = $(".hf .searchbox > .btn");
@@ -1488,6 +1529,32 @@
     if (boxes.has(null)) { boxes.delete(null); requestAnimationFrame(() => motion()); }
     boxes.forEach((b) => requestAnimationFrame(() => placePill(b)));
   }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-pressed", "aria-selected"] });
+  /* מספר שמתגלגל מהערך הקודם לחדש (סכום ההזמנה) */
+  function rollNumber(el, from, to) {
+    if (!to || from === to || stillMotion()) return;
+    const t0 = performance.now(), dur = 650;
+    el.classList.add("rolling");
+    const tick = (now) => {
+      const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = T.money(Math.round(from + (to - from) * e));
+      if (k < 1) requestAnimationFrame(tick); else el.classList.remove("rolling");
+    };
+    requestAnimationFrame(tick);
+  }
+  /* תמונות: נחשפות ברכות כשהן נטענות (טשטוש קל שנעלם) */
+  document.addEventListener("load", (e) => { const t = e.target; if (t.tagName === "IMG") t.classList.add("ld"); }, true);
+  document.addEventListener("error", (e) => { const t = e.target; if (t.tagName === "IMG") t.classList.add("ld"); }, true);
+  /* כרטיס מתחם: התמונה נוטה מעט אחרי העכבר */
+  if (matchMedia("(hover: hover) and (pointer: fine)").matches) {
+    document.addEventListener("pointermove", (e) => {
+      const m = e.target.closest && e.target.closest(".card-media");
+      if (!m || stillMotion()) return;
+      const r = m.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
+      m.style.setProperty("--rx", (-y * 5).toFixed(2) + "deg"); m.style.setProperty("--ry", (x * 6).toFixed(2) + "deg");
+      m.style.setProperty("--gx", (x * 100 + 50).toFixed(1) + "%"); m.style.setProperty("--gy", (y * 100 + 50).toFixed(1) + "%");
+    }, { passive: true });
+    document.addEventListener("pointerout", (e) => { const m = e.target.closest && e.target.closest(".card-media"); if (m && !m.contains(e.relatedTarget)) { m.style.removeProperty("--rx"); m.style.removeProperty("--ry"); } });
+  }
   /* פרץ קטן של נקודות כשמסמנים לב */
   function burst(el) {
     if (stillMotion()) return;
@@ -1501,7 +1568,10 @@
     if (document.body.classList.contains("ready")) return;
     const img = $(".hf-media img");
     const go = () => requestAnimationFrame(() => document.body.classList.add("ready"));
-    if (img && !img.complete && img.decode) Promise.race([img.decode().catch(() => {}), new Promise((r) => setTimeout(r, 1400))]).then(go);
+    const waits = [];
+    if (img && !img.complete && img.decode) waits.push(img.decode().catch(() => {}));
+    if ($(".hf-title") && document.fonts && document.fonts.ready) waits.push(document.fonts.ready);
+    if (waits.length) Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 1400))]).then(go);
     else go();
   }
   /* סרטון הרקע בפתיח: קובץ קטן לטלפון וגדול למחשב. מי שביקש בלי תנועה או חוסך נתונים רואה את התמונה בלבד */
@@ -1672,7 +1742,7 @@
     else if (act === "lb-unit") lightbox(0, "unit:" + el.dataset.id);
     else if (act === "lb-cat") lightbox(0, el.dataset.v);
     else if (act === "lb-go") lightbox(st.lb + Number(el.dataset.d));
-    else if (act === "lb-close") lightbox(-1);
+    else if (act === "lb-close") lightbox(null);
     else if (act === "copy") { T.copy(el.dataset.text); if (!el.classList.contains("copied")) { const was = el.innerHTML; el.classList.add("copied"); el.innerHTML = I("check"); setTimeout(() => { el.classList.remove("copied"); el.innerHTML = was; }, 1600); } }
     else if (act === "share") {
       const l = stayL();
@@ -1728,7 +1798,7 @@
     else if (act === "a11y-scale") { A11Y.scale = Number(el.dataset.v); applyA11y(); $$('[data-act="a11y-scale"]').forEach((b) => b.setAttribute("aria-pressed", b === el)); }
   });
   document.addEventListener("keydown", (e) => {
-    if ($("#lb")) { if (e.key === "Escape") lightbox(-1); if (e.key === "ArrowLeft") lightbox(S.stay.lb + 1); if (e.key === "ArrowRight") lightbox(S.stay.lb - 1); }
+    if ($("#lb")) { if (e.key === "Escape") lightbox(null); if (e.key === "ArrowLeft") lightbox(S.stay.lb + 1); if (e.key === "ArrowRight") lightbox(S.stay.lb - 1); }
     else if (e.key === "Escape") {
       if ($("#modal")) { $("#modal").remove(); if (S.bigMap) { S.bigMap.remove(); S.bigMap = null; } return; }
       const m = $("#mega"); if (m && !m.hidden) { closeMega(); $(".mega-btn").focus(); return; }

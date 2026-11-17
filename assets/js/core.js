@@ -373,6 +373,86 @@
   T.statusName = (list, k) => (list.find((s) => s.key === k) || { name: k || "" }).name;
 
   /* ------------------------------------------------------------------ כלים */
+  /* ---------------------------------------------------------------- עיצוב הכותרת בפתיח (נשלט מפאנל הניהול)
+     hero_style = { base: {font,size,size_m,weight,color,line,track,align,shadow}, parts: [{text,br,font,size,size_m,weight,color,italic,track}],
+                    search: {top,top_m,gap,width,height} }  ·  custom_fonts = [{name,url}]
+     גופן: "" = גופן האתר, "g:Name" = גופן עברי מגוגל, "u:Name" = גופן שהועלה */
+  T.GOOGLE_HE_FONTS = ["Rubik", "Assistant", "Secular One", "Suez One", "Frank Ruhl Libre", "Amatic SC", "Karantina", "Bellefair", "David Libre", "Varela Round", "Alef", "Noto Serif Hebrew", "Noto Sans Hebrew", "Miriam Libre", "Fredoka", "IBM Plex Sans Hebrew", "Bona Nova", "Playpen Sans Hebrew", "Solitreo", "Tinos"];
+  T.HERO_WEIGHTS = [[100, "דק מאוד"], [200, "דק"], [300, "קל"], [400, "רגיל"], [500, "בינוני"], [600, "חצי מודגש"], [700, "מודגש"], [800, "מודגש מאוד"], [900, "שחור"]];
+  const fontKey = (n) => String(n || "").replace(/[^\w֐-׿ -]/g, "").trim().slice(0, 40);
+  T.fontFamily = (v) => {
+    v = String(v || "");
+    if (v.startsWith("g:")) return `"${fontKey(v.slice(2))}", var(--f-display)`;
+    if (v.startsWith("u:")) return `"tm-${fontKey(v.slice(2))}", var(--f-display)`;
+    return "";
+  };
+  /* טוען רק את הגופנים שבשימוש בכותרת (או גופן אחד שנבחר עכשיו בתצוגה המקדימה) */
+  T.applyHeroFonts = (s, extra) => {
+    if (typeof document === "undefined") return;
+    const hs = (s && s.hero_style) || {};
+    const used = new Set([(hs.base || {}).font].concat((hs.parts || []).map((p) => p.font)).concat(extra || []).filter(Boolean));
+    const css = ((s && s.custom_fonts) || []).filter((f) => f && f.url && used.has("u:" + f.name)).map((f) => `@font-face{font-family:"tm-${fontKey(f.name)}";src:url("${String(f.url).replace(/"/g, "%22")}");font-display:swap;}`).join("\n");
+    let st = document.getElementById("tm-fonts");
+    if (!st) { st = document.createElement("style"); st.id = "tm-fonts"; document.head.appendChild(st); }
+    if (st.textContent !== css) st.textContent = css;
+    used.forEach((v) => {
+      if (!String(v).startsWith("g:")) return;
+      const name = fontKey(v.slice(2)), id = "gf-" + name.replace(/\s+/g, "-");
+      if (!T.GOOGLE_HE_FONTS.includes(name) || document.getElementById(id)) return;
+      const l = document.createElement("link");
+      l.id = id; l.rel = "stylesheet";
+      l.href = `https://fonts.googleapis.com/css?family=${encodeURIComponent(name)}:100,200,300,400,500,600,700,800,900&subset=hebrew&display=swap`;
+      document.head.appendChild(l);
+    });
+  };
+  const num = (v, min, max) => { const n = Number(v); return v === "" || v == null || !Number.isFinite(n) ? null : Math.min(max, Math.max(min, n)); };
+  const color = (v) => (/^#[0-9a-f]{3,8}$/i.test(String(v || "")) ? v : "");
+  /* opts.vw: פיקסלים ל־1vw (לתצוגה מקדימה ברוחב קבוע); בלי – מתאים את עצמו למסך */
+  const sizeCss = (d, m, o) => {
+    if (!d) return "";
+    const lo = m || Math.round(d * 0.5);
+    if (o.vw) { const v = (d / 13.2) * o.vw; return `font-size:${Math.max(lo, Math.min(d, v)).toFixed(1)}px;`; }
+    return `font-size:clamp(${lo}px, ${(d / 13.2).toFixed(3)}vw, ${d}px);`;
+  };
+  const segCss = (x, o) => {
+    let c = "";
+    const f = T.fontFamily(x.font); if (f) c += `font-family:${f};`;
+    c += sizeCss(num(x.size, 10, 220), num(x.size_m, 10, 160), o);
+    const w = num(x.weight, 100, 900); if (w) c += `font-weight:${w};`;
+    const col = color(x.color); if (col) c += `color:${col};`;
+    if (x.italic) c += "font-style:italic;";
+    const tr = num(x.track, -0.2, 1); if (tr !== null) c += `letter-spacing:${tr}em;`;
+    return c;
+  };
+  T.heroTitle = (s, opts) => {
+    const o = opts || {};
+    const hs = (s && s.hero_style) || {};
+    const b = hs.base || {};
+    const headline = String((s && s.hero_headline) || String((s && s.hero_phrases) || "").split(/\n/)[0] || T.DEFAULT_SETTINGS.hero_headline).trim();
+    const parts = (hs.parts || []).filter((p) => p && String(p.text || "").trim());
+    const lines = [];
+    (parts.length ? parts : [{ text: headline }]).forEach((p, i) => { if (!i || p.br) lines.push([]); lines[lines.length - 1].push(p); });
+    const html = lines.map((ln) => `<span class="hl-line">${ln.map((p) => { const c = segCss(p, o); const t = T.esc(String(p.text).trim()); return c ? `<span class="hl-seg" style="${T.esc(c)}">${t}</span>` : `<span class="hl-seg">${t}</span>`; }).join(" ")}</span>`).join("");
+    let style = segCss(b, o);
+    const lh = num(b.line, 0.7, 2.5); if (lh) style += `line-height:${lh};`;
+    if (b.shadow === false) style += "text-shadow:none;";
+    const al = ["start", "end", "center"].includes(b.align) ? b.align : "";
+    return { html, style, align: al, text: lines.map((ln) => ln.map((p) => String(p.text).trim()).join(" ")).join(" ") };
+  };
+  /* מיקום וגודל שורת החיפוש: משתני CSS על הפתיח */
+  T.heroVars = (s, opts) => {
+    const o = opts || {};
+    const q = ((s && s.hero_style) || {}).search || {};
+    let v = "";
+    const top = num(q.top, 0, 60), topm = num(q.top_m, 0, 60), gap = num(q.gap, 0, 300), w = num(q.width, 480, 1600), h = num(q.height, 48, 120);
+    if (top !== null) v += `--hf-top:${o.vh ? (top * o.vh).toFixed(0) + "px" : top + "vh"};`;
+    if (topm !== null) v += `--hf-top-m:${o.vh ? (topm * o.vh).toFixed(0) + "px" : topm + "vh"};`;
+    if (gap !== null) v += `--hf-gap:${gap}px;`;
+    if (w !== null) v += `--sb-max:${w}px;`;
+    if (h !== null) v += `--sb-h:${h}px;`;
+    return v;
+  };
+
   T.esc = (s) =>
     String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   T.$ = (sel, root) => (root || document).querySelector(sel);
@@ -540,6 +620,7 @@
     "chev-l": '<path d="m15 6-6 6 6 6"/>',
     "chev-r": '<path d="m9 6 6 6-6 6"/>',
     "chev-d": '<path d="m6 9 6 6 6-6"/>',
+    "chev-u": '<path d="m6 15 6-6 6 6"/>',
     heart: '<path d="M12 20s-7.5-4.6-9.2-9.3C1.7 7.5 3.8 4.5 7 4.5c2 0 3.5 1.1 5 3 1.5-1.9 3-3 5-3 3.2 0 5.3 3 4.2 6.2C19.5 15.4 12 20 12 20z"/>',
     phone: '<path d="M5 3.5h3.2l1.6 4.2-2 1.3a11 11 0 0 0 5.2 5.2l1.3-2 4.2 1.6V17a2.5 2.5 0 0 1-2.7 2.5C9.6 19 5 14.4 4.5 6.2A2.5 2.5 0 0 1 5 3.5z"/>',
     chat: '<path d="M20 11.5a8 8 0 0 1-11.8 7L4 20l1.4-4A8 8 0 1 1 20 11.5z"/><path d="M9 10.5h6M9 13.5h4"/>',

@@ -23,6 +23,7 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import path from "node:path";
 import vm from "node:vm";
+import { placePhotos } from "./place-photos.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -121,6 +122,16 @@ if (!live) {
 }
 const S = Object.assign({}, T.DEFAULT_SETTINGS, settings);
 listings = listings.map(T.normalizeListing);
+
+/* ------------------------------------------------------------ תמונות למקומות (ויקישיתוף, רישיון חופשי) */
+try {
+  const ph = await placePhotos(places || [], OUT);
+  const js = `/* נוצר אוטומטית בבנייה: תמונות חופשיות מוויקישיתוף לפי מקום, עם קרדיט */\nwindow.Tamara = window.Tamara || {};\nwindow.Tamara.PLACE_PHOTOS = ${JSON.stringify(ph)};\n`;
+  fs.writeFileSync(path.join(OUT, "assets/js/place-photos.js"), js);
+  const h = crypto.createHash("sha1").update(js).digest("hex").slice(0, 10);
+  for (const f of ["index.html", "admin.html", "owner.html"]) { const p = path.join(OUT, f); fs.writeFileSync(p, fs.readFileSync(p, "utf8").replace(/assets\/js\/place-photos\.js(\?v=\w+)?/g, "assets/js/place-photos.js?v=" + h)); }
+  console.log(`✓ תמונות למקומות: ${Object.keys(ph).length} מתוך ${(places || []).filter((p) => !p.photo).length}`);
+} catch (e) { console.warn("⚠ תמונות למקומות לא נוצרו:", e.message); }
 const noindex = !live;
 
 /* ------------------------------------------------------------ כלים */

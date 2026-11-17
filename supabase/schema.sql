@@ -1079,6 +1079,17 @@ create policy photos_upload on storage.objects for insert to authenticated
 drop policy if exists photos_delete on storage.objects;
 create policy photos_delete on storage.objects for delete to authenticated using (bucket_id = 'photos' and (select public.is_admin()));
 
+-- גופנים לכותרת בעמוד הבית (מעלים מפאנל הניהול; רק מנהל)
+insert into storage.buckets (id, name, public) values ('fonts', 'fonts', true) on conflict (id) do nothing;
+do $$ begin
+  update storage.buckets set file_size_limit = 4194304, allowed_mime_types = array['font/woff2', 'font/woff', 'font/ttf', 'font/otf', 'application/font-woff', 'application/x-font-ttf', 'application/x-font-otf', 'application/octet-stream'] where id = 'fonts';
+exception when others then null;
+end $$;
+drop policy if exists fonts_upload on storage.objects;
+create policy fonts_upload on storage.objects for insert to authenticated with check (bucket_id = 'fonts' and (select public.is_admin()));
+drop policy if exists fonts_delete on storage.objects;
+create policy fonts_delete on storage.objects for delete to authenticated using (bucket_id = 'fonts' and (select public.is_admin()));
+
 -- =====================================================================
 -- שלב 4 במדריך: הוסיפו את האימייל שלכם כמנהל (החליפו את הכתובת והריצו לבד):
 --   insert into public.admins (email) values ('you@example.com');

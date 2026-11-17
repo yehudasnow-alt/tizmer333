@@ -236,6 +236,7 @@
       async getSettings() { load(); return Object.assign(T.clone(T.DEFAULT_SETTINGS), T.clone(db.settings)); },
       async saveSettings(s) { load(); db.settings = Object.assign({}, db.settings, s); persist(); emit(); return db.settings; },
       async uploadPhoto(file) { const blob = await T.resizeImage(file, 1280, 0.78); return T.blobToDataURL(blob); },
+      async uploadFont(file) { if (file.size > 600000) throw new Error("במצב הדגמה אפשר גופן עד 600KB"); return T.blobToDataURL(file); },
       notify() {},
       icalExportUrl() { return ""; },
       async syncIcal() { throw new Error("הסנכרון זמין אחרי העלאת האתר ל-Vercel"); },
@@ -566,6 +567,16 @@
         ok(await sb.storage.from("photos").upload(name + ".jpg", blob, { contentType: "image/jpeg", upsert: false, cacheControl: "31536000" }));
         try { ok(await sb.storage.from("photos").upload(name + "-sm.jpg", small, { contentType: "image/jpeg", upsert: false, cacheControl: "31536000" })); } catch (e) {}
         return sb.storage.from("photos").getPublicUrl(name + ".jpg").data.publicUrl;
+      },
+      /* גופן לכותרת: לתיקיית fonts באחסון. אם התיקייה עוד לא נוצרה (schema.sql לא הורץ מחדש) – גופן קטן נשמר בתוך ההגדרות */
+      async uploadFont(file) {
+        const ext = (file.name.match(/\.(woff2?|ttf|otf)$/i) || [, "woff2"])[1].toLowerCase();
+        const type = { woff2: "font/woff2", woff: "font/woff", ttf: "font/ttf", otf: "font/otf" }[ext];
+        const name = `f-${T.uid("").replace(/[^a-z0-9]/gi, "").toLowerCase()}.${ext}`;
+        const r = await sb.storage.from("fonts").upload(name, file, { contentType: type, upsert: false, cacheControl: "31536000" });
+        if (!r.error) return sb.storage.from("fonts").getPublicUrl(name).data.publicUrl;
+        if (file.size <= 350000) return T.blobToDataURL(file);
+        throw new Error("אחסון הגופנים עוד לא הופעל. הריצו שוב את supabase/schema.sql, או העלו גופן קטן מ־350KB (למשל woff2).");
       },
       notify(type, id) { try { fetch("/api/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, id }), keepalive: true }).catch(() => {}); } catch (e) {} },
       icalExportUrl(listingId, unitId) { return `${location.origin}/api/ical?listing=${encodeURIComponent(listingId)}${unitId ? "&unit=" + encodeURIComponent(unitId) : ""}`; },

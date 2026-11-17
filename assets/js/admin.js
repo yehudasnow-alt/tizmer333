@@ -1160,6 +1160,102 @@
   }
 
   /* ================================================================ settings */
+  /* ---------------------------------------------------------------- עיצוב הכותרת ושורת החיפוש בפתיח */
+  const HD_W = { desk: 1320, mob: 390 }, HD_H = { desk: 760, mob: 780 };
+  function heroDesignPanel(s) {
+    const hs = s.hero_style || {}, b = hs.base || {}, q = hs.search || {}, parts = hs.parts || [];
+    const fonts = s.custom_fonts || [];
+    const fontSel = (val, attrs, inherit) => `<select class="select" ${attrs}><option value="">${inherit ? "כמו כל הכותרת" : "גופן האתר (Heebo)"}</option>${fonts.length ? `<optgroup label="גופנים שהעליתם">${fonts.map((f) => `<option value="u:${esc(f.name)}" ${val === "u:" + f.name ? "selected" : ""}>${esc(f.name)}</option>`).join("")}</optgroup>` : ""}<optgroup label="גופנים עבריים חינמיים">${T.GOOGLE_HE_FONTS.map((n) => `<option value="g:${esc(n)}" ${val === "g:" + n ? "selected" : ""}>${esc(n)}</option>`).join("")}</optgroup></select>`;
+    const wSel = (val, attrs, inherit) => `<select class="select" ${attrs}><option value="">${inherit ? "כמו כל הכותרת" : "ברירת מחדל (מודגש)"}</option>${T.HERO_WEIGHTS.map(([w, n]) => `<option value="${w}" ${Number(val) === w ? "selected" : ""}>${n} · ${w}</option>`).join("")}</select>`;
+    const colorF = (val, attrs, inherit) => `<span class="hd-color"><input type="color" ${attrs} data-k2="color" value="${esc(/^#[0-9a-f]{6}$/i.test(val || "") ? val : "#ffffff")}"><label><input type="checkbox" ${attrs} data-k2="color_off" ${val ? "" : "checked"}>${inherit ? "כמו הכותרת" : "לבן"}</label></span>`;
+    const n = (attrs, val, ph, step) => `<input class="input" type="number" ${attrs} value="${esc(val == null ? "" : val)}" placeholder="${ph}" step="${step || 1}" dir="ltr">`;
+    const part = (p, i) => {
+      const at = (k) => `data-hsp="${i}" data-k="${k}"`;
+      return `<div class="hd-part">
+        <div class="hd-part-top"><b>חלק ${i + 1}</b>
+          <label class="hd-chk"><input type="checkbox" ${at("br")} ${p.br || !i ? "checked" : ""} ${!i ? "disabled" : ""}>מתחיל שורה חדשה</label>
+          <span class="hd-part-acts"><button class="icon-btn" type="button" data-act="hp-move" data-i="${i}" data-d="-1" aria-label="למעלה" ${!i ? "disabled" : ""}>${I("chev-u")}</button><button class="icon-btn" type="button" data-act="hp-move" data-i="${i}" data-d="1" aria-label="למטה" ${i === parts.length - 1 ? "disabled" : ""}>${I("chev-d")}</button><button class="icon-btn" type="button" data-act="hp-del" data-i="${i}" aria-label="מחיקת החלק">${I("trash")}</button></span></div>
+        <div class="hd-grid">
+          <label class="field hd-wide"><span>טקסט</span><input class="input" ${at("text")} value="${esc(p.text || "")}" maxlength="80"></label>
+          <label class="field"><span>גופן</span>${fontSel(p.font || "", at("font"), true)}</label>
+          <label class="field"><span>גודל במחשב (px)</span>${n(at("size"), p.size, "כמו הכותרת")}</label>
+          <label class="field"><span>גודל בטלפון (px)</span>${n(at("size_m"), p.size_m, "אוטומטי")}</label>
+          <label class="field"><span>עובי</span>${wSel(p.weight, at("weight"), true)}</label>
+          <label class="field"><span>צבע</span>${colorF(p.color, `data-hsp="${i}"`, true)}</label>
+          <label class="field"><span>ריווח בין אותיות (em)</span>${n(at("track"), p.track, "כמו הכותרת", 0.01)}</label>
+          <label class="hd-chk"><input type="checkbox" ${at("italic")} ${p.italic ? "checked" : ""}>נטוי</label>
+        </div></div>`;
+    };
+    return `<section class="panel" ${tabAttr("settings", "site")} id="hero-design"><h2>עיצוב הכותרת ושורת החיפוש <span class="hint">כל שינוי נראה מיד בתצוגה, ונשמר באתר בלחיצה על ״שמירה״</span></h2>
+      <div class="hd-prev-bar"><span class="seg-tabs" role="group" aria-label="תצוגה"><button type="button" data-act="hd-mode" data-v="desk" aria-pressed="${(A.hdMode || "desk") === "desk"}">${I("grid")}מחשב</button><button type="button" data-act="hd-mode" data-v="mob" aria-pressed="${A.hdMode === "mob"}">${I("phone")}טלפון</button></span><button class="btn btn-ghost btn-sm" type="button" data-act="hd-reset">איפוס לעיצוב הרגיל</button></div>
+      <div class="hd-prev" id="hd-prev"><div class="hd-stage"></div></div>
+      <h3 class="hd-h">כל הכותרת</h3>
+      <div class="hd-grid">
+        <label class="field"><span>גופן</span>${fontSel(b.font || "", 'data-hsb="font"')}</label>
+        <label class="field"><span>גודל במחשב (px)</span>${n('data-hsb="size"', b.size, "60")}</label>
+        <label class="field"><span>גודל בטלפון (px)</span>${n('data-hsb="size_m"', b.size_m, "32")}</label>
+        <label class="field"><span>עובי</span>${wSel(b.weight, 'data-hsb="weight"')}</label>
+        <label class="field"><span>צבע</span>${colorF(b.color, "data-hsb")}</label>
+        <label class="field"><span>ריווח בין שורות</span>${n('data-hsb="line"', b.line, "1.08", 0.02)}</label>
+        <label class="field"><span>ריווח בין אותיות (em)</span>${n('data-hsb="track"', b.track, "-0.03", 0.01)}</label>
+        <label class="field"><span>יישור</span><select class="select" data-hsb="align"><option value="">במרכז</option><option value="start" ${b.align === "start" ? "selected" : ""}>לימין</option><option value="end" ${b.align === "end" ? "selected" : ""}>לשמאל</option></select></label>
+        <label class="hd-chk"><input type="checkbox" data-hsb="shadow" ${b.shadow === false ? "" : "checked"}>צל עדין מאחורי הטקסט</label>
+      </div>
+      <h3 class="hd-h">חלקים, שורות ומילים <span class="hint">כדי שמילה או שורה ייראו אחרת: מפרקים את הכותרת לחלקים, ולכל חלק בוחרים גופן, גודל, עובי וצבע. ״מתחיל שורה חדשה״ יורד שורה.</span></h3>
+      ${parts.length ? `<div class="hd-parts">${parts.map(part).join("")}</div>` : `<p class="hint">עכשיו הכותרת היא שורה אחת מהשדה ״כותרת במרכז הפתיח״ למעלה.</p>`}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${parts.length ? "" : `<button class="btn btn-line btn-sm" type="button" data-act="hp-split">${I("edit")}פירוק הכותרת למילים</button>`}<button class="btn btn-line btn-sm" type="button" data-act="hp-add">${I("plus")}הוספת חלק</button></div>
+      <h3 class="hd-h">גופנים שהעליתם <span class="hint">קובץ ‎.woff2‎, ‎.woff‎, ‎.ttf‎ או ‎.otf‎ מהמחשב. אחרי ההעלאה הגופן מופיע ברשימות הגופנים.</span></h3>
+      <div class="hd-fonts">${fonts.map((f, i) => `<span class="hd-font"><b style="font-family:'tm-${esc(f.name)}'">${esc(f.name)}</b><button class="icon-btn" type="button" data-act="font-del" data-i="${i}" aria-label="מחיקת הגופן ${esc(f.name)}">${I("x")}</button></span>`).join("")}<label class="btn btn-line btn-sm">${I("upload")}העלאת גופן<input type="file" accept=".woff2,.woff,.ttf,.otf" class="sr" id="font-input"></label></div>
+      <h3 class="hd-h">שורת החיפוש</h3>
+      <div class="hd-grid">
+        <label class="field"><span>מרחק מלמעלה במחשב (% מגובה המסך)</span>${n('data-hss="top"', q.top, "11")}</label>
+        <label class="field"><span>מרחק מלמעלה בטלפון (%)</span>${n('data-hss="top_m"', q.top_m, "5")}</label>
+        <label class="field"><span>רווח בין הכותרת לחיפוש (px)</span>${n('data-hss="gap"', q.gap, "30")}</label>
+        <label class="field"><span>רוחב מקסימלי (px)</span>${n('data-hss="width"', q.width, "1180", 10)}</label>
+        <label class="field"><span>גובה השדות (px)</span>${n('data-hss="height"', q.height, "78")}</label>
+      </div></section>`;
+  }
+  function readHeroForm() {
+    const root = $("#hero-design");
+    if (!root) return;
+    const hs = (A.settings.hero_style = Object.assign({}, A.settings.hero_style));
+    const val = (el) => (el.type === "checkbox" ? el.checked : el.value.trim());
+    const b = {};
+    $$("[data-hsb]", root).forEach((el) => { const k = el.dataset.k2 || el.dataset.hsb; if (k) b[k] = val(el); });
+    if (b.color_off) b.color = ""; delete b.color_off;
+    hs.base = b;
+    const parts = (hs.parts || []).map((p) => Object.assign({}, p));
+    $$("[data-hsp]", root).forEach((el) => { const p = parts[Number(el.dataset.hsp)]; const k = el.dataset.k2 || el.dataset.k; if (p && k) p[k] = val(el); });
+    parts.forEach((p, i) => { if (p.color_off) p.color = ""; delete p.color_off; if (!i) p.br = true; });
+    hs.parts = parts;
+    hs.search = {};
+    $$("[data-hss]", root).forEach((el) => { hs.search[el.dataset.hss] = val(el); });
+  }
+  /* תצוגה מקדימה בגודל אמיתי (1320 או 390 פיקסלים), מוקטנת לרוחב הפאנל */
+  function heroPreview() {
+    const box = $("#hd-prev");
+    if (!box) return;
+    if (!box._ro && "ResizeObserver" in window) { box._ro = new ResizeObserver(() => { if (box.clientWidth !== box._w) { box._w = box.clientWidth; heroPreviewSoon(); } }); box._ro.observe(box); }
+    const mode = A.hdMode || "desk", W = HD_W[mode], H = HD_H[mode];
+    const s = T.clone(A.settings);
+    s.hero_style = s.hero_style || {};
+    s.hero_style.base = Object.assign({ size: "60", size_m: "32" }, s.hero_style.base);
+    if (!s.hero_style.base.size) s.hero_style.base.size = "60";
+    if (!s.hero_style.base.size_m) s.hero_style.base.size_m = "32";
+    if (mode === "mob") { const q = s.hero_style.search = Object.assign({}, s.hero_style.search); q.top = q.top_m === "" || q.top_m == null ? "5" : q.top_m; }
+    T.applyHeroFonts(A.settings);
+    const ht = T.heroTitle(s, { vw: W / 100 });
+    const k = Math.min(1, box.clientWidth / W);
+    box.className = "hd-prev hd-" + mode;
+    box.style.height = Math.round(H * k) + "px";
+    const f = (lbl, val) => `<span class="field"><span>${lbl}</span><b class="input">${val}</b></span>`;
+    $(".hd-stage", box).style.cssText = `width:${W}px;height:${H}px;transform:scale(${k})`;
+    $(".hd-stage", box).innerHTML = `<section class="hf hf-again${ht.align ? " hf-al-" + ht.align : ""}" style="${esc(T.heroVars(s, { vh: H / 100 }))}"><div class="hf-media"><img src="assets/video/hero-poster-720.jpg" alt=""></div>
+      <div class="hf-inner"><h1 class="hf-title" style="${esc(ht.style)}">${ht.html}</h1>
+      <div class="searchbox">${f("מה מחפשים?", "כל סוגי האירוח")}${f("לאן נוסעים?", "כל הארץ")}${f("הגעה", "תאריך")}${f("עזיבה", "תאריך")}${f("אורחים", "2 מבוגרים")}<span class="btn btn-primary">${I("search")}חיפוש</span></div></div></section>`;
+  }
+  const heroPreviewSoon = T.debounce(heroPreview, 60);
+
   function viewSettings() {
     const s = A.settings;
     const p = s.plan_prices || {};
@@ -1188,6 +1284,7 @@
               <div style="display:grid;grid-template-columns:minmax(0,240px) 1fr;gap:14px;align-items:center">
                 <div class="photo" style="aspect-ratio:16/9;cursor:default"><img src="${esc(s.hero_image || T.HERO_DEFAULT)}" alt="הבאנר הנוכחי"></div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap"><label class="btn btn-line">${I("upload")}העלאת תמונה<input type="file" accept="image/*" class="sr" id="hero-input"></label>${s.hero_image ? `<button class="btn btn-ghost" type="button" data-act="hero-clear">חזרה לתמונת ברירת המחדל</button>` : ""}<span class="hint" style="width:100%">מומלץ צילום רוחבי, לפחות 2000 פיקסלים ברוחב.</span></div></div></section>
+            ${heroDesignPanel(s)}
             <section class="panel" ${tabAttr("settings", "prices")}><h2>חגים (לילות במחיר חג)</h2><div class="rows-edit">${(s.holidays || []).map((h, i) => `<div class="row-edit"><label class="field"><span>חג</span><input class="input" data-hol="${i}" data-k="label" value="${esc(h.label)}"></label><label class="field"><span>מהלילה של</span><input class="input" type="date" data-hol="${i}" data-k="from" value="${esc(h.from)}"></label><label class="field"><span>עד הלילה של</span><input class="input" type="date" data-hol="${i}" data-k="to" value="${esc(h.to)}"></label><button class="mini-btn" type="button" data-act="hol-del" data-i="${i}" aria-label="הסרה">${I("trash")}</button></div>`).join("")}
               <button class="btn btn-line btn-sm" type="button" data-act="hol-add" style="justify-self:start">${I("plus")}חג</button></div><p class="hint" style="margin-top:8px">התאריכים חושבו לפי הלוח העברי (ישראל). אפשר להוסיף גם ימי שיא משלכם.</p></section>
             <section class="panel" ${tabAttr("settings", "site")}><h2>אוספים בעמוד הבית <span class="hint">שורת מתחמים עם כותרת, למשל ״חופשה רומנטית בחורף״. אוסף מופיע כשיש בו לפחות 2 מתחמים פעילים.</span></h2><div class="rows-edit">${(s.collections || []).map((c, i) => `<div class="row-edit" style="flex-direction:column;align-items:stretch">
@@ -1845,6 +1942,7 @@
     }
     app.innerHTML = shell(html);
     if ($("#editor")) bindEditor();
+    if ($("#hd-prev")) heroPreview();
     if (IS_ADMIN && h === "system" && !A.sys && !A.sysBusy) setTimeout(() => { const b = $('[data-act="sys-run"]'); if (b) b.click(); }, 0);
     document.title = (IS_ADMIN ? "ניהול" : "ממשק מארחים") + " | " + A.settings.site_name;
   }
@@ -1926,6 +2024,7 @@
   function readSettingsForm() {
     const form = $("#settings-form");
     if (!form) return;
+    readHeroForm();
     $$("[data-hol]", form).forEach((el) => { const h = A.settings.holidays[Number(el.dataset.hol)]; if (h) h[el.dataset.k] = el.value; });
     $$("[data-cpn]", form).forEach((el) => { const c = A.settings.coupons[Number(el.dataset.cpn)]; if (c) c[el.dataset.k] = el.dataset.k === "pct" ? Number(el.value) || 0 : el.dataset.k === "code" ? el.value.trim().toUpperCase() : el.value; });
     $$("[data-col]", form).forEach((el) => { const c = (A.settings.collections || [])[Number(el.dataset.col)]; if (c) c[el.dataset.k] = el.value; });
@@ -2273,6 +2372,27 @@
     else if (act === "hol-del") settingsRows("holidays", (rows) => rows.splice(Number(el.dataset.i), 1));
     else if (act === "cpn-add") settingsRows("coupons", (rows) => rows.push({ code: "", pct: 10, until: "", active: true }));
     else if (act === "cpn-del") settingsRows("coupons", (rows) => rows.splice(Number(el.dataset.i), 1));
+    else if (act === "hd-mode") { A.hdMode = el.dataset.v; $$('[data-act="hd-mode"]').forEach((b) => b.setAttribute("aria-pressed", b === el)); heroPreview(); }
+    else if (act === "hd-reset") { readSettingsForm(); A.settings.hero_style = {}; rerenderKeepScroll(); T.toast("חזרנו לעיצוב הרגיל. לחצו ״שמירה״ כדי שזה יתעדכן באתר."); }
+    else if (act === "hp-split" || act === "hp-add" || act === "hp-del" || act === "hp-move") {
+      readSettingsForm();
+      const hs = (A.settings.hero_style = Object.assign({}, A.settings.hero_style));
+      const parts = (hs.parts = (hs.parts || []).slice());
+      const i = Number(el.dataset.i);
+      if (act === "hp-split") String(A.settings.hero_headline || T.DEFAULT_SETTINGS.hero_headline).trim().split(/\s+/).forEach((w, j) => parts.push({ text: w, br: !j }));
+      else if (act === "hp-add") parts.push({ text: "", br: true });
+      else if (act === "hp-del") parts.splice(i, 1);
+      else { const j = i + Number(el.dataset.d); if (parts[j]) [parts[i], parts[j]] = [parts[j], parts[i]]; }
+      if (parts[0]) parts[0].br = true;
+      rerenderKeepScroll();
+    }
+    else if (act === "font-del") {
+      readSettingsForm();
+      const f = (A.settings.custom_fonts || [])[Number(el.dataset.i)];
+      if (!f) return;
+      A.settings.custom_fonts = A.settings.custom_fonts.filter((x) => x !== f);
+      save(() => T.store.saveSettings(A.settings), `הגופן ״${f.name}״ הוסר`);
+    }
     else if (act === "hero-clear") save(() => T.store.saveSettings(Object.assign({}, A.settings, { hero_image: "" })), "הבאנר חזר לתמונת ברירת המחדל");
     else if (act === "rebuild") { try { await T.store.rebuildSeo(); T.toast("העדכון התחיל. הדפים יתעדכנו בעוד כמה דקות."); } catch (ex) { T.toast(ex.message, "err"); } }
     else if (act === "export") { A.exportText = JSON.stringify(await T.store.exportAll(), null, 1); rerenderKeepScroll(); T.toast("הנתונים מוכנים בתיבה. העתיקו ושמרו בקובץ."); }
@@ -2291,6 +2411,7 @@
   document.addEventListener("input", (e) => {
     const t = e.target;
     if (t.name === "pw1") { const ul = t.form && t.form.querySelector(".pw-rules"); if (ul) ul.innerHTML = pwRules(t.value); }
+    else if (t.closest("#hero-design") || t.name === "hero_headline") { readHeroForm(); if (t.name === "hero_headline") A.settings.hero_headline = t.value; heroPreviewSoon(); }
     else if (t.closest("#editor")) { readEditor(); markDirty(); }
     else if (t.id === "af-q") { A.af.q = t.value.trim(); debouncedAdv(); }
     else if (t.id === "lf-q") { A.lf.q = t.value.trim(); debouncedList(); }
@@ -2336,6 +2457,21 @@
       T.toast(files.length > 1 ? `מעלה ${files.length} תמונות…` : "מעלה תמונה…");
       for (const f of files) { try { r.photos = (r.photos || []).concat(await T.store.uploadPhoto(f)); } catch (ex) { fail("העלאה נכשלה", ex); break; } }
       d._dirty = true; rerenderKeepScroll();
+    }
+    else if (t.id === "font-input" && t.files[0]) {
+      const file = t.files[0];
+      if (!/\.(woff2?|ttf|otf)$/i.test(file.name)) { T.toast("צריך קובץ גופן: woff2, woff, ttf או otf", "err"); return; }
+      try {
+        T.toast("מעלה גופן…");
+        readSettingsForm();
+        const url = await T.store.uploadFont(file);
+        const fonts = (A.settings.custom_fonts = (A.settings.custom_fonts || []).slice());
+        let name = file.name.replace(/\.[^.]+$/, "").replace(/[^\w\u0590-\u05FF -]/g, " ").replace(/\s+/g, " ").trim().slice(0, 40) || "גופן";
+        const base = name; let k = 2; while (fonts.some((f) => f.name === name)) name = `${base} ${k++}`;
+        fonts.push({ name, url });
+        await T.store.saveSettings(A.settings); await reload(); rerenderKeepScroll();
+        T.toast(`הגופן ״${name}״ נוסף. בחרו אותו ברשימת הגופנים.`);
+      } catch (ex) { fail("העלאת הגופן נכשלה", ex); }
     }
     else if (t.id === "hero-input" && t.files[0]) {
       try { T.toast("מעלה תמונה…"); const url = await T.store.uploadPhoto(t.files[0]); await T.store.saveSettings(Object.assign({}, A.settings, { hero_image: url })); await reload(); rerenderKeepScroll(); T.toast("תמונת הבאנר עודכנה"); }
