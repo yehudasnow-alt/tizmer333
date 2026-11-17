@@ -1848,3 +1848,97 @@ a.note { color: var(--navy); }
 .amen-bento .amen .pic-l { width: 32px; height: 32px; }
 .st-pane .about-cards div { background: var(--white); border: 1px solid var(--line); }
 @media (max-width: 760px) { .bento, .amen-bento { grid-template-columns: 1fr; } .st-pane .stay-section { padding: 18px; } .stay-tabs { border-radius: 14px; } }
+
+/* ================================================================ תנועה (v8)
+   קפיץ עדין לכל מה שנפתח וזז; הכל נעצר במצב "בלי תנועה" */
+:root { --spring: var(--ease-soft); --spring-d: .5s; }
+@supports (transition-timing-function: linear(0, 1)) {
+  :root { --spring: linear(0, .006, .025 2.8%, .101 6.1%, .539 18.9%, .721 25.3%, .849 31.5%, .937 38.1%, .968 41.8%, .991 45.7%, 1.006 50.1%, 1.015 55%, 1.017 63.9%, 1.001 85.5%, 1); }
+}
+
+/* מחוון שגולש בין הלשוניות במקום קפיצה */
+.has-pill { position: relative; isolation: isolate; }
+.has-pill > .pill { position: absolute; top: 0; left: 0; z-index: -1; pointer-events: none; border-radius: 999px; background: var(--white); box-shadow: 0 1px 4px rgba(96, 108, 56, .16); transition: transform var(--spring-d) var(--spring), width var(--spring-d) var(--spring), height var(--spring-d) var(--spring), opacity .2s; }
+.has-pill > [aria-pressed="true"], .has-pill > [aria-selected="true"] { background: transparent !important; box-shadow: none !important; }
+.has-pill > button, .has-pill > a { transition: color .3s; }
+.stay-tabs.has-pill > .pill { border-radius: 12px; background: var(--navy); box-shadow: 0 4px 14px rgba(96, 108, 56, .28); }
+.a11y-panel .seg.has-pill > .pill { border-radius: 8px; background: var(--navy); box-shadow: none; }
+
+/* קישורי התפריט העליון: המילה מתגלגלת למעלה בריחוף */
+.roll { display: inline-block; overflow: hidden; height: 1.3em; line-height: 1.3; vertical-align: bottom; }
+.roll > span { display: block; transition: transform .45s var(--ease-soft); }
+.roll > span::after { content: attr(data-t); content: attr(data-t) / ""; display: block; }
+a:hover > .roll > span, button:hover > .roll > span { transform: translateY(-50%); }
+
+/* חלונות נפתחים: קפיץ קטן */
+.pick-pop, .tdd { animation-duration: .5s; animation-timing-function: var(--spring); }
+.modal-back { animation: fadeIn .25s ease both; }
+.modal { animation: modalIn .5s var(--spring) both; }
+@keyframes fadeIn { from { opacity: 0; } }
+@keyframes modalIn { from { opacity: 0; transform: translateY(18px) scale(.96); } }
+.toast { animation: toastIn .5s var(--spring); }
+
+/* לב: פרץ נקודות */
+.save-btn, [data-act="save"] { position: relative; }
+.burst { position: absolute; inset: 50% auto auto 50%; width: 0; height: 0; pointer-events: none; }
+.burst i { position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 50%; background: var(--copper); transform: rotate(var(--a)) translateY(0) scale(.4); animation: burstOut .65s var(--ease-out) forwards; }
+.burst i:nth-child(even) { background: var(--sky); width: 5px; height: 5px; }
+@keyframes burstOut { 60% { opacity: 1; } to { transform: rotate(var(--a)) translateY(-26px) scale(1); opacity: 0; } }
+
+/* מונה אורחים: המספר מתגלגל */
+.stepper input.roll-up { animation: numUp .35s var(--ease-soft); }
+.stepper input.roll-dn { animation: numDn .35s var(--ease-soft); }
+@keyframes numUp { from { transform: translateY(60%); opacity: 0; } }
+@keyframes numDn { from { transform: translateY(-60%); opacity: 0; } }
+.stepper button { transition: transform .2s var(--ease-out), background .2s; border-radius: 50%; }
+.stepper button:active { transform: scale(.85); }
+
+/* מתג: הכדור נמתח כשלוחצים ונוחת בקפיץ */
+.switch::after { transition: inset-inline-start var(--spring-d) var(--spring), width .2s var(--ease-out); }
+.switch { transition: background .3s; }
+.switch:active::after { width: 25px; }
+.switch[aria-checked="true"]:active::after { inset-inline-start: 16px; }
+
+/* דירוג: הנקודות קופצות אחת אחרי השנייה */
+[data-act="rate-cat"].pop { animation: ratePop .45s var(--d, 0ms) var(--spring); }
+@keyframes ratePop { 0% { transform: scale(.7); } 50% { transform: scale(1.18); } to { transform: none; } }
+
+/* העתקה: האייקון מתחלף לסימן וי */
+.mini-btn.copied { color: var(--ok); }
+.mini-btn.copied .ic { animation: heartPop .4s var(--ease-out); }
+
+/* שליחה: מסתובב בזמן השליחה, ואז וי שמצטייר */
+.btn.is-busy { position: relative; color: transparent !important; pointer-events: none; }
+.btn.is-busy .ic { opacity: 0; }
+.btn.is-busy::after { content: ""; position: absolute; inset: 0; margin: auto; width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .35); border-top-color: #fff; animation: spin .7s linear infinite; }
+.btn-line.is-busy::after { border-color: var(--line-2); border-top-color: var(--navy); }
+@keyframes spin { to { transform: rotate(360deg); } }
+.book-ok .badge-ok { animation: okPop .6s var(--spring) both; }
+.book-ok .badge-ok .ic path, .book-ok .badge-ok .ic polyline { stroke-dasharray: 40; stroke-dashoffset: 40; animation: okDraw .5s .3s var(--ease-out) forwards; }
+.book-ok > :not(.badge-ok) { animation: heroUp .6s calc(.25s + var(--k, 0) * 70ms) var(--ease-soft) both; }
+.book-ok > :nth-child(3) { --k: 1; } .book-ok > :nth-child(4) { --k: 2; } .book-ok > :nth-child(5) { --k: 3; }
+@keyframes okPop { from { transform: scale(.4); opacity: 0; } }
+@keyframes okDraw { to { stroke-dashoffset: 0; } }
+
+/* נקודות הדפדוף: הנקודה הפעילה נמתחת בקפיץ */
+.show-nav .dots i { transition: width var(--spring-d) var(--spring), background .3s; }
+
+/* פס ההזמנה בנייד עולה מלמטה */
+@media (max-width: 760px) { .mbar { animation: mbarIn .7s .35s var(--spring) both; } }
+@keyframes mbarIn { from { transform: translateY(110%); } }
+
+/* כפתור החיפוש בפתיח נמשך קצת אחרי העכבר */
+.hf .searchbox > .btn[data-mag] { transition: transform .5s var(--spring), background-color .2s, box-shadow .25s; }
+
+/* מעבר בין מסכים: הישן נעלם, החדש עולה בעדינות; הכותרת העליונה נשארת במקום */
+.topbar { view-transition-name: topbar; }
+::view-transition-old(root) { animation: vtOut .2s ease both; }
+::view-transition-new(root) { animation: vtIn .5s var(--ease-soft) both; }
+@keyframes vtOut { to { opacity: 0; } }
+@keyframes vtIn { from { opacity: 0; transform: translateY(10px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .has-pill > .pill, .roll > span, .switch::after { transition: none; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+  .burst, .mbar { animation: none; }
+}

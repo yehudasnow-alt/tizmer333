@@ -220,7 +220,7 @@ page({
   description: "צימרים, וילות ובקתות מהגולן ועד הערבה. מחפשים לפי אזור ותאריכים, רואים מחיר כולל ושולחים בקשה ישירות למארחים, בלי עמלות.",
   image: abs(S.hero_image || T.HERO_DEFAULT),
   jsonld: [org, site],
-  body: `<div class="wrap page seo-pre"><h1>${esc(S.site_name)} – ${esc(S.site_tagline)}</h1><p>טוען…</p><ul>${listings.slice(0, 40).map(card).join("")}</ul></div>`
+  body: `<div class="wrap page seo-pre"><h1>${esc(S.site_name)} – ${esc(S.site_tagline)}</h1><ul>${listings.slice(0, 40).map(card).join("")}</ul></div>`
 });
 
 /* ------------------------------------------------------------ מתחמים */

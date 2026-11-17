@@ -16,12 +16,31 @@
 <link rel="stylesheet" href="assets/css/fonts.css">
 <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="assets/css/tamara.css">
+<script>document.documentElement.className += " js";</script>
+<style>
+/* עד שהמסך הראשון מוכן: מסך פתיחה במקום תוכן גולמי שקופץ */
+html.js body:not(.ready) #chrome, html.js body:not(.ready) #main, html.js body:not(.ready) #footer, html.js body:not(.ready) .seo-nav, html.js body:not(.ready) .a11y-btn { visibility: hidden; }
+html.js body:not(.ready) #main * { animation-play-state: paused !important; }
+#splash { display: none; }
+html.js #splash { display: grid; position: fixed; inset: 0; z-index: 9999; place-items: center; background: #283618; transition: opacity .6s cubic-bezier(.25,.9,.3,1), visibility 0s .6s; }
+#splash div { display: grid; justify-items: center; gap: 22px; }
+#splash img { width: 62px; height: 62px; animation: spBreath 1.8s ease-in-out infinite; }
+#splash i { display: block; width: 92px; height: 2px; border-radius: 2px; background: rgba(254,250,224,.18); overflow: hidden; position: relative; }
+#splash i::after { content: ""; position: absolute; inset: 0; width: 40%; border-radius: 2px; background: #DDA15E; animation: spLine 1.25s cubic-bezier(.65,0,.35,1) infinite; }
+body.ready #splash { opacity: 0; visibility: hidden; pointer-events: none; }
+body.ready #splash div { transform: scale(.92); transition: transform .6s cubic-bezier(.25,.9,.3,1); }
+@keyframes spBreath { 50% { transform: scale(1.07); opacity: .82; } }
+@keyframes spLine { from { transform: translateX(-110%); } to { transform: translateX(260%); } }
+@media (prefers-reduced-motion: reduce) { #splash img, #splash i::after { animation: none; } }
+</style>
 </head>
 <body class="site" dir="rtl">
+<div id="splash" aria-hidden="true"><div><img src="assets/img/brand/mark-white.svg" alt="" width="62" height="62"><i></i></div></div>
+<script>setTimeout(function () { document.body.classList.add("ready"); }, 12000);</script>
 <a class="skip" href="#main">דילוג לתוכן</a>
 <div id="demo-bar"></div>
 <div id="chrome"></div>
-<main id="main" tabindex="-1"><div class="wrap" style="padding-block:120px;text-align:center;color:#6E7258">טוען…</div></main>
+<main id="main" tabindex="-1"><div class="wrap" style="padding-block:120px;text-align:center;color:#6E7258"><noscript>כדי לראות את האתר צריך להפעיל JavaScript.</noscript></div></main>
 <footer class="footer" id="footer"></footer>
 <script src="assets/js/config.js"></script>
 <script>

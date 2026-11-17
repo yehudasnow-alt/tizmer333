@@ -263,10 +263,12 @@
     const nv = S.viewedList.filter((id) => byId(id)).length;
     const cur = location.hash.slice(1);
     const nav = [["deals", "דילים"], ["weekend", "פנויים לסופ״ש"]];
+    /* בריחוף המילה מתגלגלת למעלה ומתחלפת בעותק שלה */
+    const roll = (t) => `<span class="roll"><span data-t="${esc(t)}">${esc(t)}</span></span>`;
     const me = S.me.user && S.me.user.email ? String(S.me.user.name || S.me.user.email).split(/[\s@]/)[0] : "";
     return `<header class="topbar wrap" id="topbar"><div class="topbar-in">
       <a class="brand" href="#" aria-label="${esc(S.settings.site_name)} – לדף הבית"><img src="${LOGO}" alt="${esc(S.settings.site_name)} – ${esc(S.settings.site_tagline)}"></a>
-      <nav class="mainnav" aria-label="ניווט ראשי"><a href="#search" ${cur === "search" ? 'aria-current="page"' : ""}>חיפוש</a>${NAV_TYPES.filter((x) => has.type(x.key)).map((x) => `<div class="nav-dd"><button class="nav-dd-btn" type="button" data-act="tdd" aria-expanded="false" aria-controls="tdd-${x.key}" ${cur === "type-" + x.key || cur.startsWith("type-" + x.key + "/") ? 'data-cur="1"' : ""}>${esc(x.label)}${I("chev-d")}</button><div class="tdd" id="tdd-${x.key}" hidden>${typeMenu(x.key)}</div></div>`).join("")}${nav.map(([h, t]) => `<a href="#${h}" ${cur === h ? 'aria-current="page"' : ""}>${t}</a>`).join("")}</nav>
+      <nav class="mainnav" aria-label="ניווט ראשי"><a href="#search" ${cur === "search" ? 'aria-current="page"' : ""}>${roll("חיפוש")}</a>${NAV_TYPES.filter((x) => has.type(x.key)).map((x) => `<div class="nav-dd"><button class="nav-dd-btn" type="button" data-act="tdd" aria-expanded="false" aria-controls="tdd-${x.key}" ${cur === "type-" + x.key || cur.startsWith("type-" + x.key + "/") ? 'data-cur="1"' : ""}>${roll(x.label)}${I("chev-d")}</button><div class="tdd" id="tdd-${x.key}" hidden>${typeMenu(x.key)}</div></div>`).join("")}${nav.map(([h, t]) => `<a href="#${h}" ${cur === h ? 'aria-current="page"' : ""}>${roll(t)}</a>`).join("")}</nav>
       <div class="top-actions">
         <a class="icon-btn saved-count viewed-count hide-s" href="#me-viewed" aria-label="נצפו לאחרונה (${nv})" title="נצפו לאחרונה" ${nv ? `data-n="${nv}"` : ""}>${I("history")}</a>
         <a class="icon-btn saved-count" href="#me" aria-label="המועדפים שלי (${n})" title="המועדפים שלי" ${n ? `data-n="${n}"` : ""}>${I("heart")}</a>
@@ -1394,8 +1396,9 @@
     const md = $("#modal"); if (md) md.remove();
     [S.map, S.miniMap, S.bigMap].forEach((m) => { if (m) m.remove(); });
     S.map = S.miniMap = S.bigMap = null;
-    if (!S.loaded) { main.innerHTML = `<div class="wrap" style="padding-block:120px;text-align:center;color:var(--muted)">טוען…</div>`; return; }
-    if (S.error) { main.innerHTML = `<div class="wrap page">${emptyState("לא הצלחנו לטעון את האתר", esc(S.error), `<button class="btn btn-primary" type="button" onclick="location.reload()">ניסיון נוסף</button>`)}</div>`; return; }
+    /* לפני שהנתונים הגיעו מסך הפתיחה מכסה את הדף, אז לא מציירים "טוען…" שיקפוץ */
+    if (!S.loaded) { if (document.body.classList.contains("ready")) main.innerHTML = `<div class="wrap" style="padding-block:120px;text-align:center;color:var(--muted)">טוען…</div>`; return; }
+    if (S.error) { main.innerHTML = `<div class="wrap page">${emptyState("לא הצלחנו לטעון את האתר", esc(S.error), `<button class="btn btn-primary" type="button" onclick="location.reload()">ניסיון נוסף</button>`)}</div>`; markReady(); return; }
     /* רענון נתונים כשהפתיח כבר מוצג: בלי לנגן שוב את אנימציית הפתיחה */
     S.homeAgain = !!$(".hf", main);
     let html, title = S.settings.site_name + " – " + S.settings.site_tagline;
@@ -1451,6 +1454,55 @@
     floating();
     reveal();
     heroVideo();
+    motion();
+    markReady();
+  }
+  /* ---------------------------------------------------------------- תנועה: מחוון שזז בין לשוניות, כפתור חיפוש "מגנטי" */
+  const stillMotion = () => document.documentElement.classList.contains("a11y-still") || !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const PILLS = ".seg-tabs, .stay-tabs, .a11y-panel .seg";
+  let pillRO = null;
+  function placePill(box) {
+    const on = box.querySelector(':scope > [aria-pressed="true"], :scope > [aria-selected="true"]');
+    let p = box.querySelector(":scope > .pill");
+    if (!on || !on.offsetWidth) { if (p) p.style.opacity = "0"; return; }
+    if (!p) { p = document.createElement("span"); p.className = "pill"; p.setAttribute("aria-hidden", "true"); box.prepend(p); }
+    const first = !p.style.width;
+    if (first) p.style.transition = "none";
+    Object.assign(p.style, { opacity: "1", width: on.offsetWidth + "px", height: on.offsetHeight + "px", transform: `translate(${on.offsetLeft}px, ${on.offsetTop}px)` });
+    if (first) { p.getBoundingClientRect(); p.style.transition = ""; }
+  }
+  function motion(root) {
+    if (!pillRO && "ResizeObserver" in window) pillRO = new ResizeObserver((list) => list.forEach((en) => placePill(en.target)));
+    (root || document).querySelectorAll(PILLS).forEach((box) => { if (!box.classList.contains("has-pill")) { box.classList.add("has-pill"); if (pillRO) pillRO.observe(box); } placePill(box); });
+    const mb = $(".hf .searchbox > .btn");
+    if (mb && !mb.dataset.mag && !stillMotion() && matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      mb.dataset.mag = "1";
+      mb.addEventListener("pointermove", (e) => { const r = mb.getBoundingClientRect(); mb.style.transform = `translate(${((e.clientX - r.left) / r.width - 0.5) * 8}px, ${((e.clientY - r.top) / r.height - 0.5) * 6}px)`; });
+      mb.addEventListener("pointerleave", () => { mb.style.transform = ""; });
+    }
+  }
+  /* כל שינוי בלשונית הפעילה מזיז את המחוון אליה */
+  new MutationObserver((list) => {
+    const boxes = new Set();
+    list.forEach((m) => { const b = m.target.parentElement; if (b && b.classList && b.classList.contains("has-pill")) boxes.add(b); m.addedNodes && m.addedNodes.forEach((n) => { if (n.nodeType === 1 && (n.matches(PILLS) || n.querySelector(PILLS))) boxes.add(null); }); });
+    if (boxes.has(null)) { boxes.delete(null); requestAnimationFrame(() => motion()); }
+    boxes.forEach((b) => requestAnimationFrame(() => placePill(b)));
+  }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-pressed", "aria-selected"] });
+  /* פרץ קטן של נקודות כשמסמנים לב */
+  function burst(el) {
+    if (stillMotion()) return;
+    const b = document.createElement("span");
+    b.className = "burst"; b.setAttribute("aria-hidden", "true");
+    b.innerHTML = Array.from({ length: 8 }, (_, i) => `<i style="--a:${i * 45}deg"></i>`).join("");
+    el.appendChild(b); setTimeout(() => b.remove(), 750);
+  }
+  /* מסך הפתיחה יורד כשהמסך הראשון מוכן; בדף הבית מחכים רגע קצר גם לתמונת הפתיח כדי שלא תופיע ריקה */
+  function markReady() {
+    if (document.body.classList.contains("ready")) return;
+    const img = $(".hf-media img");
+    const go = () => requestAnimationFrame(() => document.body.classList.add("ready"));
+    if (img && !img.complete && img.decode) Promise.race([img.decode().catch(() => {}), new Promise((r) => setTimeout(r, 1400))]).then(go);
+    else go();
   }
   /* סרטון הרקע בפתיח: קובץ קטן לטלפון וגדול למחשב. מי שביקש בלי תנועה או חוסך נתונים רואה את התמונה בלבד */
   function heroVideo() {
@@ -1550,13 +1602,16 @@
       if (T.isLive && S.me.user) T.store.setFavorite(id, on).catch(() => {});
       $$(`[data-act="save"][data-id="${CSS.escape(id)}"]`).forEach((b) => { b.setAttribute("aria-pressed", on); if (b.classList.contains("btn")) b.innerHTML = I("heart") + (on ? "במועדפים" : "אהבתי"); });
       updateSavedCount();
+      if (on) burst(el);
       T.toast(on ? "נשמר במועדפים" : "הוסר מהמועדפים");
     } else if (act === "menu") { const nav = $("#mobile-nav"); nav.classList.toggle("open"); el.setAttribute("aria-expanded", nav.classList.contains("open")); }
     else if (act === "mega") { const m = $("#mega"); m.hidden = !m.hidden; el.setAttribute("aria-expanded", !m.hidden); if (!m.hidden) { const a = $("a", m); if (a) a.focus(); } }
     else if (act === "cookie-ok") { T.storage.set("tamara.cookies", true); floating(); }
     else if (act === "step") {
       const input = el.parentElement.querySelector("input");
+      const was = input.value;
       input.value = Math.max(Number(input.min) || 0, Math.min(Number(input.max) || 40, (Number(input.value) || 0) + Number(el.dataset.d)));
+      if (input.value !== was) { input.classList.remove("roll-up", "roll-dn"); void input.offsetWidth; input.classList.add(Number(el.dataset.d) > 0 ? "roll-up" : "roll-dn"); }
       input.dispatchEvent(new Event("input", { bubbles: true }));
       const pop = el.closest(".guests-pop");
       if (pop) { const g = Number(pop.querySelector("[name=guests]").value) || 1, c = Number(pop.querySelector("[name=children]").value) || 0; pop.querySelector(".gsum").textContent = plural.adults(g) + (c ? " · " + plural.kids(c) : ""); }
@@ -1618,7 +1673,7 @@
     else if (act === "lb-cat") lightbox(0, el.dataset.v);
     else if (act === "lb-go") lightbox(st.lb + Number(el.dataset.d));
     else if (act === "lb-close") lightbox(-1);
-    else if (act === "copy") T.copy(el.dataset.text);
+    else if (act === "copy") { T.copy(el.dataset.text); if (!el.classList.contains("copied")) { const was = el.innerHTML; el.classList.add("copied"); el.innerHTML = I("check"); setTimeout(() => { el.classList.remove("copied"); el.innerHTML = was; }, 1600); } }
     else if (act === "share") {
       const l = stayL();
       if (navigator.share && /Mobi|Android/i.test(navigator.userAgent)) { try { await navigator.share({ title: l.name, text: `${l.name} – ${T.typeOf(l.type).name} ב${l.settlement}`, url: shareUrl(l.id) }); return; } catch (ex) { if (ex && ex.name === "AbortError") return; } }
@@ -1636,7 +1691,7 @@
     else if (act === "to-message") { const b = $("#book [name=message]"); if (b) { b.scrollIntoView({ behavior: "smooth", block: "center" }); setTimeout(() => b.focus({ preventScroll: true }), 400); } }
     else if (act === "jump") { e.preventDefault(); const t = document.getElementById(el.dataset.to); if (!t) return; const pane = t.closest(".st-pane"); if (pane) showPane(pane.id.slice(5)); t.scrollIntoView({ behavior: "smooth", block: "start" }); }
     else if (act === "st-pane") { showPane(el.dataset.v); const nav = el.closest(".stay-tabs"); if (nav.getBoundingClientRect().top < 90) nav.scrollIntoView({ behavior: "smooth", block: "start" }); }
-    else if (act === "more-desc") { const x = $("#about-text"); const open = x.classList.toggle("open"); el.setAttribute("aria-expanded", open); el.textContent = open ? "פחות" : "קראו עוד"; }
+    else if (act === "more-desc") { const x = $("#about-text"); const open = x.classList.toggle("open"); x.style.maxHeight = open ? x.scrollHeight + "px" : ""; el.setAttribute("aria-expanded", open); el.textContent = open ? "פחות" : "קראו עוד"; }
     else if (act === "book-again") { st.sent = null; refreshBooking(); }
     else if (act === "rev-sort") { st.revSort = el.dataset.v; $("#rev-host").innerHTML = reviewsHTML(stayL()); }
     else if (act === "rev-more") { st.revShow += 6; $("#rev-host").innerHTML = reviewsHTML(stayL()); }
@@ -1651,7 +1706,7 @@
     } else if (act === "rate-cat") {
       const k = el.dataset.k, v = Number(el.dataset.v);
       S.reviewScores[k] = S.reviewScores[k] === v ? undefined : v;
-      $$(`[data-act="rate-cat"][data-k="${k}"]`).forEach((b) => { const on = S.reviewScores[k] && Number(b.dataset.v) <= S.reviewScores[k]; b.classList.toggle("on", !!on); b.setAttribute("aria-checked", Number(b.dataset.v) === S.reviewScores[k]); });
+      $$(`[data-act="rate-cat"][data-k="${k}"]`).forEach((b) => { const on = S.reviewScores[k] && Number(b.dataset.v) <= S.reviewScores[k]; b.classList.toggle("on", !!on); b.classList.remove("pop"); if (on) { b.style.setProperty("--d", Number(b.dataset.v) * 40 + "ms"); void b.offsetWidth; b.classList.add("pop"); } b.setAttribute("aria-checked", Number(b.dataset.v) === S.reviewScores[k]); });
     } else if (act === "redo-search") { const s = S.searches[Number(el.dataset.i)]; if (s) { S.filters = Object.assign(defaultFilters(), s.f); S.page = 1; location.hash = "search"; } }
     else if (act === "clear-searches") { S.searches = []; T.storage.set("tamara.searches", []); render(); }
     else if (act === "clear-viewed") { S.viewedList = []; T.storage.set("tamara.viewed", []); render(); }
@@ -1763,7 +1818,7 @@
       if (fd.get("email") && !emailOk(fd.get("email"))) return bad("#book-err", "כתובת האימייל לא נראית תקינה", "email");
       if (!fd.get("consent")) return bad("#book-err", "צריך לאשר העברת פרטים למארחים", "consent");
       const btn = $('button[type="submit"]', form);
-      btn.disabled = true; btn.textContent = "שולח…";
+      btn.disabled = true; btn.textContent = "שולח…"; btn.classList.add("is-busy");
       const units = T.unitsOf(l);
       const multi = st.rooms.length > 1;
       const unitNames = st.rooms.map((r) => T.unitOf(l, r.unitId).name);
@@ -1780,7 +1835,7 @@
         pushMine(lead, saved);
         if (fd.get("remember")) remember({ name: lead.name, phone: lead.phone, email: lead.email }); else { S.guest = null; T.storage.set("tamara.guest", null); }
         refreshBooking(); T.toast("הבקשה נשלחה");
-      } catch (ex) { btn.disabled = false; btn.textContent = "שליחת בקשת הזמנה"; bad("#book-err", "השליחה לא הצליחה (" + ex.message + "). אפשר לנסות שוב או לפנות בוואטסאפ."); }
+      } catch (ex) { btn.disabled = false; btn.classList.remove("is-busy"); btn.textContent = "שליחת בקשת הזמנה"; bad("#book-err", "השליחה לא הצליחה (" + ex.message + "). אפשר לנסות שוב או לפנות בוואטסאפ."); }
     } else if (kind === "contact") {
       if (!fd.get("name").trim()) return bad("#ct-err", "כתבו שם מלא", "name");
       if (!phoneOk(fd.get("phone"))) return bad("#ct-err", "מספר הטלפון לא נראה תקין", "phone");
@@ -1826,7 +1881,7 @@
       if (!fd.get("consent")) return bad("#join-err", acc ? "צריך לאשר את הסכם הפרסום ואת מדיניות הפרטיות" : "צריך לאשר שנחזור אליכם", "consent");
       const app = { name: fd.get("name").trim(), phone: fd.get("phone").trim(), email, business: fd.get("business").trim(), settlement: fd.get("settlement").trim(), region: fd.get("region"), type: fd.get("type"), units, message: (fd.get("message") || "").trim(), tax_id: taxId, marketing: !!fd.get("marketing") };
       const btn = form.querySelector('[type="submit"]');
-      btn.disabled = true;
+      btn.disabled = true; btn.classList.add("is-busy");
       try {
         if (acc) {
           const r = await T.store.signUpHost(Object.assign({ password: String(fd.get("password")) }, app));
@@ -1837,7 +1892,7 @@
           await T.store.addApplication(app);
           $("#join-card").innerHTML = `<div class="book-ok"><span class="badge-ok">${I("check")}</span><h3 style="font-family:var(--f-display);font-weight:400;font-size:2rem">תודה, ${esc(app.name)}!</h3><p class="muted">קיבלנו את הפרטים של ${esc(app.business)}. נחזור אליכם בימים הקרובים לטלפון ${esc(app.phone)}.</p><a class="btn btn-line" href="#">לדף הבית</a></div>`;
         }
-      } catch (ex) { btn.disabled = false; bad("#join-err", (acc ? T.authError(ex) : "השליחה לא הצליחה (" + ex.message + ").") + " אם זה חוזר, כתבו לנו בוואטסאפ."); }
+      } catch (ex) { btn.disabled = false; btn.classList.remove("is-busy"); bad("#join-err", (acc ? T.authError(ex) : "השליחה לא הצליחה (" + ex.message + ").") + " אם זה חוזר, כתבו לנו בוואטסאפ."); }
     } else if (kind === "review") {
       const text = (fd.get("text") || "").trim();
       if (text.length < 10) return bad("#rev-err", "כתבו לפחות משפט אחד", "text");
@@ -1849,7 +1904,9 @@
       } catch (ex) { bad("#rev-err", ex.message); }
     }
   });
-  window.addEventListener("hashchange", () => { if (/access_token=|error_description=/.test(location.hash)) { location.reload(); return; } if (location.hash.slice(1) === "main") return; closeMega(); const mn = $("#mobile-nav.open"); if (mn) mn.classList.remove("open"); render().then(() => { window.scrollTo(0, 0); $("#main").focus({ preventScroll: true }); }); });
+  window.addEventListener("hashchange", () => { if (/access_token=|error_description=/.test(location.hash)) { location.reload(); return; } if (location.hash.slice(1) === "main") return; closeMega(); const mn = $("#mobile-nav.open"); if (mn) mn.classList.remove("open"); const go = () => render().then(() => { window.scrollTo(0, 0); $("#main").focus({ preventScroll: true }); });
+    /* מעבר רך בין מסכים (בדפדפנים שתומכים), בלי לגעת בכותרת העליונה */
+    if (document.startViewTransition && !stillMotion() && document.body.classList.contains("ready")) document.startViewTransition(go); else go(); });
   window.addEventListener("scroll", () => { const tb = $("#topbar"); if (tb) tb.classList.toggle("scrolled", window.scrollY > 10); }, { passive: true });
 
   /* ---------------------------------------------------------------- boot */
