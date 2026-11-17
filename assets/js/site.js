@@ -390,6 +390,9 @@
         </div>
       </section>
 
+      ${homeRecs()}
+      ${homeMore()}
+
       ${newsletterBand()}
 
       <section class="wrap page"><div class="band">
@@ -400,6 +403,169 @@
       </div></section>
     </div>`;
   }
+  /* ---------------------------------------------------------------- ההמלצות שלנו
+     ציון לכל מקום: מומלץ על ידינו (סימון בפאנל) + ממומן + חוות דעת (ממוצע "זהיר" שלא מעדיף מקום עם 2 ביקורות)
+     + דחיפה למקומות חדשים, ועוד תוספת אקראית קבועה ליום, כדי שהרשימה תתרענן כל יום ומקומות חדשים יקבלו חשיפה. */
+  const daySeed = (id) => { let h = 2166136261; for (const c of T.today() + "|" + id) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return ((h >>> 0) % 1000) / 1000; };
+  function recScore(l) {
+    const r = ratingOf(l.id) || { avg: 0, n: 0 };
+    const bayes = r.n ? (r.avg * r.n + 4.3 * 4) / (r.n + 4) : 4.1;
+    const ageDays = l.created_at ? (Date.now() - new Date(l.created_at).getTime()) / 864e5 : 365;
+    const fresh = ageDays < 120 ? 1.6 * (1 - ageDays / 120) : 0;
+    return (l.featured ? 2.2 : 0) + (T.isSponsored(l) ? 1.2 : 0) + (bayes - 4) * 2.4 + fresh + daySeed(l.id) * 1.6;
+  }
+  const recList = () => S.listings.slice().sort((a, b) => recScore(b) - recScore(a));
+  function deckCard(l, i) {
+    const r = ratingOf(l.id), from = T.fromPrice(l), reg = T.regionOf(l.region), typ = T.typeOf(l.type);
+    const am = (l.amenities || []).slice(0, 3).map((k) => T.amenityOf(k).name);
+    return `<article class="dk-card" data-id="${esc(l.id)}" style="z-index:${40 - i}" aria-label="${esc(l.name)}">
+      <div class="dk-img"><img src="${esc(T.thumbOf(l))}" alt="" loading="${i < 3 ? "eager" : "lazy"}" draggable="false">${r ? `<span class="dk-rate">${I("star")}${r.avg.toFixed(1)}</span>` : T.isNewListing(l) ? `<span class="dk-rate">חדש באתר</span>` : ""}</div>
+      <div class="dk-body"><div class="dk-title"><b>${esc(l.name)}</b>${from ? `<span>${T.money(from)}<small> ללילה</small></span>` : ""}</div>
+        <div class="dk-meta">${esc(typ.name)} · ${esc(l.settlement || reg.name)}</div>
+        <div class="dk-tags">${am.slice(0, 3).map((t) => `<span>${esc(t)}</span>`).join("")}</div></div>
+      <span class="dk-stamp save" aria-hidden="true">${I("heart")} שמרתי</span><span class="dk-stamp skip" aria-hidden="true">${I("chev-l")} הבא</span>
+    </article>`;
+  }
+  function homeRecs() {
+    const list = recList().slice(0, 10);
+    if (list.length < 2) return "";
+    return `<section class="wrap page home-recs" aria-labelledby="recs-h"><div class="recs">
+      <div class="recs-copy"><span class="eyebrow">${I("sparkle")} ההמלצות שלנו</span><h2 id="recs-h">מקומות שבחרנו בשבילכם</h2>
+        <p>מקומות שאורחים אוהבים, לצד מקומות חדשים שכדאי להכיר. הרשימה מתחלפת כל יום.</p>
+        <p class="recs-how">גררו ימינה כדי לשמור למועדפים, שמאלה כדי לראות את הבא.</p>
+        <div class="recs-btns"><button class="dk-btn" type="button" data-act="deck" data-d="-1" aria-label="הבא">${I("x")}</button><button class="dk-btn dk-love" type="button" data-act="deck" data-d="1" aria-label="שמירה למועדפים">${I("heart")}</button><a class="btn btn-primary" id="deck-open" href="#stay-${esc(list[0].id)}">לפרטים${I("chev-l")}</a></div>
+        <p class="recs-count" id="deck-count" aria-live="polite">1 מתוך ${list.length} · ${esc(list[0].name)}</p></div>
+      <div class="deck-wrap"><div class="deck" id="deck">${list.map(deckCard).join("")}</div></div>
+    </div></section>`;
+  }
+  /* עוד מקומות לגלות: רשת עם לשוניות לפי סוג, בלי מה שכבר בחפיסה */
+  function homeMoreGrid() {
+    const skip = new Set(recList().slice(0, 10).map((l) => l.id));
+    let list = S.listings.filter((l) => !skip.has(l.id) && (!S.moreType || l.type === S.moreType));
+    if (list.length < 4) list = S.listings.filter((l) => !S.moreType || l.type === S.moreType);
+    list = list.sort((a, b) => daySeed(b.id) + (T.isNewListing(b) ? 0.6 : 0) - daySeed(a.id) - (T.isNewListing(a) ? 0.6 : 0)).slice(0, 8);
+    return list.length ? `<div class="grid">${list.map((l) => card(l)).join("")}</div>` : emptyState("עוד אין מקומות מהסוג הזה", "", "");
+  }
+  function homeMore() {
+    if (S.listings.length < 3) return "";
+    const types = NAV_TYPES.filter((x) => has.type(x.key));
+    return `<section class="wrap page home-more" aria-labelledby="more-h">
+      <div class="sec-head"><div><span class="eyebrow">עוד מקומות לגלות</span><h2 id="more-h">צימרים, וילות ומתחמים נוספים</h2></div><a class="btn btn-line" href="#search">לכל המקומות${I("chev-l")}</a></div>
+      ${types.length > 1 ? `<div class="seg-tabs more-tabs" role="group" aria-label="סוג אירוח"><button type="button" data-act="more-type" data-v="" aria-pressed="${!S.moreType}">הכל</button>${types.map((x) => `<button type="button" data-act="more-type" data-v="${x.key}" aria-pressed="${S.moreType === x.key}">${esc(typePlural(x.key))}</button>`).join("")}</div>` : ""}
+      <div id="more-grid">${homeMoreGrid()}</div>
+    </section>`;
+  }
+
+  /* ---------------------------------------------------------------- חפיסת ההמלצות (כמו Swipe Deck)
+     הכרטיס העליון נגרר ונוטה סביב הנקודה שבה תפסו אותו; הכרטיסים שמאחור עולים תוך כדי.
+     זריקה רחוקה או מהירה מעיפה אותו, והוא חוזר לסוף החפיסה. */
+  const DK = { th: 110, drag: [900, 50], back: [280, 16] };
+  let deck = null;
+  function deckInit() {
+    const root = $("#deck");
+    if (!root || root._dk) return;
+    const els = [...root.querySelectorAll(".dk-card")];
+    const cards = els.map((el, i) => ({ el, id: el.dataset.id, save: el.querySelector(".dk-stamp.save"), skip: el.querySelector(".dk-stamp.skip"), x: spring(0, DK.drag), y: spring(0, DK.drag), d: spring(i, [260, 22]), g: 1, flying: false }));
+    deck = root._dk = { root, cards, order: cards.slice(), raf: 0, last: 0, drag: null };
+    deckDraw(); deckLabel();
+  }
+  function deckTune(q, kc) { q.k = kc[0]; q.c = stillMotion() ? 2 * Math.sqrt(kc[0]) : kc[1]; }
+  function deckDraw() {
+    const D = deck, top = D.order[0];
+    const p = top && !top.flying ? Math.min(1, Math.abs(top.x.x) / (DK.th * 1.6)) : 0;
+    D.order.forEach((c, i) => { c.d.t = i; });
+    D.cards.forEach((c) => {
+      const isTop = c === top, depth = Math.max(0, c.d.x - (isTop || c.flying ? 0 : p));
+      const sc = 1 - Math.min(depth, 3) * 0.055, y = Math.min(depth, 3) * 16, rot = c.x.x * 0.065 * c.g;
+      c.el.style.transform = `translate(${c.x.x.toFixed(1)}px, ${(c.y.x + y).toFixed(1)}px) rotate(${rot.toFixed(2)}deg) scale(${sc.toFixed(4)})`;
+      c.el.style.opacity = Math.max(0, Math.min(1, 3.6 - depth)).toFixed(3);
+      c.el.style.filter = depth > 0.01 ? `brightness(${(1 - Math.min(depth, 3) * 0.12).toFixed(3)})` : "";
+      c.el.style.zIndex = c.flying ? 50 : 40 - Math.round(c.d.t);
+      c.el.classList.toggle("is-top", isTop);
+      c.el.setAttribute("aria-hidden", isTop ? "false" : "true");
+      c.save.style.opacity = isTop || c.flying ? Math.max(0, Math.min(1, c.x.x / DK.th)).toFixed(3) : 0;
+      c.skip.style.opacity = isTop || c.flying ? Math.max(0, Math.min(1, -c.x.x / DK.th)).toFixed(3) : 0;
+    });
+  }
+  function deckLoop(now) {
+    const D = deck;
+    if (!D || !D.root.isConnected) { if (D) D.raf = 0; return; }
+    const dt = Math.min((now - (D.last || now)) / 1000, 1 / 30); D.last = now;
+    let busy = !!D.drag;
+    D.cards.forEach((c) => {
+      for (let k = 0; k < 4; k++) [c.x, c.y, c.d].forEach((q) => { const a = -q.k * (q.x - q.t) - q.c * q.v; q.v += (a * dt) / 4; q.x += (q.v * dt) / 4; });
+      if ([c.x, c.y, c.d].some((q) => Math.abs(q.x - q.t) > 0.2 || Math.abs(q.v) > 0.2)) busy = true;
+    });
+    D.timers = (D.timers || []).filter((t) => { if (now >= t.at) { t.fn(); return false; } busy = true; return true; });
+    deckDraw();
+    D.raf = busy ? requestAnimationFrame(deckLoop) : 0;
+    if (!busy) D.last = 0;
+  }
+  const deckKick = () => { if (deck && !deck.raf) deck.raf = requestAnimationFrame(deckLoop); };
+  function deckLabel() {
+    const D = deck, c = D.order[0], l = byId(c.id), i = D.cards.indexOf(c);
+    const cnt = $("#deck-count"), open = $("#deck-open");
+    if (cnt && l) cnt.textContent = `${i + 1} מתוך ${D.cards.length} · ${l.name}`;
+    if (open && l) open.setAttribute("href", "#stay-" + l.id);
+  }
+  /* כיוון: ימינה = שמירה, שמאלה = הבא (גם בכפתורים) */
+  function deckFling(dir, vx) {
+    const D = deck, c = D && D.order[0];
+    if (!c || c.flying) return;
+    const p = Math.min(1, Math.abs(c.x.x) / (DK.th * 1.6));
+    D.order.forEach((o) => { if (o !== c) o.d.x = Math.max(0, o.d.x - p); });
+    c.flying = true;
+    deckTune(c.x, [70, 17]); deckTune(c.y, [70, 17]);
+    c.x.v = dir * Math.max(Math.abs(vx || 0), 1500);
+    c.x.t = dir * Math.max(innerWidth / 2 + 360, Math.abs(c.x.x) + 420);
+    if (dir > 0 && !S.saved.has(c.id)) {
+      S.saved.add(c.id); saveSaved(); updateSavedCount();
+      if (T.isLive && S.me.user) T.store.setFavorite(c.id, true).catch(() => {});
+      $$(`[data-act="save"][data-id="${c.id}"]`).forEach((b) => { b.classList.add("on"); b.setAttribute("aria-pressed", "true"); });
+      T.toast("נשמר במועדפים");
+    }
+    D.order = D.order.slice(1).concat(c);
+    (D.timers = D.timers || []).push({ at: performance.now() + 420, fn: () => { c.flying = false; deckTune(c.x, DK.drag); deckTune(c.y, DK.drag); c.x.x = c.x.t = c.x.v = 0; c.y.x = c.y.t = c.y.v = 0; c.d.x = D.order.length + 0.5; } });
+    deckLabel(); deckKick();
+  }
+  /* גרירה של הכרטיס העליון (עכבר או אצבע); לחיצה בלי גרירה פותחת את דף המקום */
+  document.addEventListener("pointerdown", (e) => {
+    const el = e.target.closest && e.target.closest(".dk-card");
+    if (!el || e.button > 0) return;
+    deckInit();
+    const D = deck, c = D && D.order[0];
+    if (!c || c.el !== el || c.flying) return;
+    const r = el.getBoundingClientRect();
+    D.drag = { c, id: e.pointerId, x0: e.clientX - c.x.x, y0: e.clientY - c.y.x, sx: e.clientX, sy: e.clientY, lx: e.clientX, lt: performance.now(), vx: 0, moved: false };
+    c.g = e.clientY < r.top + r.height / 2 ? 1 : -1;
+    deckTune(c.x, DK.drag); deckTune(c.y, DK.drag);
+    el.classList.add("dragging");
+    try { el.setPointerCapture(e.pointerId); } catch (ex) {}
+    deckKick();
+  });
+  document.addEventListener("pointermove", (e) => {
+    const g = deck && deck.drag;
+    if (!g || e.pointerId !== g.id) return;
+    const now = performance.now(), dt = Math.max(1, now - g.lt) / 1000;
+    g.vx = g.vx * 0.5 + ((e.clientX - g.lx) / dt) * 0.5; g.lx = e.clientX; g.lt = now;
+    if (Math.abs(e.clientX - g.sx) + Math.abs(e.clientY - g.sy) > 6) g.moved = true;
+    g.c.x.t = e.clientX - g.x0; g.c.y.t = (e.clientY - g.y0) * 0.6;
+    deckKick();
+  });
+  const deckUp = (e) => {
+    const g = deck && deck.drag;
+    if (!g || e.pointerId !== g.id) return;
+    deck.drag = null;
+    g.c.el.classList.remove("dragging");
+    if (!g.moved) { g.c.x.t = g.c.y.t = 0; location.hash = "stay-" + g.c.id; return; }
+    const x = g.c.x.t;
+    const dir = Math.abs(x) > DK.th ? Math.sign(x) : Math.abs(g.vx) > 700 && Math.sign(g.vx) === Math.sign(x || g.vx) ? Math.sign(g.vx) : 0;
+    if (dir) deckFling(dir, g.vx);
+    else { deckTune(g.c.x, DK.back); deckTune(g.c.y, DK.back); g.c.x.t = 0; g.c.y.t = 0; deckKick(); }
+  };
+  document.addEventListener("pointerup", deckUp);
+  document.addEventListener("pointercancel", deckUp);
+
   function showcase(list) {
     const i = ((S.showIdx % list.length) + list.length) % list.length;
     const l = list[i];
@@ -1469,6 +1635,7 @@
     reveal();
     heroVideo();
     motion();
+    if ($("#deck")) deckInit();
     markReady();
   }
   /* תצוגה מקדימה מפאנל הניהול (בתוך מסגרת): מקבלים צבעים ומצב זכוכית בזמן אמת, בלי לשמור כלום */
@@ -1852,6 +2019,8 @@
       if (pop) { const g = Number(pop.querySelector("[name=guests]").value) || 1, c = Number(pop.querySelector("[name=children]").value) || 0; pop.querySelector(".gsum").textContent = plural.adults(g) + (c ? " · " + plural.kids(c) : ""); }
     } else if (act === "quick") { e.preventDefault(); location.hash = "quick-" + el.dataset.i; }
     else if (act === "show") { S.showIdx += Number(el.dataset.d); $("#showcase").innerHTML = showcase(S.listings.filter((l) => l.featured)); }
+    else if (act === "deck") { deckInit(); deckFling(Number(el.dataset.d)); }
+    else if (act === "more-type") { S.moreType = el.dataset.v; $$('[data-act="more-type"]').forEach((b) => b.setAttribute("aria-pressed", b === el)); const g = $("#more-grid"); if (g) g.innerHTML = homeMoreGrid(); motion(g); }
     else if (act === "cimg") {
       e.preventDefault();
       const box = el.closest(".card-media"), o = box && pagerOf(box, { touchOnly: true });
